@@ -6,11 +6,11 @@ export function whatsappLink(mensagem: string) {
 
 export function mensagemReserva(dados: {
   rota: string;
-  data?: string;
-  periodo?: string;
-  carro?: string;
-  passageiros?: number;
-  valor?: string;
+  data?: string | undefined;
+  periodo?: string | undefined;
+  carro?: string | undefined;
+  passageiros?: number | undefined;
+  valor?: string | undefined;
 }) {
   const linhas = [
     `Olá, ${EMPRESA.nome}! Quero reservar um transfer.`,

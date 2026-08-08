@@ -235,7 +235,7 @@ function RotaDetalhe() {
 
           <h2 className="mt-10 font-display text-2xl">Locais de embarque</h2>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
-            {rota.embarque.map((e) => (
+            {rota.embarque.map((e: string) => (
               <li key={e} className="flex gap-2">
                 <MapPin className="mt-0.5 size-4 shrink-0 text-primary" /> {e}
               </li>

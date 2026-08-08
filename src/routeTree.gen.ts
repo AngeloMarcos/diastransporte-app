@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ContatoRouteImport } from './routes/contato'
 import { Route as FrotaRouteImport } from './routes/frota'
 import { Route as TransfersIndexRouteImport } from './routes/transfers.index'
+import { Route as TransfersRotaRouteImport } from './routes/transfers.$rota'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,17 +35,24 @@ const TransfersIndexRoute = TransfersIndexRouteImport.update({
   path: '/transfers/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TransfersRotaRoute = TransfersRotaRouteImport.update({
+  id: '/transfers/$rota',
+  path: '/transfers/$rota',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
+  '/transfers/$rota': typeof TransfersRotaRoute
   '/transfers/': typeof TransfersIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
+  '/transfers/$rota': typeof TransfersRotaRoute
   '/transfers': typeof TransfersIndexRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,28 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
+  '/transfers/$rota': typeof TransfersRotaRoute
   '/transfers/': typeof TransfersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/contato' | '/frota' | '/transfers/'
+  fullPaths: '/' | '/contato' | '/frota' | '/transfers/$rota' | '/transfers/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/contato' | '/frota' | '/transfers'
-  id: '__root__' | '/' | '/contato' | '/frota' | '/transfers/'
+  to: '/' | '/contato' | '/frota' | '/transfers/$rota' | '/transfers'
+  id:
+    | '__root__'
+    | '/'
+    | '/contato'
+    | '/frota'
+    | '/transfers/$rota'
+    | '/transfers/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ContatoRoute: typeof ContatoRoute
   FrotaRoute: typeof FrotaRoute
+  TransfersRotaRoute: typeof TransfersRotaRoute
   TransfersIndexRoute: typeof TransfersIndexRoute
 }
 
@@ -99,6 +115,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TransfersIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/transfers/$rota': {
+      id: '/transfers/$rota'
+      path: '/transfers/$rota'
+      fullPath: '/transfers/$rota'
+      preLoaderRoute: typeof TransfersRotaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -106,6 +129,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ContatoRoute: ContatoRoute,
   FrotaRoute: FrotaRoute,
+  TransfersRotaRoute: TransfersRotaRoute,
   TransfersIndexRoute: TransfersIndexRoute,
 }
 export const routeTree = rootRouteImport
