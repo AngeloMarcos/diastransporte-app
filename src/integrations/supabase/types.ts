@@ -82,6 +82,42 @@ export type Database = {
           },
         ]
       }
+      conteudo_site: {
+        Row: {
+          chave: string
+          created_at: string
+          id: string
+          imagem: string
+          ordem: number
+          secao: string
+          texto: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          chave: string
+          created_at?: string
+          id?: string
+          imagem?: string
+          ordem?: number
+          secao?: string
+          texto?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Update: {
+          chave?: string
+          created_at?: string
+          id?: string
+          imagem?: string
+          ordem?: number
+          secao?: string
+          texto?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
