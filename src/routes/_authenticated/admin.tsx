@@ -1,17 +1,50 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { Loader2, Save, Upload } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  CalendarCheck,
+  FileText,
+  LayoutDashboard,
+  Loader2,
+  MessageCircle,
+  Plus,
+  Route as RouteIcon,
+  Save,
+  Search,
+  Trash2,
+  Upload,
+  Wallet,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { cn } from "@/lib/utils";
 import { formatBRL } from "@/data/rotas";
 import { ROTA_COLUMNS, type RotaRow } from "@/lib/rotasMap";
 
@@ -30,10 +63,83 @@ export const Route = createFileRoute("/_authenticated/admin")({
 
 const statusOpcoes = ["pendente", "confirmado", "concluido", "cancelado"] as const;
 
+const STATUS_META: Record<
+  (typeof statusOpcoes)[number],
+  { label: string; badgeClass: string; barClass: string }
+> = {
+  pendente: {
+    label: "Pendente",
+    badgeClass: "border-amber-500/30 bg-amber-500/10 text-amber-400",
+    barClass: "bg-amber-500",
+  },
+  confirmado: {
+    label: "Confirmado",
+    badgeClass: "border-blue-500/30 bg-blue-500/10 text-blue-400",
+    barClass: "bg-blue-500",
+  },
+  concluido: {
+    label: "Concluído",
+    badgeClass: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+    barClass: "bg-emerald-500",
+  },
+  cancelado: {
+    label: "Cancelado",
+    badgeClass: "border-red-500/30 bg-red-500/10 text-red-400",
+    barClass: "bg-red-500",
+  },
+};
+
+function contarStatus(lista: { status: string }[]) {
+  return statusOpcoes.reduce<Record<string, number>>((acc, s) => {
+    acc[s] = lista.filter((a) => a.status === s).length;
+    return acc;
+  }, {});
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const meta = STATUS_META[status as (typeof statusOpcoes)[number]];
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "capitalize",
+        meta?.badgeClass ?? "border-border bg-muted text-muted-foreground",
+      )}
+    >
+      {meta?.label ?? status}
+    </Badge>
+  );
+}
+
+function slugify(texto: string) {
+  return texto
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-+|-+$)/g, "");
+}
+
+function linkWhatsappCliente(telefone: string | null) {
+  if (!telefone) return null;
+  const digitos = telefone.replace(/\D/g, "");
+  if (!digitos) return null;
+  const comDdi = digitos.length <= 11 ? `55${digitos}` : digitos;
+  return `https://wa.me/${comDdi}`;
+}
+
+const abas = [
+  { id: "geral", label: "Visão geral", icon: LayoutDashboard },
+  { id: "rotas", label: "Rotas e preços", icon: RouteIcon },
+  { id: "agendamentos", label: "Agendamentos", icon: CalendarCheck },
+  { id: "conteudo", label: "Conteúdo do site", icon: FileText },
+] as const;
+
 function AdminPage() {
-  const { isAdmin, carregando } = useAuth();
+  const { user, isAdmin, carregando } = useAuth();
   const navigate = useNavigate();
-  const [aba, setAba] = useState<"rotas" | "agendamentos" | "conteudo">("rotas");
+  const [aba, setAba] = useState<(typeof abas)[number]["id"]>("geral");
 
   useEffect(() => {
     if (!carregando && !isAdmin) {
@@ -57,50 +163,327 @@ function AdminPage() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main className="mx-auto max-w-5xl px-4 py-12">
+      <main className="mx-auto max-w-6xl px-4 py-12">
         <h1 className="font-display text-3xl">Painel do administrador</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Edite fotos, descrições e preços das rotas e acompanhe os agendamentos.
+          {user?.email ? `Logado como ${user.email} · ` : ""}
+          Acompanhe agendamentos, edite rotas, preços, fotos e o conteúdo do site.
         </p>
 
-        <div className="mt-6 flex gap-2">
-          <Button
-            variant={aba === "rotas" ? "default" : "secondary"}
-            size="sm"
-            onClick={() => setAba("rotas")}
-          >
-            Rotas e preços
-          </Button>
-          <Button
-            variant={aba === "agendamentos" ? "default" : "secondary"}
-            size="sm"
-            onClick={() => setAba("agendamentos")}
-          >
-            Agendamentos
-          </Button>
-          <Button
-            variant={aba === "conteudo" ? "default" : "secondary"}
-            size="sm"
-            onClick={() => setAba("conteudo")}
-          >
-            Conteúdo do site
-          </Button>
-        </div>
+        <Tabs
+          value={aba}
+          onValueChange={(v) => setAba(v as (typeof abas)[number]["id"])}
+          className="mt-6"
+        >
+          <TabsList className="h-auto flex-wrap justify-start gap-1 bg-secondary/60 p-1">
+            {abas.map(({ id, label, icon: Icon }) => (
+              <TabsTrigger key={id} value={id} className="gap-1.5">
+                <Icon className="size-4" /> {label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-        {aba === "rotas" ? (
-          <AdminRotas />
-        ) : aba === "agendamentos" ? (
-          <AdminAgendamentos />
-        ) : (
-          <AdminConteudo />
-        )}
+          <TabsContent value="geral" className="mt-6">
+            <AdminVisaoGeral onIrPara={setAba} />
+          </TabsContent>
+          <TabsContent value="rotas" className="mt-6">
+            <AdminRotas />
+          </TabsContent>
+          <TabsContent value="agendamentos" className="mt-6">
+            <AdminAgendamentos />
+          </TabsContent>
+          <TabsContent value="conteudo" className="mt-6">
+            <AdminConteudo />
+          </TabsContent>
+        </Tabs>
       </main>
       <Footer />
     </div>
   );
 }
 
+function StatCard({
+  label,
+  value,
+  hint,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  icon: LucideIcon;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-5">
+      <div className="flex items-center justify-between">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+        <Icon className="size-4 text-muted-foreground" />
+      </div>
+      <p className="mt-2 font-display text-2xl">{value}</p>
+      {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
+
+function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["id"]) => void }) {
+  const { data: agendamentos, isLoading: carregandoAgendamentos } = useQuery({
+    queryKey: ["admin-agendamentos"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: rotas, isLoading: carregandoRotas } = useQuery({
+    queryKey: ["admin-rotas"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("rotas")
+        .select(ROTA_COLUMNS)
+        .order("popularidade", { ascending: false });
+      if (error) throw error;
+      return data as unknown as RotaRow[];
+    },
+  });
+
+  if (carregandoAgendamentos || carregandoRotas) {
+    return <p className="text-sm text-muted-foreground">Carregando painel…</p>;
+  }
+
+  const lista = agendamentos ?? [];
+  const rotasLista = rotas ?? [];
+  const contagem = contarStatus(lista);
+  const receitaConfirmada = lista
+    .filter((a) => a.status === "confirmado" || a.status === "concluido")
+    .reduce((soma, a) => soma + (a.valor ?? 0), 0);
+  const rotasAtivas = rotasLista.filter((r) => r.ativo).length;
+  const recentes = lista.slice(0, 5);
+
+  return (
+    <div className="space-y-8">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Agendamentos"
+          value={String(lista.length)}
+          hint={`${contagem["pendente"] ?? 0} pendente(s)`}
+          icon={CalendarCheck}
+        />
+        <StatCard
+          label="Receita confirmada"
+          value={formatBRL(receitaConfirmada)}
+          hint="Confirmados + concluídos"
+          icon={Wallet}
+        />
+        <StatCard
+          label="Rotas ativas"
+          value={`${rotasAtivas} / ${rotasLista.length}`}
+          hint="Visíveis no site"
+          icon={RouteIcon}
+        />
+        <StatCard
+          label="Cancelamentos"
+          value={String(contagem["cancelado"] ?? 0)}
+          hint="Do total de agendamentos"
+          icon={LayoutDashboard}
+        />
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-display text-lg">Status dos agendamentos</h2>
+          <Button size="sm" variant="secondary" onClick={() => onIrPara("agendamentos")}>
+            Ver todos
+          </Button>
+        </div>
+        {lista.length ? (
+          <>
+            <div className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-muted">
+              {statusOpcoes.map((s) =>
+                contagem[s] ? (
+                  <div
+                    key={s}
+                    className={STATUS_META[s].barClass}
+                    style={{ width: `${((contagem[s] ?? 0) / lista.length) * 100}%` }}
+                    title={`${STATUS_META[s].label}: ${contagem[s]}`}
+                  />
+                ) : null,
+              )}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+              {statusOpcoes.map((s) => (
+                <span key={s} className="inline-flex items-center gap-1.5">
+                  <span className={cn("size-2 rounded-full", STATUS_META[s].barClass)} />
+                  {STATUS_META[s].label}: {contagem[s] ?? 0}
+                </span>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="mt-4 text-sm text-muted-foreground">Nenhum agendamento ainda.</p>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-display text-lg">Últimos agendamentos</h2>
+          <Button size="sm" variant="secondary" onClick={() => onIrPara("agendamentos")}>
+            Ver todos
+          </Button>
+        </div>
+        {recentes.length ? (
+          <div className="mt-4 divide-y divide-border">
+            {recentes.map((a) => (
+              <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                <div>
+                  <p className="text-sm font-medium">{a.trecho}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {a.contato_nome ?? "sem nome"} ·{" "}
+                    {new Date(a.created_at).toLocaleDateString("pt-BR")}
+                  </p>
+                </div>
+                <StatusBadge status={a.status} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-muted-foreground">Nenhum agendamento ainda.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const ROTA_VAZIA = {
+  origem: "",
+  destino: "",
+  slug: "",
+  duracao: "",
+  distancia: "",
+  preco_pequeno: "",
+  resumo: "",
+};
+
+function NovaRotaDialog() {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(ROTA_VAZIA);
+  const [slugManual, setSlugManual] = useState(false);
+
+  const slugAtual = slugManual ? form.slug : slugify(`${form.origem}-${form.destino}`);
+
+  const criar = useMutation({
+    mutationFn: async () => {
+      if (!form.origem.trim() || !form.destino.trim()) {
+        throw new Error("Preencha origem e destino.");
+      }
+      const { error } = await supabase.from("rotas").insert({
+        slug: slugAtual || `rota-${Date.now()}`,
+        origem: form.origem,
+        destino: form.destino,
+        duracao: form.duracao,
+        distancia: form.distancia,
+        preco_pequeno: Number(form.preco_pequeno) || 0,
+        resumo: form.resumo,
+        ativo: false,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Rota criada como oculta. Edite os detalhes e ative quando estiver pronta.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-rotas"] });
+      setOpen(false);
+      setForm(ROTA_VAZIA);
+      setSlugManual(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao criar rota."),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm">
+          <Plus className="size-4" /> Nova rota
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Nova rota</DialogTitle>
+          <DialogDescription>
+            Crie o registro básico da rota. Ela entra oculta no site — edite fotos e descrição
+            depois e marque como visível quando estiver pronta.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Campo
+            label="Origem"
+            value={form.origem}
+            onChange={(v) => setForm((f) => ({ ...f, origem: v }))}
+          />
+          <Campo
+            label="Destino"
+            value={form.destino}
+            onChange={(v) => setForm((f) => ({ ...f, destino: v }))}
+          />
+          <Campo
+            label="Duração"
+            value={form.duracao}
+            onChange={(v) => setForm((f) => ({ ...f, duracao: v }))}
+          />
+          <Campo
+            label="Distância"
+            value={form.distancia}
+            onChange={(v) => setForm((f) => ({ ...f, distancia: v }))}
+          />
+          <CampoNumero
+            label="Preço carro pequeno (dia)"
+            value={form.preco_pequeno === "" ? null : Number(form.preco_pequeno)}
+            onChange={(v) => setForm((f) => ({ ...f, preco_pequeno: v === null ? "" : String(v) }))}
+          />
+          <div>
+            <Label>Slug (URL)</Label>
+            <Input
+              className="mt-2"
+              value={slugAtual}
+              onChange={(e) => {
+                setSlugManual(true);
+                setForm((f) => ({ ...f, slug: e.target.value }));
+              }}
+            />
+          </div>
+        </div>
+        <div>
+          <Label>Resumo</Label>
+          <Textarea
+            className="mt-2"
+            rows={2}
+            value={form.resumo}
+            onChange={(e) => setForm((f) => ({ ...f, resumo: e.target.value }))}
+          />
+        </div>
+
+        <DialogFooter>
+          <Button onClick={() => criar.mutate()} disabled={criar.isPending}>
+            {criar.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Plus className="size-4" />
+            )}
+            Criar rota
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AdminRotas() {
+  const [busca, setBusca] = useState("");
+
   const { data, isLoading } = useQuery({
     queryKey: ["admin-rotas"],
     queryFn: async () => {
@@ -113,13 +496,41 @@ function AdminRotas() {
     },
   });
 
-  if (isLoading) return <p className="mt-8 text-sm text-muted-foreground">Carregando rotas…</p>;
+  const filtradas = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return data ?? [];
+    return (data ?? []).filter((r) =>
+      `${r.origem} ${r.destino} ${r.slug}`.toLowerCase().includes(termo),
+    );
+  }, [data, busca]);
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando rotas…</p>;
 
   return (
-    <div className="mt-8 space-y-4">
-      {data?.map((rota) => (
-        <RotaEditor key={rota.id} rota={rota} />
-      ))}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="relative max-w-xs flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="pl-8"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por origem ou destino"
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-muted-foreground">
+            {filtradas.length} de {data?.length ?? 0} rotas
+          </p>
+          <NovaRotaDialog />
+        </div>
+      </div>
+
+      {filtradas.length ? (
+        filtradas.map((rota) => <RotaEditor key={rota.id} rota={rota} />)
+      ) : (
+        <p className="text-sm text-muted-foreground">Nenhuma rota encontrada.</p>
+      )}
     </div>
   );
 }
@@ -162,6 +573,18 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao salvar."),
   });
 
+  const remover = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("rotas").delete().eq("id", rota.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Rota removida.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-rotas"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao remover rota."),
+  });
+
   async function enviarFoto(arquivo: File, destino: "principal" | "galeria") {
     setEnviandoFoto(true);
     try {
@@ -194,14 +617,49 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
             <h2 className="font-display text-lg">
               {rota.origem} → {rota.destino}
             </h2>
-            <p className="text-xs text-muted-foreground">
-              {formatBRL(rota.preco_pequeno)} · {rota.ativo ? "ativa" : "oculta"}
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              {formatBRL(rota.preco_pequeno)}
+              <Badge
+                variant="outline"
+                className={
+                  rota.ativo
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                    : "border-border bg-muted text-muted-foreground"
+                }
+              >
+                {rota.ativo ? "ativa" : "oculta"}
+              </Badge>
+              {rota.destaque ? <Badge variant="outline">{rota.destaque}</Badge> : null}
             </p>
           </div>
         </div>
-        <Button size="sm" variant="secondary" onClick={() => setAberto((v) => !v)}>
-          {aberto ? "Fechar" : "Editar"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="secondary" onClick={() => setAberto((v) => !v)}>
+            {aberto ? "Fechar" : "Editar"}
+          </Button>
+          <Button
+            size="icon"
+            variant="secondary"
+            className="size-9 text-destructive"
+            title="Remover rota"
+            disabled={remover.isPending}
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Remover a rota ${rota.origem} → ${rota.destino}? Essa ação não pode ser desfeita.`,
+                )
+              ) {
+                remover.mutate();
+              }
+            }}
+          >
+            {remover.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Trash2 className="size-4" />
+            )}
+          </Button>
+        </div>
       </div>
 
       {aberto && (
@@ -391,6 +849,11 @@ function CampoNumero({
 
 function AdminAgendamentos() {
   const queryClient = useQueryClient();
+  const [busca, setBusca] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState<"todos" | (typeof statusOpcoes)[number]>(
+    "todos",
+  );
+
   const { data, isLoading } = useQuery({
     queryKey: ["admin-agendamentos"],
     queryFn: async () => {
@@ -412,48 +875,149 @@ function AdminAgendamentos() {
       toast.success("Status atualizado.");
       void queryClient.invalidateQueries({ queryKey: ["admin-agendamentos"] });
     },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atualizar."),
   });
 
-  if (isLoading) return <p className="mt-8 text-sm text-muted-foreground">Carregando…</p>;
-  if (!data?.length)
-    return <p className="mt-8 text-sm text-muted-foreground">Nenhum agendamento ainda.</p>;
+  const remover = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("agendamentos").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Agendamento removido.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-agendamentos"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao remover."),
+  });
+
+  const lista = useMemo(() => data ?? [], [data]);
+  const contagem = contarStatus(lista);
+
+  const filtrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return lista.filter((a) => {
+      if (filtroStatus !== "todos" && a.status !== filtroStatus) return false;
+      if (!termo) return true;
+      return `${a.trecho} ${a.contato_nome ?? ""} ${a.contato_telefone ?? ""}`
+        .toLowerCase()
+        .includes(termo);
+    });
+  }, [lista, busca, filtroStatus]);
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando…</p>;
 
   return (
-    <div className="mt-8 space-y-4">
-      {data.map((a) => (
-        <article key={a.id} className="rounded-lg border border-border bg-card p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="font-display text-lg">{a.trecho}</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {a.data_viagem ?? "data a combinar"}
-                {a.hora ? ` · ${a.hora}` : ""} · carro {a.carro} · {a.periodo} · {a.passageiros}{" "}
-                passageiro(s)
-                {a.valor ? ` · ${formatBRL(a.valor)}` : ""}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {a.contato_nome ?? "sem nome"} · {a.contato_telefone ?? "sem telefone"}
-              </p>
-              {a.embarque_local ? (
-                <p className="mt-1 text-xs text-muted-foreground">Embarque: {a.embarque_local}</p>
-              ) : null}
-              {a.observacoes ? <p className="mt-2 text-sm">{a.observacoes}</p> : null}
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {statusOpcoes.map((s) => (
-                <Button
-                  key={s}
-                  size="sm"
-                  variant={a.status === s ? "default" : "secondary"}
-                  onClick={() => atualizar.mutate({ id: a.id, status: s })}
-                >
-                  {s}
-                </Button>
-              ))}
-            </div>
-          </div>
-        </article>
-      ))}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          variant={filtroStatus === "todos" ? "default" : "secondary"}
+          onClick={() => setFiltroStatus("todos")}
+        >
+          Todos ({lista.length})
+        </Button>
+        {statusOpcoes.map((s) => (
+          <Button
+            key={s}
+            size="sm"
+            variant={filtroStatus === s ? "default" : "secondary"}
+            onClick={() => setFiltroStatus(s)}
+          >
+            {STATUS_META[s].label} ({contagem[s] ?? 0})
+          </Button>
+        ))}
+      </div>
+
+      <div className="relative max-w-sm">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          className="pl-8"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar por nome, telefone ou trecho"
+        />
+      </div>
+
+      {!lista.length ? (
+        <p className="text-sm text-muted-foreground">Nenhum agendamento ainda.</p>
+      ) : !filtrados.length ? (
+        <p className="text-sm text-muted-foreground">Nenhum agendamento encontrado.</p>
+      ) : (
+        <div className="space-y-4">
+          {filtrados.map((a) => {
+            const linkWhats = linkWhatsappCliente(a.contato_telefone);
+            return (
+              <article key={a.id} className="rounded-lg border border-border bg-card p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="font-display text-lg">{a.trecho}</h2>
+                      <StatusBadge status={a.status} />
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {a.data_viagem ?? "data a combinar"}
+                      {a.hora ? ` · ${a.hora}` : ""} · carro {a.carro} · {a.periodo} ·{" "}
+                      {a.passageiros} passageiro(s)
+                      {a.valor ? ` · ${formatBRL(a.valor)}` : ""}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {a.contato_nome ?? "sem nome"} · {a.contato_telefone ?? "sem telefone"}
+                    </p>
+                    {a.embarque_local ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Embarque: {a.embarque_local}
+                      </p>
+                    ) : null}
+                    {a.observacoes ? <p className="mt-2 text-sm">{a.observacoes}</p> : null}
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <Select
+                      value={a.status}
+                      onValueChange={(status) => atualizar.mutate({ id: a.id, status })}
+                    >
+                      <SelectTrigger className="h-8 w-[150px] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statusOpcoes.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {STATUS_META[s].label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {linkWhats ? (
+                      <Button
+                        asChild
+                        size="icon"
+                        variant="secondary"
+                        className="size-8"
+                        title="Falar no WhatsApp"
+                      >
+                        <a href={linkWhats} target="_blank" rel="noreferrer">
+                          <MessageCircle className="size-4" />
+                        </a>
+                      </Button>
+                    ) : null}
+                    <Button
+                      size="icon"
+                      variant="secondary"
+                      className="size-8 text-destructive"
+                      title="Remover agendamento"
+                      onClick={() => {
+                        if (window.confirm("Remover este agendamento?")) remover.mutate(a.id);
+                      }}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -497,17 +1061,34 @@ function AdminConteudo() {
 
   const [novaChave, setNovaChave] = useState("");
 
-  if (isLoading) return <p className="mt-8 text-sm text-muted-foreground">Carregando conteúdo…</p>;
+  const grupos = useMemo(() => {
+    const mapa = new Map<string, ConteudoItem[]>();
+    for (const item of data ?? []) {
+      const lista = mapa.get(item.secao) ?? [];
+      lista.push(item);
+      mapa.set(item.secao, lista);
+    }
+    return Array.from(mapa.entries());
+  }, [data]);
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando conteúdo…</p>;
 
   return (
-    <div className="mt-8 space-y-4">
+    <div className="space-y-8">
       <p className="text-sm text-muted-foreground">
         Cada bloco tem uma chave usada pelo site (ex.: <code>home_hero</code>,{" "}
         <code>frota_intro</code>, <code>contato_intro</code>). Edite título, texto e imagem e salve.
       </p>
 
-      {data?.map((item) => (
-        <ConteudoEditor key={item.id} item={item} />
+      {grupos.map(([secao, itens]) => (
+        <div key={secao} className="space-y-4">
+          <h2 className="font-display text-sm uppercase tracking-wide text-muted-foreground">
+            Seção: {secao}
+          </h2>
+          {itens.map((item) => (
+            <ConteudoEditor key={item.id} item={item} />
+          ))}
+        </div>
       ))}
 
       <div className="rounded-lg border border-dashed border-border p-5">
