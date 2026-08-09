@@ -3,8 +3,12 @@ import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { Button } from "@/components/ui/button";
 import { veiculos, fotos } from "@/data/rotas";
+import { listConteudo } from "@/lib/conteudo.functions";
+import { mapearConteudo, texto } from "@/lib/conteudo";
 
 export const Route = createFileRoute("/frota")({
+  loader: () => listConteudo(),
+
   head: () => ({
     meta: [
       { title: "Nossa frota — Dias Transporte" },
