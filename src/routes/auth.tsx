@@ -10,6 +10,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
+import { consumirRedirectPosLogin, lerRascunho, type RascunhoReserva } from "@/lib/reserva";
+
+function seguirAposEntrar(navigate: ReturnType<typeof useNavigate>) {
+  const redirect = consumirRedirectPosLogin();
+  if (redirect) {
+    window.location.assign(redirect);
+    return;
+  }
+  void navigate({ to: "/minhas-viagens" });
+}
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -38,11 +48,14 @@ function AuthPage() {
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [rascunho, setRascunho] = useState<RascunhoReserva | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) void navigate({ to: "/minhas-viagens", replace: true });
+      if (data.session) seguirAposEntrar(navigate);
     });
+    // Lido só no cliente (depois da hidratação) pra não divergir do HTML do SSR.
+    setRascunho(lerRascunho());
   }, [navigate]);
 
   async function onSubmit(e: React.FormEvent) {
@@ -57,7 +70,7 @@ function AuthPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
         if (error) throw error;
         toast.success("Bem-vindo de volta!");
-        void navigate({ to: "/minhas-viagens" });
+        seguirAposEntrar(navigate);
       } else {
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -70,7 +83,7 @@ function AuthPage() {
         if (error) throw error;
         if (data.session) {
           toast.success("Conta criada!");
-          void navigate({ to: "/minhas-viagens" });
+          seguirAposEntrar(navigate);
         } else {
           toast.success("Conta criada. Confirme seu e-mail para entrar.");
         }
@@ -91,7 +104,7 @@ function AuthPage() {
       return;
     }
     if (result.redirected) return;
-    void navigate({ to: "/minhas-viagens" });
+    seguirAposEntrar(navigate);
   }
 
   return (
@@ -102,8 +115,22 @@ function AuthPage() {
           {modo === "entrar" ? "Entrar na sua conta" : "Criar conta"}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Agende suas corridas e acompanhe o status de cada transfer.
+          {rascunho
+            ? "Falta pouco para confirmar sua reserva."
+            : "Agende suas corridas e acompanhe o status de cada transfer."}
         </p>
+
+        {rascunho && (
+          <div className="mt-4 rounded-lg border border-primary/40 bg-primary/10 p-4 text-sm">
+            <p className="font-medium">
+              {rascunho.origem} → {rascunho.destino}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {modo === "entrar" ? "Entre" : "Crie sua conta"} para voltar direto para essa reserva
+              com os dados que você já preencheu.
+            </p>
+          </div>
+        )}
 
         <form
           onSubmit={onSubmit}

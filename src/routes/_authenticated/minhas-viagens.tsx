@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, Car, MessageCircle, Users } from "lucide-react";
+import { CalendarDays, Car, MapPin, MessageCircle, Users } from "lucide-react";
 
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
@@ -91,6 +91,11 @@ function MinhasViagens() {
                 </span>
                 {a.valor ? <span>{formatBRL(a.valor)}</span> : null}
               </div>
+              {a.embarque_local ? (
+                <p className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <MapPin className="size-3.5" /> Embarque: {a.embarque_local}
+                </p>
+              ) : null}
               {a.observacoes ? (
                 <p className="mt-3 text-sm text-muted-foreground">{a.observacoes}</p>
               ) : null}

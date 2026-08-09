@@ -1,5 +1,5 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import {
   CalendarCheck,
   Check,
@@ -21,6 +21,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Accordion,
   AccordionContent,
   AccordionItem,
@@ -32,6 +39,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { listRotas } from "@/lib/rotas.functions";
 import { mensagemReserva, whatsappLink } from "@/lib/whatsapp";
+import { lerRascunho, limparRascunho, salvarRascunho, salvarRedirectPosLogin } from "@/lib/reserva";
+
+const OUTRO_EMBARQUE = "outro";
 
 export const Route = createFileRoute("/transfers/$rota")({
   loader: async ({ params }) => {
@@ -82,17 +92,44 @@ function RotaDetalhe() {
   const loaderData = Route.useLoaderData() as { rota: Rota; rotas: Rota[] };
   const { rota, rotas } = loaderData;
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [indice, setIndice] = useState(0);
   const [data, setData] = useState("");
+  const [hora, setHora] = useState("");
   const [periodo, setPeriodo] = useState<"dia" | "noite">("dia");
   const [carro, setCarro] = useState<"pequeno" | "grande">("pequeno");
   const [passageiros, setPassageiros] = useState(2);
+  const [embarqueEscolha, setEmbarqueEscolha] = useState("");
+  const [embarqueOutro, setEmbarqueOutro] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [agendando, setAgendando] = useState(false);
 
   const maxPassageiros = carro === "pequeno" ? 4 : 5;
   const preco = precoFinal(rota, carro, periodo);
   const temNoite = rota.precoPequenoNoite !== undefined || rota.precoGrandeNoite !== undefined;
+  const embarqueLocal = embarqueEscolha === OUTRO_EMBARQUE ? embarqueOutro.trim() : embarqueEscolha;
+
+  // Se o usuário saiu para criar conta/entrar no meio da reserva, restaura o
+  // que ele já tinha preenchido para não obrigá-lo a começar de novo.
+  useEffect(() => {
+    const rascunho = lerRascunho(rota.slug);
+    if (!rascunho) return;
+    setData(rascunho.data);
+    setHora(rascunho.hora);
+    setPeriodo(rascunho.periodo);
+    setCarro(rascunho.carro);
+    setPassageiros(rascunho.passageiros);
+    setObservacoes(rascunho.observacoes);
+    if (rascunho.embarqueLocal && rota.embarque.includes(rascunho.embarqueLocal)) {
+      setEmbarqueEscolha(rascunho.embarqueLocal);
+    } else if (rascunho.embarqueLocal) {
+      setEmbarqueEscolha(OUTRO_EMBARQUE);
+      setEmbarqueOutro(rascunho.embarqueLocal);
+    }
+    limparRascunho();
+    toast.message("Continuando sua reserva — revise os dados e confirme.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rota.slug]);
 
   const relacionadas = useMemo(
     () => rotas.filter((r: Rota) => r.slug !== rota.slug).slice(0, 3),
@@ -101,8 +138,33 @@ function RotaDetalhe() {
 
   const trecho = `${rota.origem} → ${rota.destino}`;
 
+  function irParaLoginComRascunho() {
+    salvarRascunho({
+      slug: rota.slug,
+      origem: rota.origem,
+      destino: rota.destino,
+      data,
+      hora,
+      periodo,
+      carro,
+      passageiros,
+      embarqueLocal,
+      observacoes,
+    });
+    salvarRedirectPosLogin(`/transfers/${rota.slug}`);
+    void navigate({ to: "/auth" });
+  }
+
   async function agendar() {
     if (!user) return;
+    if (!data) {
+      toast.error("Escolha a data do embarque.");
+      return;
+    }
+    if (!embarqueLocal) {
+      toast.error("Escolha (ou informe) o local de embarque.");
+      return;
+    }
     setAgendando(true);
     try {
       const { data: perfil } = await supabase
@@ -116,10 +178,12 @@ function RotaDetalhe() {
         rota_id: rota.id ?? null,
         trecho,
         data_viagem: data || null,
+        hora: hora || null,
         periodo: periodo === "noite" ? "noite" : "dia",
         carro,
         passageiros,
         valor: preco ?? null,
+        embarque_local: embarqueLocal || null,
         observacoes: observacoes || null,
         contato_nome: perfil?.nome ?? user.email ?? null,
         contato_telefone: perfil?.telefone ?? null,
@@ -139,9 +203,11 @@ function RotaDetalhe() {
     mensagemReserva({
       rota: `${rota.origem} → ${rota.destino}`,
       data: data || undefined,
+      hora: hora || undefined,
       periodo: periodo === "noite" ? "Noite (18h às 5h)" : "Dia",
       carro: carro === "pequeno" ? "Carro pequeno (até 4)" : "Carro grande (até 5)",
       passageiros,
+      embarque: embarqueLocal || undefined,
       valor: preco ? formatBRL(preco) : "sob consulta",
     }),
   );
@@ -340,15 +406,28 @@ function RotaDetalhe() {
             </p>
 
             <div className="mt-6 space-y-4">
-              <div>
-                <Label htmlFor="data">Data do embarque</Label>
-                <Input
-                  id="data"
-                  type="date"
-                  value={data}
-                  onChange={(e) => setData(e.target.value)}
-                  className="mt-2"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="data">Data do embarque</Label>
+                  <Input
+                    id="data"
+                    type="date"
+                    required
+                    value={data}
+                    onChange={(e) => setData(e.target.value)}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="hora">Horário</Label>
+                  <Input
+                    id="hora"
+                    type="time"
+                    value={hora}
+                    onChange={(e) => setHora(e.target.value)}
+                    className="mt-2"
+                  />
+                </div>
               </div>
 
               <div>
@@ -425,12 +504,38 @@ function RotaDetalhe() {
             </div>
 
             <div className="mt-6">
-              <Label htmlFor="obs">Local de embarque / observações</Label>
+              <Label htmlFor="embarque">Local de embarque</Label>
+              <Select value={embarqueEscolha} onValueChange={setEmbarqueEscolha}>
+                <SelectTrigger id="embarque" className="mt-2">
+                  <SelectValue placeholder="Onde podemos te buscar?" />
+                </SelectTrigger>
+                <SelectContent>
+                  {rota.embarque.map((local) => (
+                    <SelectItem key={local} value={local}>
+                      {local}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={OUTRO_EMBARQUE}>Outro endereço</SelectItem>
+                </SelectContent>
+              </Select>
+              {embarqueEscolha === OUTRO_EMBARQUE && (
+                <Input
+                  value={embarqueOutro}
+                  onChange={(e) => setEmbarqueOutro(e.target.value)}
+                  placeholder="Endereço completo para embarque"
+                  maxLength={200}
+                  className="mt-2"
+                />
+              )}
+            </div>
+
+            <div className="mt-4">
+              <Label htmlFor="obs">Observações (opcional)</Label>
               <Input
                 id="obs"
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
-                placeholder="Ex: Aeroporto, voo G3 1234"
+                placeholder="Ex: voo G3 1234, cadeirinha de criança"
                 maxLength={300}
                 className="mt-2"
               />
@@ -441,10 +546,8 @@ function RotaDetalhe() {
                 <CalendarCheck className="size-4" /> Agendar esta corrida
               </Button>
             ) : (
-              <Button asChild className="mt-4 w-full">
-                <Link to="/auth">
-                  <CalendarCheck className="size-4" /> Entrar para agendar
-                </Link>
+              <Button className="mt-4 w-full" onClick={irParaLoginComRascunho}>
+                <CalendarCheck className="size-4" /> Entrar para agendar
               </Button>
             )}
 

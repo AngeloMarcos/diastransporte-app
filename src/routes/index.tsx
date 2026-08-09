@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, MessageCircle, Search } from "lucide-react";
 import { useState } from "react";
 import { Header } from "@/components/site/Header";
@@ -64,6 +64,7 @@ function Home() {
     conteudo: ConteudoRow[];
   };
   const conteudo = mapearConteudo(conteudoLista);
+  const navigate = useNavigate();
   const [busca, setBusca] = useState("");
   const destaques = [...rotas].sort((a, b) => b.popularidade - a.popularidade).slice(0, 3);
   const filtradas = busca.trim()
@@ -71,6 +72,16 @@ function Home() {
         `${r.origem} ${r.destino}`.toLowerCase().includes(busca.trim().toLowerCase()),
       )
     : [];
+
+  function buscar(e: React.FormEvent) {
+    e.preventDefault();
+    const [unica] = filtradas;
+    if (filtradas.length === 1 && unica) {
+      void navigate({ to: "/transfers/$rota", params: { rota: unica.slug } });
+    } else {
+      void navigate({ to: "/transfers" });
+    }
+  }
 
   return (
     <div className="min-h-screen">
@@ -99,7 +110,10 @@ function Home() {
             )}
           </p>
 
-          <div className="mt-8 max-w-xl rounded-lg border border-border bg-background/80 p-3 backdrop-blur">
+          <form
+            onSubmit={buscar}
+            className="mt-8 max-w-xl rounded-lg border border-border bg-background/80 p-3 backdrop-blur"
+          >
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 value={busca}
@@ -107,10 +121,8 @@ function Home() {
                 placeholder="Para onde você vai? Ex: Barreirinhas"
                 className="h-11 border-border bg-card"
               />
-              <Button asChild className="h-11 px-6">
-                <Link to="/transfers">
-                  <Search className="size-4" /> Buscar
-                </Link>
+              <Button type="submit" className="h-11 px-6">
+                <Search className="size-4" /> Buscar
               </Button>
             </div>
             {filtradas.length > 0 && (
@@ -131,7 +143,7 @@ function Home() {
                 ))}
               </ul>
             )}
-          </div>
+          </form>
         </div>
       </section>
 

@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { TrustBadges } from "@/components/site/TrustBadges";
 import { RotaCard } from "@/components/site/RotaCard";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { type Rota } from "@/data/rotas";
 import { listRotas } from "@/lib/rotas.functions";
 import { whatsappLink } from "@/lib/whatsapp";
@@ -37,15 +38,19 @@ function Transfers() {
   const rotas = Route.useLoaderData() as Rota[];
   const [ordem, setOrdem] = useState<Ordem>("populares");
   const [filtro, setFiltro] = useState<Filtro>("todos");
+  const [busca, setBusca] = useState("");
 
   const lista = useMemo(() => {
-    const base = rotas.filter((r) => (filtro === "grande" ? r.precoGrande !== null : true));
+    const termo = busca.trim().toLowerCase();
+    const base = rotas
+      .filter((r) => (filtro === "grande" ? r.precoGrande !== null : true))
+      .filter((r) => !termo || `${r.origem} ${r.destino}`.toLowerCase().includes(termo));
     const copia = [...base];
     if (ordem === "menor") copia.sort((a, b) => a.precoPequeno - b.precoPequeno);
     else if (ordem === "maior") copia.sort((a, b) => b.precoPequeno - a.precoPequeno);
     else copia.sort((a, b) => b.popularidade - a.popularidade);
     return copia;
-  }, [rotas, ordem, filtro]);
+  }, [rotas, ordem, filtro, busca]);
 
   return (
     <div className="min-h-screen">
@@ -64,7 +69,17 @@ function Transfers() {
       <TrustBadges />
 
       <section className="mx-auto max-w-6xl px-4 py-12">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="relative max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por origem ou destino"
+            className="h-11 pl-9"
+          />
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">{lista.length} trechos disponíveis</p>
           <div className="flex flex-wrap gap-2">
             {(
@@ -103,11 +118,22 @@ function Transfers() {
           </div>
         </div>
 
-        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {lista.map((r) => (
-            <RotaCard key={r.slug} rota={r} />
-          ))}
-        </div>
+        {lista.length ? (
+          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {lista.map((r) => (
+              <RotaCard key={r.slug} rota={r} />
+            ))}
+          </div>
+        ) : (
+          <div className="mt-8 rounded-lg border border-dashed border-border p-8 text-center">
+            <p className="text-sm text-muted-foreground">
+              Nenhum trecho encontrado para “{busca}”.
+            </p>
+            <Button size="sm" variant="secondary" className="mt-3" onClick={() => setBusca("")}>
+              Limpar busca
+            </Button>
+          </div>
+        )}
 
         <div className="mt-12 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-card p-6">
           <div>
