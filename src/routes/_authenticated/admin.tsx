@@ -33,7 +33,7 @@ const statusOpcoes = ["pendente", "confirmado", "concluido", "cancelado"] as con
 function AdminPage() {
   const { isAdmin, carregando } = useAuth();
   const navigate = useNavigate();
-  const [aba, setAba] = useState<"rotas" | "agendamentos">("rotas");
+  const [aba, setAba] = useState<"rotas" | "agendamentos" | "conteudo">("rotas");
 
   useEffect(() => {
     if (!carregando && !isAdmin) {
