@@ -35,19 +35,28 @@ const galeria = [
 ];
 
 function Frota() {
+  const conteudo = mapearConteudo(Route.useLoaderData());
+
   return (
     <div className="min-h-screen">
       <Header />
 
       <section className="border-b border-border bg-card">
         <div className="mx-auto max-w-6xl px-4 py-16">
-          <h1 className="font-display text-4xl sm:text-5xl">Nossa frota</h1>
+          <h1 className="font-display text-4xl sm:text-5xl">
+            {texto(conteudo, "frota_intro", "titulo", "Nossa frota")}
+          </h1>
           <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
-            Carros próprios, revisados a cada viagem e com ar-condicionado. Você escolhe o porte do
-            veículo de acordo com o grupo e a bagagem.
+            {texto(
+              conteudo,
+              "frota_intro",
+              "texto",
+              "Carros próprios, revisados a cada viagem e com ar-condicionado. Você escolhe o porte do veículo de acordo com o grupo e a bagagem.",
+            )}
           </p>
         </div>
       </section>
+
 
       <section className="mx-auto max-w-6xl px-4 py-16">
         <div className="grid gap-6 md:grid-cols-2">
