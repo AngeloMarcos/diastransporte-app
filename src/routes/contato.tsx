@@ -9,8 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { EMPRESA, fotos } from "@/data/rotas";
 import { whatsappLink } from "@/lib/whatsapp";
+import { listConteudo } from "@/lib/conteudo.functions";
+import { mapearConteudo, texto } from "@/lib/conteudo";
 
 export const Route = createFileRoute("/contato")({
+  loader: () => listConteudo(),
+
   head: () => ({
     meta: [
       { title: "Contato e atendimento — Dias Transporte" },
