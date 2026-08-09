@@ -1363,15 +1363,15 @@ function UsuarioLinha({
     <article className="rounded-lg border border-border bg-card p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="font-medium">
-            {usuario.nome || "Sem nome"}{" "}
+          <div className="flex flex-wrap items-center gap-2 font-medium">
+            <span>{usuario.nome || "Sem nome"}</span>
             {usuario.isAdmin && (
               <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary">
                 Administrador
               </Badge>
             )}
-            {euMesmo && <span className="ml-2 text-xs text-muted-foreground">(você)</span>}
-          </p>
+            {euMesmo && <span className="text-xs text-muted-foreground">(você)</span>}
+          </div>
           <p className="text-sm text-muted-foreground">{usuario.email}</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {usuario.agendamentos} agendamento(s) ·{" "}
