@@ -141,10 +141,18 @@ function Home() {
       <section className="mx-auto max-w-6xl px-4 py-20">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="font-display text-3xl sm:text-4xl">Rotas mais pedidas</h2>
+            <h2 className="font-display text-3xl sm:text-4xl">
+              {texto(conteudo, "home_sobre", "titulo", "Rotas mais pedidas")}
+            </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Valores por veículo, já com combustível, pedágio e motorista.
+              {texto(
+                conteudo,
+                "home_sobre",
+                "texto",
+                "Valores por veículo, já com combustível, pedágio e motorista.",
+              )}
             </p>
+
           </div>
           <Button asChild variant="secondary">
             <Link to="/transfers">
