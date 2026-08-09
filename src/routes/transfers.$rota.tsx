@@ -1,6 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
+  CalendarCheck,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -25,19 +26,27 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { formatBRL, getRota, precoFinal, rotas } from "@/data/rotas";
+import { toast } from "sonner";
+import { formatBRL, precoFinal, type Rota } from "@/data/rotas";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { listRotas } from "@/lib/rotas.functions";
 import { mensagemReserva, whatsappLink } from "@/lib/whatsapp";
 
 export const Route = createFileRoute("/transfers/$rota")({
-  loader: ({ params }) => {
-    const rota = getRota(params.rota);
+  loader: async ({ params }) => {
+    const rotas = await listRotas();
+    const rota = rotas.find((r) => r.slug === params.rota);
     if (!rota) throw notFound();
-    return { rota };
+    return { rota, rotas };
   },
   head: ({ loaderData }) => {
     if (!loaderData) {
       return {
-        meta: [{ title: "Trecho não encontrado — Dias Transporte" }, { name: "robots", content: "noindex" }],
+        meta: [
+          { title: "Trecho não encontrado — Dias Transporte" },
+          { name: "robots", content: "noindex" },
+        ],
       };
     }
     const { rota } = loaderData;
@@ -70,21 +79,61 @@ const inclui = [
 ];
 
 function RotaDetalhe() {
-  const { rota } = Route.useLoaderData();
+  const loaderData = Route.useLoaderData() as { rota: Rota; rotas: Rota[] };
+  const { rota, rotas } = loaderData;
+  const { user } = useAuth();
   const [indice, setIndice] = useState(0);
   const [data, setData] = useState("");
   const [periodo, setPeriodo] = useState<"dia" | "noite">("dia");
   const [carro, setCarro] = useState<"pequeno" | "grande">("pequeno");
   const [passageiros, setPassageiros] = useState(2);
+  const [observacoes, setObservacoes] = useState("");
+  const [agendando, setAgendando] = useState(false);
 
   const maxPassageiros = carro === "pequeno" ? 4 : 5;
   const preco = precoFinal(rota, carro, periodo);
   const temNoite = rota.precoPequenoNoite !== undefined || rota.precoGrandeNoite !== undefined;
 
   const relacionadas = useMemo(
-    () => rotas.filter((r) => r.slug !== rota.slug).slice(0, 3),
-    [rota.slug],
+    () => rotas.filter((r: Rota) => r.slug !== rota.slug).slice(0, 3),
+    [rotas, rota.slug],
   );
+
+  const trecho = `${rota.origem} → ${rota.destino}`;
+
+  async function agendar() {
+    if (!user) return;
+    setAgendando(true);
+    try {
+      const { data: perfil } = await supabase
+        .from("profiles")
+        .select("nome,telefone")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const { error } = await supabase.from("agendamentos").insert({
+        user_id: user.id,
+        rota_id: rota.id ?? null,
+        trecho,
+        data_viagem: data || null,
+        periodo: periodo === "noite" ? "noite" : "dia",
+        carro,
+        passageiros,
+        valor: preco ?? null,
+        observacoes: observacoes || null,
+        contato_nome: perfil?.nome ?? user.email ?? null,
+        contato_telefone: perfil?.telefone ?? null,
+      });
+      if (error) throw error;
+
+      toast.success("Corrida agendada! Vamos confirmar pelo WhatsApp.");
+      window.open(link, "_blank", "noreferrer");
+    } catch (erro) {
+      toast.error(erro instanceof Error ? erro.message : "Não foi possível agendar.");
+    } finally {
+      setAgendando(false);
+    }
+  }
 
   const link = whatsappLink(
     mensagemReserva({
@@ -172,7 +221,9 @@ function RotaDetalhe() {
               </p>
             </div>
             <div className="rounded-lg border border-border bg-card p-4">
-              <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Distância</p>
+              <p className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                Distância
+              </p>
               <p className="mt-1 inline-flex items-center gap-2 text-sm">
                 <MapPin className="size-4 text-primary" /> {rota.distancia}
               </p>
@@ -211,7 +262,7 @@ function RotaDetalhe() {
                       {formatBRL(rota.precoPequenoNoite ?? rota.precoPequeno)}
                     </td>
                     <td className="px-4 py-3">
-                      {rota.precoGrandeNoite ?? rota.precoGrande
+                      {(rota.precoGrandeNoite ?? rota.precoGrande)
                         ? formatBRL((rota.precoGrandeNoite ?? rota.precoGrande) as number)
                         : "Sob consulta"}
                     </td>
@@ -221,7 +272,8 @@ function RotaDetalhe() {
             </table>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Valores por veículo, não por pessoa. {rota.ida_e_volta ? "Trecho disponível nos dois sentidos." : "Trecho de ida."}
+            Valores por veículo, não por pessoa.{" "}
+            {rota.ida_e_volta ? "Trecho disponível nos dois sentidos." : "Trecho de ida."}
           </p>
 
           <h2 className="mt-10 font-display text-2xl">Inclui</h2>
@@ -277,11 +329,15 @@ function RotaDetalhe() {
 
         <aside className="lg:sticky lg:top-24 lg:h-fit">
           <div className="rounded-lg border border-border bg-card p-6">
-            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Valor total</p>
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">
+              Valor total
+            </p>
             <p className="mt-1 font-display text-4xl">
               {preco ? formatBRL(preco) : "Sob consulta"}
             </p>
-            <p className="text-xs text-muted-foreground">por veículo, até {maxPassageiros} passageiros</p>
+            <p className="text-xs text-muted-foreground">
+              por veículo, até {maxPassageiros} passageiros
+            </p>
 
             <div className="mt-6 space-y-4">
               <div>
@@ -368,13 +424,41 @@ function RotaDetalhe() {
               </div>
             </div>
 
-            <Button asChild className="mt-6 w-full bg-whats text-whats-foreground hover:bg-whats/90">
+            <div className="mt-6">
+              <Label htmlFor="obs">Local de embarque / observações</Label>
+              <Input
+                id="obs"
+                value={observacoes}
+                onChange={(e) => setObservacoes(e.target.value)}
+                placeholder="Ex: Aeroporto, voo G3 1234"
+                maxLength={300}
+                className="mt-2"
+              />
+            </div>
+
+            {user ? (
+              <Button className="mt-4 w-full" disabled={agendando} onClick={() => void agendar()}>
+                <CalendarCheck className="size-4" /> Agendar esta corrida
+              </Button>
+            ) : (
+              <Button asChild className="mt-4 w-full">
+                <Link to="/auth">
+                  <CalendarCheck className="size-4" /> Entrar para agendar
+                </Link>
+              </Button>
+            )}
+
+            <Button
+              asChild
+              className="mt-2 w-full bg-whats text-whats-foreground hover:bg-whats/90"
+            >
               <a href={link} target="_blank" rel="noreferrer">
                 <MessageCircle className="size-4" /> Reservar pelo WhatsApp
               </a>
             </Button>
             <p className="mt-3 text-xs text-muted-foreground">
-              Confirmação imediata no WhatsApp. Cancelamento grátis até 24h antes.
+              O agendamento fica registrado na sua conta e chega no nosso WhatsApp. Cancelamento
+              grátis até 24h antes.
             </p>
           </div>
         </aside>
