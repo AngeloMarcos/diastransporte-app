@@ -51,19 +51,26 @@ function Contato() {
 
       <section className="relative border-b border-border">
         <img
-          src={fotos.cronosNoite}
+          src={texto(conteudo, "contato_intro", "imagem", fotos.cronosNoite)}
           alt="Carro da Dias Transporte em embarque noturno"
           className="absolute inset-0 size-full object-cover"
         />
         <div className="absolute inset-0 overlay-escuro" />
         <div className="relative mx-auto max-w-6xl px-4 py-20">
-          <h1 className="font-display text-4xl sm:text-5xl">Fale com a gente</h1>
+          <h1 className="font-display text-4xl sm:text-5xl">
+            {texto(conteudo, "contato_intro", "titulo", "Fale com a gente")}
+          </h1>
           <p className="mt-3 max-w-xl text-sm text-muted-foreground">
-            Atendemos voos de qualquer horário, inclusive na madrugada. Mande o trecho e a data que
-            confirmamos a disponibilidade.
+            {texto(
+              conteudo,
+              "contato_intro",
+              "texto",
+              "Atendemos voos de qualquer horário, inclusive na madrugada. Mande o trecho e a data que confirmamos a disponibilidade.",
+            )}
           </p>
         </div>
       </section>
+
 
       <section className="mx-auto grid max-w-6xl gap-10 px-4 py-16 lg:grid-cols-2">
         <div className="space-y-6">
