@@ -34,7 +34,9 @@ export const Route = createFileRoute("/contato")({
 });
 
 function Contato() {
+  const conteudo = mapearConteudo(Route.useLoaderData());
   const [nome, setNome] = useState("");
+
   const [trecho, setTrecho] = useState("");
   const [data, setData] = useState("");
   const [obs, setObs] = useState("");
