@@ -458,3 +458,211 @@ function AdminAgendamentos() {
     </div>
   );
 }
+
+type ConteudoItem = {
+  id: string;
+  chave: string;
+  secao: string;
+  titulo: string;
+  texto: string;
+  imagem: string;
+  ordem: number;
+};
+
+function AdminConteudo() {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-conteudo"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("conteudo_site")
+        .select("id, chave, secao, titulo, texto, imagem, ordem")
+        .order("secao", { ascending: true })
+        .order("ordem", { ascending: true });
+      if (error) throw error;
+      return data as unknown as ConteudoItem[];
+    },
+  });
+
+  const criar = useMutation({
+    mutationFn: async (chave: string) => {
+      const { error } = await supabase.from("conteudo_site").insert({ chave, secao: "geral" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Bloco criado.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-conteudo"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao criar bloco."),
+  });
+
+  const [novaChave, setNovaChave] = useState("");
+
+  if (isLoading) return <p className="mt-8 text-sm text-muted-foreground">Carregando conteúdo…</p>;
+
+  return (
+    <div className="mt-8 space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Cada bloco tem uma chave usada pelo site (ex.: <code>home_hero</code>,{" "}
+        <code>frota_intro</code>, <code>contato_intro</code>). Edite título, texto e imagem e salve.
+      </p>
+
+      {data?.map((item) => (
+        <ConteudoEditor key={item.id} item={item} />
+      ))}
+
+      <div className="rounded-lg border border-dashed border-border p-5">
+        <Label>Novo bloco (chave)</Label>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Input
+            className="max-w-xs"
+            value={novaChave}
+            placeholder="ex.: home_promo"
+            onChange={(e) => setNovaChave(e.target.value.replace(/[^\w-]/g, "_").toLowerCase())}
+          />
+          <Button
+            variant="secondary"
+            disabled={!novaChave || criar.isPending}
+            onClick={() => {
+              criar.mutate(novaChave);
+              setNovaChave("");
+            }}
+          >
+            Criar bloco
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConteudoEditor({ item }: { item: ConteudoItem }) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState(item);
+  const [enviando, setEnviando] = useState(false);
+
+  const salvar = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("conteudo_site")
+        .update({
+          secao: form.secao,
+          titulo: form.titulo,
+          texto: form.texto,
+          imagem: form.imagem,
+          ordem: Number(form.ordem) || 0,
+        })
+        .eq("id", item.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Conteúdo atualizado.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-conteudo"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao salvar."),
+  });
+
+  const remover = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("conteudo_site").delete().eq("id", item.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Bloco removido.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-conteudo"] });
+    },
+  });
+
+  async function enviarImagem(arquivo: File) {
+    setEnviando(true);
+    try {
+      const caminho = `conteudo/${item.chave}/${Date.now()}-${arquivo.name.replace(/[^\w.-]/g, "_")}`;
+      const { error } = await supabase.storage.from("rotas").upload(caminho, arquivo);
+      if (error) throw error;
+      const { data, error: erroUrl } = await supabase.storage
+        .from("rotas")
+        .createSignedUrl(caminho, 60 * 60 * 24 * 365 * 20);
+      if (erroUrl || !data) throw erroUrl ?? new Error("Falha ao gerar link da imagem.");
+      setForm((f) => ({ ...f, imagem: data.signedUrl }));
+      toast.success("Imagem enviada. Clique em salvar para publicar.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao enviar imagem.");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <article className="rounded-lg border border-border bg-card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg">{item.chave}</h2>
+          <p className="text-xs text-muted-foreground">seção: {form.secao}</p>
+        </div>
+        {form.imagem ? (
+          <img src={form.imagem} alt="" className="size-12 rounded-sm object-cover" />
+        ) : null}
+      </div>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <Campo label="Seção" value={form.secao} onChange={(v) => setForm({ ...form, secao: v })} />
+        <CampoNumero
+          label="Ordem"
+          value={form.ordem}
+          onChange={(v) => setForm({ ...form, ordem: v ?? 0 })}
+        />
+        <Campo
+          label="Título"
+          value={form.titulo}
+          onChange={(v) => setForm({ ...form, titulo: v })}
+        />
+        <Campo
+          label="URL da imagem"
+          value={form.imagem}
+          onChange={(v) => setForm({ ...form, imagem: v })}
+        />
+      </div>
+
+      <div className="mt-4">
+        <Label>Texto / descrição</Label>
+        <Textarea
+          className="mt-2"
+          rows={3}
+          value={form.texto}
+          onChange={(e) => setForm({ ...form, texto: e.target.value })}
+        />
+      </div>
+
+      <div className="mt-4">
+        <Label>Enviar imagem</Label>
+        <Input
+          type="file"
+          accept="image/*"
+          className="mt-2 max-w-xs"
+          onChange={(e) => {
+            const arquivo = e.target.files?.[0];
+            if (arquivo) void enviarImagem(arquivo);
+          }}
+        />
+      </div>
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        <Button onClick={() => salvar.mutate()} disabled={salvar.isPending || enviando}>
+          {salvar.isPending || enviando ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Save className="size-4" />
+          )}
+          Salvar bloco
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={() => remover.mutate()}
+          disabled={remover.isPending}
+        >
+          Remover
+        </Button>
+      </div>
+    </article>
+  );
+}
