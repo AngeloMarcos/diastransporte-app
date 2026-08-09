@@ -9,10 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EMPRESA, fotos, veiculos, type Rota } from "@/data/rotas";
 import { listRotas } from "@/lib/rotas.functions";
+import { listConteudo, type ConteudoRow } from "@/lib/conteudo.functions";
+import { mapearConteudo, texto } from "@/lib/conteudo";
 import { whatsappLink } from "@/lib/whatsapp";
 
 export const Route = createFileRoute("/")({
-  loader: () => listRotas(),
+  loader: async () => ({ rotas: await listRotas(), conteudo: await listConteudo() }),
+
   head: () => ({
     meta: [
       { title: "Dias Transporte — Transfer São Luís e Lençóis Maranhenses" },
