@@ -59,7 +59,11 @@ const depoimentos = [
 ];
 
 function Home() {
-  const rotas = Route.useLoaderData() as Rota[];
+  const { rotas, conteudo: conteudoLista } = Route.useLoaderData() as {
+    rotas: Rota[];
+    conteudo: ConteudoRow[];
+  };
+  const conteudo = mapearConteudo(conteudoLista);
   const [busca, setBusca] = useState("");
   const destaques = [...rotas].sort((a, b) => b.popularidade - a.popularidade).slice(0, 3);
   const filtradas = busca.trim()
@@ -74,7 +78,7 @@ function Home() {
 
       <section className="relative flex min-h-[88vh] items-center">
         <img
-          src={fotos.fileira}
+          src={texto(conteudo, "home_hero", "imagem", fotos.fileira)}
           alt="Frota de carros da Dias Transporte alinhada na estrada do Maranhão"
           className="absolute inset-0 size-full object-cover"
         />
@@ -84,12 +88,17 @@ function Home() {
             Tarifário temporada 2026
           </span>
           <h1 className="mt-5 max-w-3xl font-display text-5xl leading-[0.95] sm:text-7xl">
-            Do desembarque às dunas
+            {texto(conteudo, "home_hero", "titulo", "Do desembarque às dunas")}
           </h1>
           <p className="mt-5 max-w-xl text-base text-muted-foreground sm:text-lg">
-            Transfer particular entre São Luís, Barreirinhas, Santo Amaro e toda a Rota das Emoções.
-            Preço fechado por veículo, sem rateio e sem espera.
+            {texto(
+              conteudo,
+              "home_hero",
+              "texto",
+              "Transfer particular entre São Luís, Barreirinhas, Santo Amaro e toda a Rota das Emoções. Preço fechado por veículo, sem rateio e sem espera.",
+            )}
           </p>
+
 
           <div className="mt-8 max-w-xl rounded-lg border border-border bg-background/80 p-3 backdrop-blur">
             <div className="flex flex-col gap-2 sm:flex-row">
