@@ -77,7 +77,6 @@ function Contato() {
         </div>
       </section>
 
-
       <section className="mx-auto grid max-w-6xl gap-10 px-4 py-16 lg:grid-cols-2">
         <div className="space-y-6">
           <div className="rounded-lg border border-border bg-card p-6">

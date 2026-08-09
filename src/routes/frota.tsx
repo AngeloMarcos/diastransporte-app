@@ -61,7 +61,6 @@ function Frota() {
         </div>
       </section>
 
-
       <section className="mx-auto max-w-6xl px-4 py-16">
         <div className="grid gap-6 md:grid-cols-2">
           {veiculos.map((v) => (

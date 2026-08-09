@@ -99,7 +99,6 @@ function Home() {
             )}
           </p>
 
-
           <div className="mt-8 max-w-xl rounded-lg border border-border bg-background/80 p-3 backdrop-blur">
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
@@ -152,7 +151,6 @@ function Home() {
                 "Valores por veículo, já com combustível, pedágio e motorista.",
               )}
             </p>
-
           </div>
           <Button asChild variant="secondary">
             <Link to="/transfers">

@@ -94,7 +94,6 @@ function AdminPage() {
         ) : (
           <AdminConteudo />
         )}
-
       </main>
       <Footer />
     </div>
@@ -655,11 +654,7 @@ function ConteudoEditor({ item }: { item: ConteudoItem }) {
           )}
           Salvar bloco
         </Button>
-        <Button
-          variant="secondary"
-          onClick={() => remover.mutate()}
-          disabled={remover.isPending}
-        >
+        <Button variant="secondary" onClick={() => remover.mutate()} disabled={remover.isPending}>
           Remover
         </Button>
       </div>
