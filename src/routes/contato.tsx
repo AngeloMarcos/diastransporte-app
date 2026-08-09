@@ -81,8 +81,15 @@ function Contato() {
                 <MapPin className="size-4 text-primary" /> Base em {EMPRESA.base}
               </li>
             </ul>
-            <Button asChild className="mt-6 w-full bg-whats text-whats-foreground hover:bg-whats/90">
-              <a href={whatsappLink("Olá! Quero informações sobre transfer.")} target="_blank" rel="noreferrer">
+            <Button
+              asChild
+              className="mt-6 w-full bg-whats text-whats-foreground hover:bg-whats/90"
+            >
+              <a
+                href={whatsappLink("Olá! Quero informações sobre transfer.")}
+                target="_blank"
+                rel="noreferrer"
+              >
                 <MessageCircle className="size-4" /> Abrir conversa no WhatsApp
               </a>
             </Button>
@@ -91,8 +98,8 @@ function Contato() {
           <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
             <h2 className="font-display text-xl text-foreground">Área de atendimento</h2>
             <p className="mt-3">
-              São Luís, Barreirinhas, Santo Amaro do Maranhão, Parnaíba, Barra Grande e Jericoacoara.
-              Trechos fora dessa lista são orçados sob consulta.
+              São Luís, Barreirinhas, Santo Amaro do Maranhão, Parnaíba, Barra Grande e
+              Jericoacoara. Trechos fora dessa lista são orçados sob consulta.
             </p>
           </div>
         </div>
@@ -112,7 +119,12 @@ function Contato() {
           <div className="mt-6 space-y-4">
             <div>
               <Label htmlFor="nome">Seu nome</Label>
-              <Input id="nome" value={nome} onChange={(e) => setNome(e.target.value)} className="mt-2" />
+              <Input
+                id="nome"
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                className="mt-2"
+              />
             </div>
             <div>
               <Label htmlFor="trecho">Trecho desejado</Label>
@@ -147,7 +159,10 @@ function Contato() {
             </div>
           </div>
 
-          <Button type="submit" className="mt-6 w-full bg-whats text-whats-foreground hover:bg-whats/90">
+          <Button
+            type="submit"
+            className="mt-6 w-full bg-whats text-whats-foreground hover:bg-whats/90"
+          >
             <MessageCircle className="size-4" /> Enviar pelo WhatsApp
           </Button>
         </form>

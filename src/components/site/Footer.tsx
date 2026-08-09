@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Instagram, MessageCircle } from "lucide-react";
+import logo from "@/assets/logo.jpeg.asset.json";
 import { EMPRESA } from "@/data/rotas";
 import { whatsappLink } from "@/lib/whatsapp";
 import { Button } from "@/components/ui/button";
@@ -10,9 +11,12 @@ export function Footer() {
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 md:grid-cols-4">
         <div className="md:col-span-2">
           <div className="flex items-center gap-2">
-            <span className="flex h-9 items-center rounded-sm bg-primary px-2 font-display text-lg leading-none text-primary-foreground">
-              DT
-            </span>
+            <img
+              src={logo.url}
+              alt="Logo Dias Transporte"
+              className="h-10 w-10 rounded-sm object-contain"
+            />
+
             <span className="font-display text-lg tracking-wide">{EMPRESA.nome}</span>
           </div>
           <p className="mt-4 max-w-sm text-sm text-muted-foreground">
@@ -58,7 +62,11 @@ export function Footer() {
             Todos os dias, 6h às 22h
           </p>
           <Button asChild className="mt-4 w-full bg-whats text-whats-foreground hover:bg-whats/90">
-            <a href={whatsappLink("Olá! Quero reservar um transfer.")} target="_blank" rel="noreferrer">
+            <a
+              href={whatsappLink("Olá! Quero reservar um transfer.")}
+              target="_blank"
+              rel="noreferrer"
+            >
               <MessageCircle className="size-4" /> WhatsApp
             </a>
           </Button>

@@ -10,14 +10,27 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ContatoRouteImport } from './routes/contato'
 import { Route as FrotaRouteImport } from './routes/frota'
+import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as AuthenticatedMinhasViagensRouteImport } from './routes/_authenticated/minhas-viagens'
 import { Route as TransfersIndexRouteImport } from './routes/transfers.index'
 import { Route as TransfersRotaRouteImport } from './routes/transfers.$rota'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContatoRoute = ContatoRouteImport.update({
@@ -30,6 +43,17 @@ const FrotaRoute = FrotaRouteImport.update({
   path: '/frota',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedMinhasViagensRoute =
+  AuthenticatedMinhasViagensRouteImport.update({
+    id: '/minhas-viagens',
+    path: '/minhas-viagens',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const TransfersIndexRoute = TransfersIndexRouteImport.update({
   id: '/transfers/',
   path: '/transfers/',
@@ -43,42 +67,74 @@ const TransfersRotaRoute = TransfersRotaRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
+  '/admin': typeof AuthenticatedAdminRoute
+  '/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
   '/transfers/$rota': typeof TransfersRotaRoute
   '/transfers/': typeof TransfersIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
+  '/admin': typeof AuthenticatedAdminRoute
+  '/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
   '/transfers/$rota': typeof TransfersRotaRoute
   '/transfers': typeof TransfersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/auth': typeof AuthRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
+  '/_authenticated/admin': typeof AuthenticatedAdminRoute
+  '/_authenticated/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
   '/transfers/$rota': typeof TransfersRotaRoute
   '/transfers/': typeof TransfersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/contato' | '/frota' | '/transfers/$rota' | '/transfers/'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/contato'
+    | '/frota'
+    | '/admin'
+    | '/minhas-viagens'
+    | '/transfers/$rota'
+    | '/transfers/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/contato' | '/frota' | '/transfers/$rota' | '/transfers'
+  to:
+    | '/'
+    | '/auth'
+    | '/contato'
+    | '/frota'
+    | '/admin'
+    | '/minhas-viagens'
+    | '/transfers/$rota'
+    | '/transfers'
   id:
     | '__root__'
     | '/'
+    | '/_authenticated'
+    | '/auth'
     | '/contato'
     | '/frota'
+    | '/_authenticated/admin'
+    | '/_authenticated/minhas-viagens'
     | '/transfers/$rota'
     | '/transfers/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AuthRoute: typeof AuthRoute
   ContatoRoute: typeof ContatoRoute
   FrotaRoute: typeof FrotaRoute
   TransfersRotaRoute: typeof TransfersRotaRoute
@@ -94,6 +150,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/contato': {
       id: '/contato'
       path: '/contato'
@@ -107,6 +177,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/frota'
       preLoaderRoute: typeof FrotaRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/admin': {
+      id: '/_authenticated/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthenticatedAdminRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/minhas-viagens': {
+      id: '/_authenticated/minhas-viagens'
+      path: '/minhas-viagens'
+      fullPath: '/minhas-viagens'
+      preLoaderRoute: typeof AuthenticatedMinhasViagensRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/transfers/': {
       id: '/transfers/'
@@ -125,8 +209,23 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
+  AuthenticatedMinhasViagensRoute: typeof AuthenticatedMinhasViagensRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAdminRoute: AuthenticatedAdminRoute,
+  AuthenticatedMinhasViagensRoute: AuthenticatedMinhasViagensRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AuthRoute: AuthRoute,
   ContatoRoute: ContatoRoute,
   FrotaRoute: FrotaRoute,
   TransfersRotaRoute: TransfersRotaRoute,
@@ -135,13 +234,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

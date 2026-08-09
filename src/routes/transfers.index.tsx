@@ -6,10 +6,12 @@ import { Footer } from "@/components/site/Footer";
 import { TrustBadges } from "@/components/site/TrustBadges";
 import { RotaCard } from "@/components/site/RotaCard";
 import { Button } from "@/components/ui/button";
-import { rotas } from "@/data/rotas";
+import { type Rota } from "@/data/rotas";
+import { listRotas } from "@/lib/rotas.functions";
 import { whatsappLink } from "@/lib/whatsapp";
 
 export const Route = createFileRoute("/transfers/")({
+  loader: () => listRotas(),
   head: () => ({
     meta: [
       { title: "Transfers e tarifário 2026 — Dias Transporte" },
@@ -32,6 +34,7 @@ type Ordem = "populares" | "menor" | "maior";
 type Filtro = "todos" | "pequeno" | "grande";
 
 function Transfers() {
+  const rotas = Route.useLoaderData() as Rota[];
   const [ordem, setOrdem] = useState<Ordem>("populares");
   const [filtro, setFiltro] = useState<Filtro>("todos");
 
@@ -42,7 +45,7 @@ function Transfers() {
     else if (ordem === "maior") copia.sort((a, b) => b.precoPequeno - a.precoPequeno);
     else copia.sort((a, b) => b.popularidade - a.popularidade);
     return copia;
-  }, [ordem, filtro]);
+  }, [rotas, ordem, filtro]);
 
   return (
     <div className="min-h-screen">
@@ -108,7 +111,9 @@ function Transfers() {
 
         <div className="mt-12 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-card p-6">
           <div>
-            <h2 className="font-display text-xl">Precisa de ida e volta ou de um trecho fora da lista?</h2>
+            <h2 className="font-display text-xl">
+              Precisa de ida e volta ou de um trecho fora da lista?
+            </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Montamos o roteiro completo e fechamos um valor único.
             </p>

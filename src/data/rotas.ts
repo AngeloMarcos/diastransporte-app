@@ -27,6 +27,7 @@ export const EMPRESA = {
 };
 
 export type Rota = {
+  id?: string;
   slug: string;
   origem: string;
   destino: string;

@@ -7,10 +7,12 @@ import { TrustBadges } from "@/components/site/TrustBadges";
 import { RotaCard } from "@/components/site/RotaCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { EMPRESA, fotos, rotas, veiculos } from "@/data/rotas";
+import { EMPRESA, fotos, veiculos, type Rota } from "@/data/rotas";
+import { listRotas } from "@/lib/rotas.functions";
 import { whatsappLink } from "@/lib/whatsapp";
 
 export const Route = createFileRoute("/")({
+  loader: () => listRotas(),
   head: () => ({
     meta: [
       { title: "Dias Transporte — Transfer São Luís e Lençóis Maranhenses" },
@@ -22,7 +24,8 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "Dias Transporte — Do desembarque às dunas" },
       {
         property: "og:description",
-        content: "Transfers particulares em São Luís e nos Lençóis Maranhenses. Preço fechado por veículo.",
+        content:
+          "Transfers particulares em São Luís e nos Lençóis Maranhenses. Preço fechado por veículo.",
       },
     ],
   }),
@@ -47,11 +50,13 @@ const depoimentos = [
   },
   {
     nome: "Família Aguiar",
-    texto: "Pegamos o carro grande por causa das malas. Valeu cada centavo, o motorista foi atencioso.",
+    texto:
+      "Pegamos o carro grande por causa das malas. Valeu cada centavo, o motorista foi atencioso.",
   },
 ];
 
 function Home() {
+  const rotas = Route.useLoaderData() as Rota[];
   const [busca, setBusca] = useState("");
   const destaques = [...rotas].sort((a, b) => b.popularidade - a.popularidade).slice(0, 3);
   const filtradas = busca.trim()
@@ -150,7 +155,10 @@ function Home() {
           </p>
           <div className="mt-8 grid gap-6 md:grid-cols-2">
             {veiculos.map((v) => (
-              <div key={v.nome} className="overflow-hidden rounded-lg border border-border bg-background">
+              <div
+                key={v.nome}
+                className="overflow-hidden rounded-lg border border-border bg-background"
+              >
                 <img
                   src={v.foto}
                   alt={v.modelo}
@@ -193,7 +201,10 @@ function Home() {
           <h2 className="font-display text-3xl sm:text-4xl">Quem já viajou com a gente</h2>
           <div className="mt-8 grid gap-6 md:grid-cols-3">
             {depoimentos.map((d) => (
-              <blockquote key={d.nome} className="rounded-lg border border-border bg-background p-6">
+              <blockquote
+                key={d.nome}
+                className="rounded-lg border border-border bg-background p-6"
+              >
                 <p className="text-sm text-muted-foreground">“{d.texto}”</p>
                 <footer className="mt-4 text-sm font-semibold">{d.nome}</footer>
               </blockquote>

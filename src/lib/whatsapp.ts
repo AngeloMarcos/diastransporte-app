@@ -12,11 +12,7 @@ export function mensagemReserva(dados: {
   passageiros?: number | undefined;
   valor?: string | undefined;
 }) {
-  const linhas = [
-    `Olá, ${EMPRESA.nome}! Quero reservar um transfer.`,
-    ``,
-    `Trecho: ${dados.rota}`,
-  ];
+  const linhas = [`Olá, ${EMPRESA.nome}! Quero reservar um transfer.`, ``, `Trecho: ${dados.rota}`];
   if (dados.data) linhas.push(`Data: ${dados.data}`);
   if (dados.periodo) linhas.push(`Período: ${dados.periodo}`);
   if (dados.carro) linhas.push(`Veículo: ${dados.carro}`);
