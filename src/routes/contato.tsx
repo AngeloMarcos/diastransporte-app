@@ -9,8 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { EMPRESA, fotos } from "@/data/rotas";
 import { whatsappLink } from "@/lib/whatsapp";
+import { listConteudo } from "@/lib/conteudo.functions";
+import { mapearConteudo, texto } from "@/lib/conteudo";
 
 export const Route = createFileRoute("/contato")({
+  loader: () => listConteudo(),
+
   head: () => ({
     meta: [
       { title: "Contato e atendimento — Dias Transporte" },
@@ -30,7 +34,9 @@ export const Route = createFileRoute("/contato")({
 });
 
 function Contato() {
+  const conteudo = mapearConteudo(Route.useLoaderData());
   const [nome, setNome] = useState("");
+
   const [trecho, setTrecho] = useState("");
   const [data, setData] = useState("");
   const [obs, setObs] = useState("");
@@ -51,16 +57,22 @@ function Contato() {
 
       <section className="relative border-b border-border">
         <img
-          src={fotos.cronosNoite}
+          src={texto(conteudo, "contato_intro", "imagem", fotos.cronosNoite)}
           alt="Carro da Dias Transporte em embarque noturno"
           className="absolute inset-0 size-full object-cover"
         />
         <div className="absolute inset-0 overlay-escuro" />
         <div className="relative mx-auto max-w-6xl px-4 py-20">
-          <h1 className="font-display text-4xl sm:text-5xl">Fale com a gente</h1>
+          <h1 className="font-display text-4xl sm:text-5xl">
+            {texto(conteudo, "contato_intro", "titulo", "Fale com a gente")}
+          </h1>
           <p className="mt-3 max-w-xl text-sm text-muted-foreground">
-            Atendemos voos de qualquer horário, inclusive na madrugada. Mande o trecho e a data que
-            confirmamos a disponibilidade.
+            {texto(
+              conteudo,
+              "contato_intro",
+              "texto",
+              "Atendemos voos de qualquer horário, inclusive na madrugada. Mande o trecho e a data que confirmamos a disponibilidade.",
+            )}
           </p>
         </div>
       </section>

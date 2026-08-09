@@ -9,10 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EMPRESA, fotos, veiculos, type Rota } from "@/data/rotas";
 import { listRotas } from "@/lib/rotas.functions";
+import { listConteudo, type ConteudoRow } from "@/lib/conteudo.functions";
+import { mapearConteudo, texto } from "@/lib/conteudo";
 import { whatsappLink } from "@/lib/whatsapp";
 
 export const Route = createFileRoute("/")({
-  loader: () => listRotas(),
+  loader: async () => ({ rotas: await listRotas(), conteudo: await listConteudo() }),
+
   head: () => ({
     meta: [
       { title: "Dias Transporte — Transfer São Luís e Lençóis Maranhenses" },
@@ -56,7 +59,11 @@ const depoimentos = [
 ];
 
 function Home() {
-  const rotas = Route.useLoaderData() as Rota[];
+  const { rotas, conteudo: conteudoLista } = Route.useLoaderData() as {
+    rotas: Rota[];
+    conteudo: ConteudoRow[];
+  };
+  const conteudo = mapearConteudo(conteudoLista);
   const [busca, setBusca] = useState("");
   const destaques = [...rotas].sort((a, b) => b.popularidade - a.popularidade).slice(0, 3);
   const filtradas = busca.trim()
@@ -71,7 +78,7 @@ function Home() {
 
       <section className="relative flex min-h-[88vh] items-center">
         <img
-          src={fotos.fileira}
+          src={texto(conteudo, "home_hero", "imagem", fotos.fileira)}
           alt="Frota de carros da Dias Transporte alinhada na estrada do Maranhão"
           className="absolute inset-0 size-full object-cover"
         />
@@ -81,11 +88,15 @@ function Home() {
             Tarifário temporada 2026
           </span>
           <h1 className="mt-5 max-w-3xl font-display text-5xl leading-[0.95] sm:text-7xl">
-            Do desembarque às dunas
+            {texto(conteudo, "home_hero", "titulo", "Do desembarque às dunas")}
           </h1>
           <p className="mt-5 max-w-xl text-base text-muted-foreground sm:text-lg">
-            Transfer particular entre São Luís, Barreirinhas, Santo Amaro e toda a Rota das Emoções.
-            Preço fechado por veículo, sem rateio e sem espera.
+            {texto(
+              conteudo,
+              "home_hero",
+              "texto",
+              "Transfer particular entre São Luís, Barreirinhas, Santo Amaro e toda a Rota das Emoções. Preço fechado por veículo, sem rateio e sem espera.",
+            )}
           </p>
 
           <div className="mt-8 max-w-xl rounded-lg border border-border bg-background/80 p-3 backdrop-blur">
@@ -129,9 +140,16 @@ function Home() {
       <section className="mx-auto max-w-6xl px-4 py-20">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="font-display text-3xl sm:text-4xl">Rotas mais pedidas</h2>
+            <h2 className="font-display text-3xl sm:text-4xl">
+              {texto(conteudo, "home_sobre", "titulo", "Rotas mais pedidas")}
+            </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Valores por veículo, já com combustível, pedágio e motorista.
+              {texto(
+                conteudo,
+                "home_sobre",
+                "texto",
+                "Valores por veículo, já com combustível, pedágio e motorista.",
+              )}
             </p>
           </div>
           <Button asChild variant="secondary">
