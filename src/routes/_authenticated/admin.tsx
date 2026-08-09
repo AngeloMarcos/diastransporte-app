@@ -78,9 +78,23 @@ function AdminPage() {
           >
             Agendamentos
           </Button>
+          <Button
+            variant={aba === "conteudo" ? "default" : "secondary"}
+            size="sm"
+            onClick={() => setAba("conteudo")}
+          >
+            Conteúdo do site
+          </Button>
         </div>
 
-        {aba === "rotas" ? <AdminRotas /> : <AdminAgendamentos />}
+        {aba === "rotas" ? (
+          <AdminRotas />
+        ) : aba === "agendamentos" ? (
+          <AdminAgendamentos />
+        ) : (
+          <AdminConteudo />
+        )}
+
       </main>
       <Footer />
     </div>
