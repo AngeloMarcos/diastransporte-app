@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import {
   CalendarCheck,
@@ -13,6 +14,7 @@ import {
   Search,
   Trash2,
   Upload,
+  Users,
   Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -47,6 +49,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { formatBRL } from "@/data/rotas";
 import { ROTA_COLUMNS, type RotaRow } from "@/lib/rotasMap";
+import {
+  definirPapelAdmin,
+  listUsuarios,
+  redefinirSenhaUsuario,
+  type UsuarioAdmin,
+} from "@/lib/usuarios.functions";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
@@ -134,6 +142,7 @@ const abas = [
   { id: "rotas", label: "Rotas e preços", icon: RouteIcon },
   { id: "agendamentos", label: "Agendamentos", icon: CalendarCheck },
   { id: "conteudo", label: "Conteúdo do site", icon: FileText },
+  { id: "usuarios", label: "Usuários e acessos", icon: Users },
 ] as const;
 
 function AdminPage() {
@@ -194,6 +203,9 @@ function AdminPage() {
           </TabsContent>
           <TabsContent value="conteudo" className="mt-6">
             <AdminConteudo />
+          </TabsContent>
+          <TabsContent value="usuarios" className="mt-6">
+            <AdminUsuarios />
           </TabsContent>
         </Tabs>
       </main>
@@ -1237,6 +1249,186 @@ function ConteudoEditor({ item }: { item: ConteudoItem }) {
         </Button>
         <Button variant="secondary" onClick={() => remover.mutate()} disabled={remover.isPending}>
           Remover
+        </Button>
+      </div>
+    </article>
+  );
+}
+
+function AdminUsuarios() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const carregarUsuarios = useServerFn(listUsuarios);
+  const alterarPapel = useServerFn(definirPapelAdmin);
+  const redefinirSenha = useServerFn(redefinirSenhaUsuario);
+  const [busca, setBusca] = useState("");
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin-usuarios"],
+    queryFn: () => carregarUsuarios(),
+  });
+
+  const papel = useMutation({
+    mutationFn: (vars: { userId: string; admin: boolean }) => alterarPapel({ data: vars }),
+    onSuccess: () => {
+      toast.success("Permissões atualizadas.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-usuarios"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atualizar permissões."),
+  });
+
+  const senha = useMutation({
+    mutationFn: (vars: { userId: string; senha: string }) => redefinirSenha({ data: vars }),
+    onSuccess: () => toast.success("Senha redefinida."),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao redefinir a senha."),
+  });
+
+  const lista = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    const todos = data ?? [];
+    if (!termo) return todos;
+    return todos.filter((u) =>
+      [u.email, u.nome, u.telefone].some((c) => c.toLowerCase().includes(termo)),
+    );
+  }, [data, busca]);
+
+  const totalAdmins = (data ?? []).filter((u) => u.isAdmin).length;
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando usuários…</p>;
+  if (error) {
+    return (
+      <p className="text-sm text-red-400">
+        {error instanceof Error ? error.message : "Não foi possível carregar os usuários."}
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          {data?.length ?? 0} contas · {totalAdmins} administrador(es). Promova, remova acessos ou
+          redefina senhas.
+        </p>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por e-mail, nome ou WhatsApp"
+            className="w-72 pl-9"
+          />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {lista.map((u) => (
+          <UsuarioLinha
+            key={u.id}
+            usuario={u}
+            euMesmo={u.id === user?.id}
+            salvandoPapel={papel.isPending}
+            salvandoSenha={senha.isPending}
+            onAlternarAdmin={() => papel.mutate({ userId: u.id, admin: !u.isAdmin })}
+            onRedefinirSenha={(nova) => senha.mutate({ userId: u.id, senha: nova })}
+          />
+        ))}
+        {!lista.length && (
+          <p className="text-sm text-muted-foreground">Nenhum usuário encontrado.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function UsuarioLinha({
+  usuario,
+  euMesmo,
+  salvandoPapel,
+  salvandoSenha,
+  onAlternarAdmin,
+  onRedefinirSenha,
+}: {
+  usuario: UsuarioAdmin;
+  euMesmo: boolean;
+  salvandoPapel: boolean;
+  salvandoSenha: boolean;
+  onAlternarAdmin: () => void;
+  onRedefinirSenha: (senha: string) => void;
+}) {
+  const [novaSenha, setNovaSenha] = useState("");
+  const whats = linkWhatsappCliente(usuario.telefone || null);
+
+  return (
+    <article className="rounded-lg border border-border bg-card p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2 font-medium">
+            <span>{usuario.nome || "Sem nome"}</span>
+            {usuario.isAdmin && (
+              <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary">
+                Administrador
+              </Badge>
+            )}
+            {euMesmo && <span className="text-xs text-muted-foreground">(você)</span>}
+          </div>
+          <p className="text-sm text-muted-foreground">{usuario.email}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {usuario.agendamentos} agendamento(s) ·{" "}
+            {usuario.confirmado ? "e-mail confirmado" : "e-mail não confirmado"} · último acesso:{" "}
+            {usuario.ultimoAcesso
+              ? new Date(usuario.ultimoAcesso).toLocaleString("pt-BR")
+              : "nunca"}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {whats && (
+            <Button variant="ghost" size="sm" asChild>
+              <a href={whats} target="_blank" rel="noreferrer">
+                <MessageCircle className="size-4" /> WhatsApp
+              </a>
+            </Button>
+          )}
+          <Button
+            variant={usuario.isAdmin ? "outline" : "secondary"}
+            size="sm"
+            disabled={salvandoPapel || (euMesmo && usuario.isAdmin)}
+            onClick={onAlternarAdmin}
+          >
+            {usuario.isAdmin ? "Remover admin" : "Tornar admin"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-end gap-2">
+        <div>
+          <Label htmlFor={`senha-${usuario.id}`} className="text-xs">
+            Nova senha
+          </Label>
+          <Input
+            id={`senha-${usuario.id}`}
+            type="text"
+            value={novaSenha}
+            onChange={(e) => setNovaSenha(e.target.value)}
+            placeholder="mínimo 6 caracteres"
+            className="mt-1 w-56"
+          />
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={novaSenha.length < 6 || salvandoSenha}
+          onClick={() => {
+            onRedefinirSenha(novaSenha);
+            setNovaSenha("");
+          }}
+        >
+          {salvandoSenha ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Save className="size-4" />
+          )}
+          Redefinir senha
         </Button>
       </div>
     </article>
