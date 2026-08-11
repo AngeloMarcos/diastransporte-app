@@ -157,6 +157,37 @@ function RotaDetalhe() {
     void navigate({ to: "/auth" });
   }
 
+  function adicionarItem() {
+    if (!data) {
+      toast.error("Escolha a data do embarque.");
+      return;
+    }
+    if (!embarqueLocal) {
+      toast.error("Escolha (ou informe) o local de embarque.");
+      return;
+    }
+    adicionarAoCarrinho({
+      slug: rota.slug,
+      rotaId: rota.id ?? null,
+      trecho,
+      origem: rota.origem,
+      destino: rota.destino,
+      data,
+      hora,
+      periodo,
+      carro,
+      passageiros,
+      embarqueLocal,
+      observacoes,
+      valor: preco ?? null,
+    });
+    toast.success("Adicionado ao carrinho.", {
+      action: { label: "Ver carrinho", onClick: () => void navigate({ to: "/carrinho" }) },
+    });
+  }
+
+
+
   async function agendar() {
     if (!user) return;
     if (!data) {
