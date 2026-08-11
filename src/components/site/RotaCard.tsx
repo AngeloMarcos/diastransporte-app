@@ -6,12 +6,15 @@ import { Button } from "@/components/ui/button";
 export function RotaCard({ rota }: { rota: Rota }) {
   return (
     <article className="group flex flex-col overflow-hidden rounded-lg border border-border bg-card">
-      <div className="relative aspect-[4/3] overflow-hidden">
+      <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
         <img
           src={rota.foto}
           alt={`Transfer ${rota.origem} para ${rota.destino}`}
           loading="lazy"
-          className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
+          decoding="async"
+          width={800}
+          height={600}
+          className="absolute inset-0 size-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
         />
         <div className="absolute left-3 top-3 flex gap-2">
           <span className="rounded-sm bg-background/85 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest">
@@ -26,7 +29,7 @@ export function RotaCard({ rota }: { rota: Rota }) {
       </div>
 
       <div className="flex flex-1 flex-col p-5">
-        <h3 className="font-display text-lg leading-tight">
+        <h3 className="font-display text-lg leading-tight text-balance break-words">
           {rota.origem} <span className="text-primary">→</span> {rota.destino}
         </h3>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
