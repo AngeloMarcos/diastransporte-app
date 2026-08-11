@@ -83,6 +83,27 @@
       window.addEventListener("online", function () {
         location.reload();
       });
+
+      // Recovery path for returning visitors controlled by the previous
+      // worker, which incorrectly served this page for every navigation.
+      // Checking for an update here is essential because the app bundle does
+      // not run while that worker is displaying the offline fallback.
+      if (navigator.onLine && "serviceWorker" in navigator) {
+        var refreshing = false;
+        navigator.serviceWorker.addEventListener("controllerchange", function () {
+          if (refreshing) return;
+          refreshing = true;
+          location.reload();
+        });
+        navigator.serviceWorker
+          .register("/sw.js", { scope: "/", updateViaCache: "none" })
+          .then(function (registration) {
+            return registration.update();
+          })
+          .catch(function () {
+            // Keep the retry button available if the network is genuinely down.
+          });
+      }
     </script>
   </body>
 </html>

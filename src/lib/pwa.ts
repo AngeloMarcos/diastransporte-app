@@ -36,7 +36,10 @@ export function registerOfflineShell(): void {
     return;
   }
 
-  void navigator.serviceWorker.register(SW_URL, { scope: "/" }).catch(() => {
-    /* offline shell is best-effort; never break the app */
-  });
+  void navigator.serviceWorker
+    .register(SW_URL, { scope: "/", updateViaCache: "none" })
+    .then((registration) => registration.update())
+    .catch(() => {
+      /* offline shell is best-effort; never break the app */
+    });
 }

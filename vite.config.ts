@@ -28,8 +28,10 @@ export default defineConfig({
         workbox: {
           globDirectory: "dist/client",
           globPatterns: ["**/*.{css,js,woff,woff2,png,svg,ico,webmanifest,html}"],
-          navigateFallback: "/offline.html",
-          navigateFallbackDenylist: [/^\/api\//, /^\/~oauth/, /^\/_serverFn\//],
+          // Do not use offline.html as navigateFallback: that creates a
+          // NavigationRoute which serves the offline page for every URL,
+          // before the NetworkFirst route below gets a chance to run.
+          navigateFallback: null,
           cleanupOutdatedCaches: true,
           clientsClaim: true,
           skipWaiting: true,
@@ -40,7 +42,7 @@ export default defineConfig({
               handler: "NetworkFirst",
               options: {
                 cacheName: "shell-html",
-                networkTimeoutSeconds: 5,
+                precacheFallback: { fallbackURL: "/offline.html" },
                 expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 },
               },
             },
