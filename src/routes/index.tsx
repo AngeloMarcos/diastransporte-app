@@ -109,8 +109,14 @@ function Home() {
         <img
           src={texto(conteudo, "home_hero", "imagem", fotos.fileira)}
           alt="Frota de carros da Dias Transporte alinhada na estrada do Maranhão"
-          className="absolute inset-0 size-full object-cover"
+          width={1920}
+          height={1080}
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 size-full object-cover object-center"
         />
+
         <div className="absolute inset-0 overlay-escuro" />
         <div className="relative mx-auto w-full max-w-6xl px-4 py-section">
           <span className="inline-block rounded-sm border border-primary/60 px-3 py-1 text-[11px] uppercase tracking-[0.25em] text-primary">
