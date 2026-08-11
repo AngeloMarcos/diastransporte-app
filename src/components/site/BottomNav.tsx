@@ -1,10 +1,9 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Home, MapPinned, ShoppingBag, UserRound, LogIn } from "lucide-react";
-import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
-import { lerRascunho } from "@/lib/reserva";
+import { useCarrinho } from "@/lib/carrinho";
 
 /**
  * Barra de navegação inferior estilo app — visível apenas no celular (< md).
@@ -23,27 +22,18 @@ type Item = {
 
 export function BottomNav() {
   const { user } = useAuth();
-  const [rascunho, setRascunho] = useState<ReturnType<typeof lerRascunho>>(null);
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-
-  // sessionStorage só existe no cliente: ler após hidratar evita mismatch.
-  useEffect(() => {
-    setRascunho(lerRascunho());
-  }, [pathname]);
+  const { itens } = useCarrinho();
 
   const itens: Item[] = [
     { key: "inicio", label: "Início", icon: Home, to: "/" },
     { key: "transfers", label: "Transfers", icon: MapPinned, to: "/transfers" },
-    rascunho
-      ? {
-          key: "carrinho",
-          label: "Carrinho",
-          icon: ShoppingBag,
-          to: "/transfers/$rota",
-          params: { rota: rascunho.slug },
-          badge: 1,
-        }
-      : { key: "carrinho", label: "Carrinho", icon: ShoppingBag, to: "/transfers" },
+    {
+      key: "carrinho",
+      label: "Carrinho",
+      icon: ShoppingBag,
+      to: "/carrinho",
+      ...(itens.length > 0 ? { badge: itens.length } : {}),
+    },
     user
       ? { key: "conta", label: "Minhas viagens", icon: UserRound, to: "/minhas-viagens" }
       : { key: "conta", label: "Entrar", icon: LogIn, to: "/auth" },
