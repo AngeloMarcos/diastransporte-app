@@ -648,7 +648,7 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
             <h2 className="font-display text-lg">
               {rota.origem} → {rota.destino}
             </h2>
-            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               {formatBRL(rota.preco_pequeno)}
               <Badge
                 variant="outline"
@@ -661,7 +661,7 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
                 {rota.ativo ? "ativa" : "oculta"}
               </Badge>
               {rota.destaque ? <Badge variant="outline">{rota.destaque}</Badge> : null}
-            </p>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
