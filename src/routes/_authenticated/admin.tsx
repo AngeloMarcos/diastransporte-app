@@ -643,7 +643,15 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
     <article className="rounded-lg border border-border bg-card p-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <img src={form.foto} alt="" className="size-12 shrink-0 rounded-sm object-cover" />
+          <img
+            src={form.foto}
+            alt=""
+            width={48}
+            height={48}
+            loading="lazy"
+            decoding="async"
+            className="size-12 shrink-0 rounded-sm object-cover"
+          />
           <div>
             <h2 className="font-display text-lg">
               {rota.origem} → {rota.destino}
@@ -792,7 +800,15 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
             <div className="mt-2 flex flex-wrap gap-2">
               {form.galeria.map((url, i) => (
                 <div key={`${url}-${i}`} className="relative">
-                  <img src={url} alt="" className="size-16 rounded-sm object-cover" />
+                  <img
+                    src={url}
+                    alt=""
+                    width={64}
+                    height={64}
+                    loading="lazy"
+                    decoding="async"
+                    className="size-16 rounded-sm object-cover"
+                  />
                   <button
                     type="button"
                     aria-label="Remover foto"
@@ -1222,7 +1238,15 @@ function ConteudoEditor({ item }: { item: ConteudoItem }) {
           <p className="text-xs text-muted-foreground">seção: {form.secao}</p>
         </div>
         {form.imagem ? (
-          <img src={form.imagem} alt="" className="size-12 rounded-sm object-cover" />
+          <img
+            src={form.imagem}
+            alt=""
+            width={48}
+            height={48}
+            loading="lazy"
+            decoding="async"
+            className="size-12 rounded-sm object-cover"
+          />
         ) : null}
       </div>
 
