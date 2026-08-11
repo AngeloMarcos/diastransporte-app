@@ -59,8 +59,14 @@ function Contato() {
         <img
           src={texto(conteudo, "contato_intro", "imagem", fotos.cronosNoite)}
           alt="Carro da Dias Transporte em embarque noturno"
-          className="absolute inset-0 size-full object-cover"
+          width={1920}
+          height={1080}
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 size-full object-cover object-center"
         />
+
         <div className="absolute inset-0 overlay-escuro" />
         <div className="relative mx-auto max-w-6xl px-4 py-section">
           <h1 className="font-display text-fluid-2xl">
