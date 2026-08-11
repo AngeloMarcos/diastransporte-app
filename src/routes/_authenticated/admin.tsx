@@ -314,7 +314,11 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
       <div className="rounded-lg border border-border bg-card p-5">
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-display text-lg">Status dos agendamentos</h2>
-          <Button variant="secondary" className="h-11 shrink-0" onClick={() => onIrPara("agendamentos")}>
+          <Button
+            variant="secondary"
+            className="h-11 shrink-0"
+            onClick={() => onIrPara("agendamentos")}
+          >
             Ver todos
           </Button>
         </div>
@@ -349,7 +353,11 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
       <div className="rounded-lg border border-border bg-card p-5">
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-display text-lg">Últimos agendamentos</h2>
-          <Button variant="secondary" className="h-11 shrink-0" onClick={() => onIrPara("agendamentos")}>
+          <Button
+            variant="secondary"
+            className="h-11 shrink-0"
+            onClick={() => onIrPara("agendamentos")}
+          >
             Ver todos
           </Button>
         </div>
@@ -486,7 +494,11 @@ function NovaRotaDialog() {
         </div>
 
         <DialogFooter>
-          <Button className="h-11 w-full sm:w-auto" onClick={() => criar.mutate()} disabled={criar.isPending}>
+          <Button
+            className="h-11 w-full sm:w-auto"
+            onClick={() => criar.mutate()}
+            disabled={criar.isPending}
+          >
             {criar.isPending ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
