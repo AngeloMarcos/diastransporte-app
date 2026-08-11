@@ -5,6 +5,7 @@ import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { TrustBadges } from "@/components/site/TrustBadges";
 import { RotaCard } from "@/components/site/RotaCard";
+import { ListagemHeroSkeleton, RotaGridSkeleton } from "@/components/site/Skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { type Rota } from "@/data/rotas";
@@ -29,7 +30,34 @@ export const Route = createFileRoute("/transfers/")({
     ],
   }),
   component: Transfers,
+  pendingMs: 200,
+  pendingMinMs: 300,
+  pendingComponent: TransfersPendente,
+  errorComponent: ({ error }) => (
+    <div className="min-h-screen">
+      <Header />
+      <div className="mx-auto max-w-6xl px-4 py-24" role="alert">
+        <h1 className="font-display text-3xl">Não conseguimos carregar o tarifário</h1>
+        <p className="mt-3 text-sm text-muted-foreground">{error.message}</p>
+      </div>
+      <Footer />
+    </div>
+  ),
 });
+
+function TransfersPendente() {
+  return (
+    <div className="min-h-screen">
+      <Header />
+      <ListagemHeroSkeleton />
+      <TrustBadges />
+      <section className="mx-auto max-w-6xl px-4 py-12">
+        <RotaGridSkeleton />
+      </section>
+      <Footer />
+    </div>
+  );
+}
 
 type Ordem = "populares" | "menor" | "maior";
 type Filtro = "todos" | "pequeno" | "grande";
@@ -119,7 +147,7 @@ function Transfers() {
         </div>
 
         {lista.length ? (
-          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {lista.map((r) => (
               <RotaCard key={r.slug} rota={r} />
             ))}
