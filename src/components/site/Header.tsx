@@ -99,71 +99,28 @@ export function Header() {
           </Button>
         </nav>
 
-        <button
-          type="button"
-          onClick={() => setAberto((v) => !v)}
-          aria-label="Abrir menu"
-          className="rounded-sm border border-border p-2 text-foreground md:hidden"
-        >
-          <Menu className="size-5" />
-        </button>
+        {/* Mobile: uma única ação secundária (navegação fica na barra inferior). */}
+        {isAdmin ? (
+          <Link
+            to="/admin"
+            aria-label="Painel admin"
+            className="inline-grid size-11 shrink-0 place-items-center rounded-sm border border-border text-primary md:hidden"
+          >
+            <LayoutDashboard className="size-5" />
+          </Link>
+        ) : (
+          <a
+            href={whatsappLink("Olá! Quero informações sobre transfer.")}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Falar no WhatsApp"
+            className="inline-grid size-11 shrink-0 place-items-center rounded-sm bg-whats text-whats-foreground md:hidden"
+          >
+            <Phone className="size-5" />
+          </a>
+        )}
       </div>
 
-      {aberto && (
-        <div className="border-t border-border bg-card px-4 py-3 md:hidden">
-          <div className="flex flex-col gap-3">
-            {links.map((l) => (
-              <Link
-                key={l.to}
-                to={l.to}
-                onClick={() => setAberto(false)}
-                className="text-sm uppercase tracking-wide text-muted-foreground"
-                activeProps={{ className: "text-foreground" }}
-              >
-                {l.label}
-              </Link>
-            ))}
-            {user ? (
-              <>
-                <Link
-                  to="/minhas-viagens"
-                  onClick={() => setAberto(false)}
-                  className="text-sm uppercase tracking-wide text-muted-foreground"
-                >
-                  Minhas viagens
-                </Link>
-                {isAdmin && (
-                  <Link
-                    to="/admin"
-                    onClick={() => setAberto(false)}
-                    className="text-sm uppercase tracking-wide text-primary"
-                  >
-                    Painel admin
-                  </Link>
-                )}
-                <Button size="sm" variant="secondary" onClick={() => void sair()}>
-                  <LogOut className="size-4" /> Sair
-                </Button>
-              </>
-            ) : (
-              <Button asChild size="sm" variant="secondary">
-                <Link to="/auth" onClick={() => setAberto(false)}>
-                  <LogIn className="size-4" /> Entrar / criar conta
-                </Link>
-              </Button>
-            )}
-            <Button asChild size="sm" className="bg-whats text-whats-foreground hover:bg-whats/90">
-              <a
-                href={whatsappLink("Olá! Quero informações sobre transfer.")}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <Phone className="size-4" /> Falar no WhatsApp
-              </a>
-            </Button>
-          </div>
-        </div>
-      )}
     </header>
   );
 }
