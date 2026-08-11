@@ -3,8 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
   CalendarCheck,
   FileText,
+  KeyRound,
   LayoutDashboard,
   Loader2,
   MessageCircle,
@@ -12,18 +14,31 @@ import {
   Route as RouteIcon,
   Save,
   Search,
+  ShieldAlert,
   Trash2,
   Upload,
   Users,
   Wallet,
 } from "lucide-react";
+
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+
 import {
   Dialog,
   DialogContent,
@@ -1420,6 +1435,8 @@ function UsuarioLinha({
   onRedefinirSenha: (senha: string) => void;
 }) {
   const [novaSenha, setNovaSenha] = useState("");
+  const [confirmando, setConfirmando] = useState(false);
+
   const whats = linkWhatsappCliente(usuario.telefone || null);
 
   return (
@@ -1477,23 +1494,62 @@ function UsuarioLinha({
             className="mt-1 h-11 w-full sm:w-56"
           />
         </div>
-        <Button
-          variant="secondary"
-          className="h-11"
-          disabled={novaSenha.length < 6 || salvandoSenha}
-          onClick={() => {
-            onRedefinirSenha(novaSenha);
-            setNovaSenha("");
-          }}
-        >
-          {salvandoSenha ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <Save className="size-4" />
-          )}
-          Redefinir senha
-        </Button>
+        <AlertDialog open={confirmando} onOpenChange={setConfirmando}>
+          <Button
+            variant="secondary"
+            className="h-11"
+            disabled={novaSenha.length < 6 || salvandoSenha}
+            onClick={() => setConfirmando(true)}
+          >
+            {salvandoSenha ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <KeyRound className="size-4" />
+            )}
+            Redefinir senha
+          </Button>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="size-5 text-primary" />
+                Redefinir a senha de {usuario.nome || usuario.email}?
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3">
+                  <p>
+                    A senha de <strong className="text-foreground">{usuario.email}</strong> será
+                    substituída imediatamente. Esta ação é irreversível: a senha atual deixa de
+                    funcionar e a pessoa precisará usar a nova senha para entrar novamente.
+                  </p>
+                  {usuario.isAdmin && (
+                    <p className="flex items-start gap-2 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm font-medium text-red-300">
+                      <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+                      <span>
+                        Atenção: isso afeta outro administrador
+                        {euMesmo ? " (a sua própria conta)" : ""}. Confirme com a pessoa antes de
+                        prosseguir.
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="h-11">Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="h-11"
+                onClick={() => {
+                  onRedefinirSenha(novaSenha);
+                  setNovaSenha("");
+                }}
+              >
+                Sim, redefinir senha
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
+
     </article>
   );
 }
