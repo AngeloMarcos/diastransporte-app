@@ -539,7 +539,6 @@ function RotaDetalhe() {
               &quot;Reservar agora&quot; leva você direto ao carrinho para finalizar. Cancelamento
               grátis até 24h antes.
             </p>
-
           </div>
         </aside>
       </div>
