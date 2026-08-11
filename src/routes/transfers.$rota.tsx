@@ -13,7 +13,6 @@ import {
   ShieldCheck,
   ShoppingBag,
   Snowflake,
-
   UserRound,
 } from "lucide-react";
 import { Header } from "@/components/site/Header";
@@ -186,8 +185,6 @@ function RotaDetalhe() {
       action: { label: "Ver carrinho", onClick: () => void navigate({ to: "/carrinho" }) },
     });
   }
-
-
 
   async function agendar() {
     if (!user) return;
@@ -594,7 +591,6 @@ function RotaDetalhe() {
               </Button>
             )}
 
-
             <Button
               asChild
               className="mt-2 w-full bg-whats text-whats-foreground hover:bg-whats/90"
@@ -639,7 +635,6 @@ function RotaDetalhe() {
       </div>
 
       <Footer />
-
     </div>
   );
 }

@@ -90,5 +90,11 @@ export function useCarrinho() {
     };
   }, [sincronizar]);
 
-  return { itens, pronto, total: totalCarrinho(itens), remover: removerDoCarrinho, limpar: limparCarrinho };
+  return {
+    itens,
+    pronto,
+    total: totalCarrinho(itens),
+    remover: removerDoCarrinho,
+    limpar: limparCarrinho,
+  };
 }
