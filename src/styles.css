@@ -107,11 +107,18 @@
     border-color: var(--color-border);
   }
 
+  /* Fundo escuro já na raiz: evita flash branco em navegação/recarga */
+  html {
+    background-color: var(--color-background);
+    color-scheme: dark;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
   }
+
 
   h1,
   h2,
