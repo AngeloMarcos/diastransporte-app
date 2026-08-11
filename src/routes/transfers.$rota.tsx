@@ -42,6 +42,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { listRotas } from "@/lib/rotas.functions";
 import { mensagemReserva, whatsappLink } from "@/lib/whatsapp";
 import { lerRascunho, limparRascunho, salvarRascunho, salvarRedirectPosLogin } from "@/lib/reserva";
+import { adicionarAoCarrinho } from "@/lib/carrinho";
 
 const OUTRO_EMBARQUE = "outro";
 
