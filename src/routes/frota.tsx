@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { veiculos, fotos } from "@/data/rotas";
 import { listConteudo } from "@/lib/conteudo.functions";
 import { mapearConteudo, texto } from "@/lib/conteudo";
+import { FrotaSkeleton, ListagemHeroSkeleton } from "@/components/site/Skeletons";
 
 export const Route = createFileRoute("/frota")({
   loader: () => listConteudo(),
@@ -25,6 +26,26 @@ export const Route = createFileRoute("/frota")({
     ],
   }),
   component: Frota,
+  pendingMs: 200,
+  pendingMinMs: 300,
+  pendingComponent: () => (
+    <div className="min-h-screen">
+      <Header />
+      <ListagemHeroSkeleton />
+      <FrotaSkeleton />
+      <Footer />
+    </div>
+  ),
+  errorComponent: ({ error }) => (
+    <div className="min-h-screen">
+      <Header />
+      <div className="mx-auto max-w-6xl px-4 py-24" role="alert">
+        <h1 className="font-display text-3xl">Não conseguimos carregar a frota</h1>
+        <p className="mt-3 text-sm text-muted-foreground">{error.message}</p>
+      </div>
+      <Footer />
+    </div>
+  ),
 });
 
 const galeria = [
@@ -65,12 +86,17 @@ function Frota() {
         <div className="grid gap-6 md:grid-cols-2">
           {veiculos.map((v) => (
             <div key={v.nome} className="overflow-hidden rounded-lg border border-border bg-card">
-              <img
-                src={v.foto}
-                alt={v.modelo}
-                loading="lazy"
-                className="aspect-[16/10] w-full object-cover"
-              />
+              <div className="relative aspect-[16/10] w-full overflow-hidden bg-muted">
+                <img
+                  src={v.foto}
+                  alt={v.modelo}
+                  loading="lazy"
+                  decoding="async"
+                  width={960}
+                  height={600}
+                  className="absolute inset-0 size-full object-cover object-center"
+                />
+              </div>
               <div className="p-6">
                 <h2 className="font-display text-2xl">{v.nome}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">{v.modelo}</p>
@@ -88,15 +114,22 @@ function Frota() {
         </div>
 
         <h2 className="mt-16 font-display text-2xl">Na estrada</h2>
-        <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
           {galeria.map((g) => (
-            <img
+            <div
               key={g.src}
-              src={g.src}
-              alt={g.alt}
-              loading="lazy"
-              className="aspect-square w-full rounded-lg border border-border object-cover"
-            />
+              className="relative aspect-square w-full overflow-hidden rounded-lg border border-border bg-muted"
+            >
+              <img
+                src={g.src}
+                alt={g.alt}
+                loading="lazy"
+                decoding="async"
+                width={600}
+                height={600}
+                className="absolute inset-0 size-full object-cover object-center"
+              />
+            </div>
           ))}
         </div>
 
