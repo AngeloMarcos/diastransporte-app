@@ -34,8 +34,12 @@ export function Header() {
           <img
             src={logo.url}
             alt="Logo Dias Transporte"
+            width={44}
+            height={44}
+            decoding="async"
             className="h-11 w-11 shrink-0 rounded-sm object-contain"
           />
+
           <span className="min-w-0 leading-tight">
             <span className="block truncate font-display text-base tracking-wide">
               {EMPRESA.nome}
