@@ -1492,23 +1492,62 @@ function UsuarioLinha({
             className="mt-1 h-11 w-full sm:w-56"
           />
         </div>
-        <Button
-          variant="secondary"
-          className="h-11"
-          disabled={novaSenha.length < 6 || salvandoSenha}
-          onClick={() => {
-            onRedefinirSenha(novaSenha);
-            setNovaSenha("");
-          }}
-        >
-          {salvandoSenha ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <Save className="size-4" />
-          )}
-          Redefinir senha
-        </Button>
+        <AlertDialog open={confirmando} onOpenChange={setConfirmando}>
+          <Button
+            variant="secondary"
+            className="h-11"
+            disabled={novaSenha.length < 6 || salvandoSenha}
+            onClick={() => setConfirmando(true)}
+          >
+            {salvandoSenha ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <KeyRound className="size-4" />
+            )}
+            Redefinir senha
+          </Button>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="size-5 text-primary" />
+                Redefinir a senha de {usuario.nome || usuario.email}?
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3">
+                  <p>
+                    A senha de <strong className="text-foreground">{usuario.email}</strong> será
+                    substituída imediatamente. Esta ação é irreversível: a senha atual deixa de
+                    funcionar e a pessoa precisará usar a nova senha para entrar novamente.
+                  </p>
+                  {usuario.isAdmin && (
+                    <p className="flex items-start gap-2 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm font-medium text-red-300">
+                      <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+                      <span>
+                        Atenção: isso afeta outro administrador
+                        {euMesmo ? " (a sua própria conta)" : ""}. Confirme com a pessoa antes de
+                        prosseguir.
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="h-11">Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="h-11"
+                onClick={() => {
+                  onRedefinirSenha(novaSenha);
+                  setNovaSenha("");
+                }}
+              >
+                Sim, redefinir senha
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
+
     </article>
   );
 }
