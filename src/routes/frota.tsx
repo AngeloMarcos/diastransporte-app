@@ -39,8 +39,8 @@ export const Route = createFileRoute("/frota")({
   errorComponent: ({ error }) => (
     <div className="min-h-screen">
       <Header />
-      <div className="mx-auto max-w-6xl px-4 py-24" role="alert">
-        <h1 className="font-display text-3xl">Não conseguimos carregar a frota</h1>
+      <div className="mx-auto max-w-6xl px-4 py-section" role="alert">
+        <h1 className="font-display text-fluid-2xl">Não conseguimos carregar a frota</h1>
         <p className="mt-3 text-sm text-muted-foreground">{error.message}</p>
       </div>
       <Footer />
@@ -67,8 +67,8 @@ function Frota() {
       <Header />
 
       <section className="border-b border-border bg-card">
-        <div className="mx-auto max-w-6xl px-4 py-16">
-          <h1 className="font-display text-4xl sm:text-5xl">
+        <div className="mx-auto max-w-6xl px-4 py-section">
+          <h1 className="font-display text-fluid-2xl">
             {texto(conteudo, "frota_intro", "titulo", "Nossa frota")}
           </h1>
           <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
@@ -82,7 +82,7 @@ function Frota() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-16">
+      <section className="mx-auto max-w-6xl px-4 py-section">
         <div className="grid gap-6 md:grid-cols-2">
           {veiculos.map((v) => (
             <div key={v.nome} className="overflow-hidden rounded-lg border border-border bg-card">
@@ -98,7 +98,7 @@ function Frota() {
                 />
               </div>
               <div className="p-6">
-                <h2 className="font-display text-2xl">{v.nome}</h2>
+                <h2 className="font-display text-fluid-lg">{v.nome}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">{v.modelo}</p>
                 <p className="mt-4 text-sm">
                   {v.passageiros} · {v.bagagem}
@@ -113,7 +113,7 @@ function Frota() {
           ))}
         </div>
 
-        <h2 className="mt-16 font-display text-2xl">Na estrada</h2>
+        <h2 className="mt-16 font-display text-fluid-lg">Na estrada</h2>
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
           {galeria.map((g) => (
             <div

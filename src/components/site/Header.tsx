@@ -46,7 +46,6 @@ export function Header() {
           </span>
         </Link>
 
-
         <nav className="hidden items-center gap-6 md:flex">
           {links.map((l) => (
             <Link
@@ -120,7 +119,6 @@ export function Header() {
           </a>
         )}
       </div>
-
     </header>
   );
 }

@@ -55,7 +55,7 @@ export function VeiculoCardSkeleton() {
 
 export function FrotaSkeleton() {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-16">
+    <div className="mx-auto max-w-6xl px-4 py-section">
       <div className="grid gap-6 md:grid-cols-2">
         <VeiculoCardSkeleton />
         <VeiculoCardSkeleton />
@@ -73,7 +73,7 @@ export function FrotaSkeleton() {
 export function ListagemHeroSkeleton() {
   return (
     <section className="border-b border-border bg-card">
-      <div className="mx-auto max-w-6xl px-4 py-16">
+      <div className="mx-auto max-w-6xl px-4 py-section">
         <Skeleton className="h-11 w-72 max-w-full" />
         <Skeleton className="mt-4 h-4 w-full max-w-xl" />
         <Skeleton className="mt-2 h-4 w-2/3 max-w-md" />

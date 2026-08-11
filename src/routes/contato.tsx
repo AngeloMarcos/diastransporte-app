@@ -62,8 +62,8 @@ function Contato() {
           className="absolute inset-0 size-full object-cover"
         />
         <div className="absolute inset-0 overlay-escuro" />
-        <div className="relative mx-auto max-w-6xl px-4 py-20">
-          <h1 className="font-display text-4xl sm:text-5xl">
+        <div className="relative mx-auto max-w-6xl px-4 py-section">
+          <h1 className="font-display text-fluid-2xl">
             {texto(conteudo, "contato_intro", "titulo", "Fale com a gente")}
           </h1>
           <p className="mt-3 max-w-xl text-sm text-muted-foreground">
@@ -77,10 +77,10 @@ function Contato() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-6xl gap-10 px-4 py-16 lg:grid-cols-2">
+      <section className="mx-auto grid max-w-6xl gap-10 px-4 py-section lg:grid-cols-2">
         <div className="space-y-6">
           <div className="rounded-lg border border-border bg-card p-6">
-            <h2 className="font-display text-xl">Atendimento</h2>
+            <h2 className="font-display text-fluid-lg">Atendimento</h2>
             <ul className="mt-4 space-y-3 text-sm text-muted-foreground">
               <li className="flex items-center gap-2">
                 <Phone className="size-4 text-primary" /> {EMPRESA.whatsappLabel}
@@ -108,7 +108,7 @@ function Contato() {
           </div>
 
           <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
-            <h2 className="font-display text-xl text-foreground">Área de atendimento</h2>
+            <h2 className="font-display text-fluid-lg text-foreground">Área de atendimento</h2>
             <p className="mt-3">
               São Luís, Barreirinhas, Santo Amaro do Maranhão, Parnaíba, Barra Grande e
               Jericoacoara. Trechos fora dessa lista são orçados sob consulta.
@@ -123,7 +123,7 @@ function Contato() {
             window.open(whatsappLink(mensagem), "_blank", "noopener");
           }}
         >
-          <h2 className="font-display text-xl">Pedir orçamento</h2>
+          <h2 className="font-display text-fluid-lg">Pedir orçamento</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Preencha e enviamos direto para o nosso WhatsApp.
           </p>
