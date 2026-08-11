@@ -109,8 +109,14 @@ function Home() {
         <img
           src={texto(conteudo, "home_hero", "imagem", fotos.fileira)}
           alt="Frota de carros da Dias Transporte alinhada na estrada do Maranhão"
-          className="absolute inset-0 size-full object-cover"
+          width={1920}
+          height={1080}
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 size-full object-cover object-center"
         />
+
         <div className="absolute inset-0 overlay-escuro" />
         <div className="relative mx-auto w-full max-w-6xl px-4 py-section">
           <span className="inline-block rounded-sm border border-primary/60 px-3 py-1 text-[11px] uppercase tracking-[0.25em] text-primary">
@@ -211,8 +217,12 @@ function Home() {
                   src={v.foto}
                   alt={v.modelo}
                   loading="lazy"
-                  className="aspect-[16/10] w-full object-cover"
+                  decoding="async"
+                  width={960}
+                  height={600}
+                  className="aspect-[16/10] w-full object-cover object-center"
                 />
+
                 <div className="p-5">
                   <h3 className="font-display text-xl">{v.nome}</h3>
                   <p className="mt-1 text-sm text-muted-foreground">{v.modelo}</p>
@@ -266,8 +276,12 @@ function Home() {
           src={fotos.frotaPorDoSol}
           alt="Frota da Dias Transporte ao pôr do sol"
           loading="lazy"
-          className="absolute inset-0 size-full object-cover"
+          decoding="async"
+          width={1920}
+          height={1080}
+          className="absolute inset-0 size-full object-cover object-center"
         />
+
         <div className="absolute inset-0 overlay-escuro" />
         <div className="relative mx-auto max-w-6xl px-4 py-section text-center">
           <h2 className="font-display text-fluid-2xl">Reserve seu trecho agora</h2>

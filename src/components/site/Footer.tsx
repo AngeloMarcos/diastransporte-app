@@ -14,8 +14,13 @@ export function Footer() {
             <img
               src={logo.url}
               alt="Logo Dias Transporte"
+              width={40}
+              height={40}
+              loading="lazy"
+              decoding="async"
               className="h-10 w-10 rounded-sm object-contain"
             />
+
 
             <span className="font-display text-lg tracking-wide">{EMPRESA.nome}</span>
           </div>

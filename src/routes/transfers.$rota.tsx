@@ -259,8 +259,13 @@ function RotaDetalhe() {
             <img
               src={rota.galeria[indice]}
               alt={`Transfer ${rota.origem} para ${rota.destino} — foto ${indice + 1}`}
-              className="aspect-[16/10] w-full object-cover"
+              width={960}
+              height={600}
+              decoding="async"
+              fetchPriority={indice === 0 ? "high" : "auto"}
+              className="aspect-[16/10] w-full object-cover object-center"
             />
+
             <div className="absolute inset-x-0 bottom-0 flex items-center justify-between p-3">
               <button
                 type="button"
