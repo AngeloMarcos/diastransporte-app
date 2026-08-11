@@ -620,7 +620,26 @@ function RotaDetalhe() {
         </div>
       </section>
 
+      {/* Barra fixa no rodapé (mobile): preço + adicionar sempre visíveis */}
+      <div aria-hidden className="h-24 md:hidden" />
+      <div className="fixed inset-x-0 bottom-[calc(4.25rem+var(--safe-bottom))] z-40 border-t border-border bg-background/95 px-4 py-3 backdrop-blur md:hidden">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">
+              Total por veículo
+            </p>
+            <p className="truncate font-display text-2xl">
+              {preco ? formatBRL(preco) : "Sob consulta"}
+            </p>
+          </div>
+          <Button className="min-h-11 shrink-0" onClick={adicionarItem}>
+            <ShoppingBag className="size-4" /> Adicionar
+          </Button>
+        </div>
+      </div>
+
       <Footer />
+
     </div>
   );
 }
