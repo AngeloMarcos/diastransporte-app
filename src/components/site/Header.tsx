@@ -1,7 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, LogIn, LogOut, Menu, Phone, UserRound } from "lucide-react";
-import { useState } from "react";
+import { LayoutDashboard, LogIn, LogOut, Phone, UserRound } from "lucide-react";
 
 import logo from "@/assets/logo.jpeg.asset.json";
 import { EMPRESA } from "@/data/rotas";
@@ -17,7 +16,6 @@ const links = [
 ] as const;
 
 export function Header() {
-  const [aberto, setAberto] = useState(false);
   const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -30,21 +28,24 @@ export function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/85 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-        <Link to="/" className="flex items-center gap-2.5">
+    <header className="sticky top-0 z-50 border-b border-border bg-background/85 pt-[var(--safe-top)] backdrop-blur">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
+        <Link to="/" className="flex min-w-0 min-h-11 items-center gap-2.5">
           <img
             src={logo.url}
             alt="Logo Dias Transporte"
-            className="h-11 w-11 rounded-sm object-contain"
+            className="h-11 w-11 shrink-0 rounded-sm object-contain"
           />
-          <span className="leading-tight">
-            <span className="block font-display text-base tracking-wide">{EMPRESA.nome}</span>
-            <span className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          <span className="min-w-0 leading-tight">
+            <span className="block truncate font-display text-base tracking-wide">
+              {EMPRESA.nome}
+            </span>
+            <span className="block truncate text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {EMPRESA.base}
             </span>
           </span>
         </Link>
+
 
         <nav className="hidden items-center gap-6 md:flex">
           {links.map((l) => (
