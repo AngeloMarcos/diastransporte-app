@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as CarrinhoRouteImport } from './routes/carrinho'
 import { Route as ContatoRouteImport } from './routes/contato'
 import { Route as FrotaRouteImport } from './routes/frota'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
@@ -31,6 +32,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CarrinhoRoute = CarrinhoRouteImport.update({
+  id: '/carrinho',
+  path: '/carrinho',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContatoRoute = ContatoRouteImport.update({
@@ -68,6 +74,7 @@ const TransfersRotaRoute = TransfersRotaRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/carrinho': typeof CarrinhoRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
   '/admin': typeof AuthenticatedAdminRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/carrinho': typeof CarrinhoRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
   '/admin': typeof AuthenticatedAdminRoute
@@ -90,6 +98,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/carrinho': typeof CarrinhoRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
@@ -102,6 +111,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/carrinho'
     | '/contato'
     | '/frota'
     | '/admin'
@@ -112,6 +122,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/carrinho'
     | '/contato'
     | '/frota'
     | '/admin'
@@ -123,6 +134,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/carrinho'
     | '/contato'
     | '/frota'
     | '/_authenticated/admin'
@@ -135,6 +147,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  CarrinhoRoute: typeof CarrinhoRoute
   ContatoRoute: typeof ContatoRoute
   FrotaRoute: typeof FrotaRoute
   TransfersRotaRoute: typeof TransfersRotaRoute
@@ -162,6 +175,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/carrinho': {
+      id: '/carrinho'
+      path: '/carrinho'
+      fullPath: '/carrinho'
+      preLoaderRoute: typeof CarrinhoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contato': {
@@ -226,6 +246,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  CarrinhoRoute: CarrinhoRoute,
   ContatoRoute: ContatoRoute,
   FrotaRoute: FrotaRoute,
   TransfersRotaRoute: TransfersRotaRoute,
@@ -234,13 +255,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

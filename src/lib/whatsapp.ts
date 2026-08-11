@@ -24,3 +24,33 @@ export function mensagemReserva(dados: {
   linhas.push(``, `Pode confirmar a disponibilidade?`);
   return linhas.join("\n");
 }
+
+export function mensagemCarrinho(
+  itens: {
+    trecho: string;
+    data?: string | undefined;
+    hora?: string | undefined;
+    periodo?: string | undefined;
+    carro?: string | undefined;
+    passageiros?: number | undefined;
+    embarque?: string | undefined;
+    valor?: string | undefined;
+  }[],
+  extras?: { nome?: string | undefined; telefone?: string | undefined; total?: string | undefined },
+) {
+  const linhas = [`Olá, ${EMPRESA.nome}! Quero confirmar estas reservas:`];
+  itens.forEach((item, i) => {
+    linhas.push(``, `${i + 1}) ${item.trecho}`);
+    if (item.data) linhas.push(`   Data: ${item.data}${item.hora ? ` às ${item.hora}` : ""}`);
+    if (item.periodo) linhas.push(`   Período: ${item.periodo}`);
+    if (item.carro) linhas.push(`   Veículo: ${item.carro}`);
+    if (item.passageiros) linhas.push(`   Passageiros: ${item.passageiros}`);
+    if (item.embarque) linhas.push(`   Embarque: ${item.embarque}`);
+    if (item.valor) linhas.push(`   Valor: ${item.valor}`);
+  });
+  if (extras?.total) linhas.push(``, `Total estimado: ${extras.total}`);
+  if (extras?.nome) linhas.push(`Nome: ${extras.nome}`);
+  if (extras?.telefone) linhas.push(`WhatsApp: ${extras.telefone}`);
+  linhas.push(``, `Pode confirmar a disponibilidade?`);
+  return linhas.join("\n");
+}

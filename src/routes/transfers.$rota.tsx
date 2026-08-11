@@ -11,6 +11,7 @@ import {
   Minus,
   Plus,
   ShieldCheck,
+  ShoppingBag,
   Snowflake,
   UserRound,
 } from "lucide-react";
@@ -40,6 +41,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { listRotas } from "@/lib/rotas.functions";
 import { mensagemReserva, whatsappLink } from "@/lib/whatsapp";
 import { lerRascunho, limparRascunho, salvarRascunho, salvarRedirectPosLogin } from "@/lib/reserva";
+import { adicionarAoCarrinho } from "@/lib/carrinho";
 
 const OUTRO_EMBARQUE = "outro";
 
@@ -153,6 +155,35 @@ function RotaDetalhe() {
     });
     salvarRedirectPosLogin(`/transfers/${rota.slug}`);
     void navigate({ to: "/auth" });
+  }
+
+  function adicionarItem() {
+    if (!data) {
+      toast.error("Escolha a data do embarque.");
+      return;
+    }
+    if (!embarqueLocal) {
+      toast.error("Escolha (ou informe) o local de embarque.");
+      return;
+    }
+    adicionarAoCarrinho({
+      slug: rota.slug,
+      rotaId: rota.id ?? null,
+      trecho,
+      origem: rota.origem,
+      destino: rota.destino,
+      data,
+      hora,
+      periodo,
+      carro,
+      passageiros,
+      embarqueLocal,
+      observacoes,
+      valor: preco ?? null,
+    });
+    toast.success("Adicionado ao carrinho.", {
+      action: { label: "Ver carrinho", onClick: () => void navigate({ to: "/carrinho" }) },
+    });
   }
 
   async function agendar() {
@@ -541,12 +572,21 @@ function RotaDetalhe() {
               />
             </div>
 
+            <Button className="mt-4 w-full" onClick={adicionarItem}>
+              <ShoppingBag className="size-4" /> Adicionar ao carrinho
+            </Button>
+
             {user ? (
-              <Button className="mt-4 w-full" disabled={agendando} onClick={() => void agendar()}>
+              <Button
+                variant="secondary"
+                className="mt-2 w-full"
+                disabled={agendando}
+                onClick={() => void agendar()}
+              >
                 <CalendarCheck className="size-4" /> Agendar esta corrida
               </Button>
             ) : (
-              <Button className="mt-4 w-full" onClick={irParaLoginComRascunho}>
+              <Button variant="secondary" className="mt-2 w-full" onClick={irParaLoginComRascunho}>
                 <CalendarCheck className="size-4" /> Entrar para agendar
               </Button>
             )}
@@ -575,6 +615,24 @@ function RotaDetalhe() {
           ))}
         </div>
       </section>
+
+      {/* Barra fixa no rodapé (mobile): preço + adicionar sempre visíveis */}
+      <div aria-hidden className="h-24 md:hidden" />
+      <div className="fixed inset-x-0 bottom-[calc(4.25rem+var(--safe-bottom))] z-40 border-t border-border bg-background/95 px-4 py-3 backdrop-blur md:hidden">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">
+              Total por veículo
+            </p>
+            <p className="truncate font-display text-2xl">
+              {preco ? formatBRL(preco) : "Sob consulta"}
+            </p>
+          </div>
+          <Button className="min-h-11 shrink-0" onClick={adicionarItem}>
+            <ShoppingBag className="size-4" /> Adicionar
+          </Button>
+        </div>
+      </div>
 
       <Footer />
     </div>
