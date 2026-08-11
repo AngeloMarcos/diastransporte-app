@@ -47,6 +47,29 @@
 
 :root {
   --radius: 0.35rem;
+
+  /* Áreas seguras do dispositivo (notch / home indicator) */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* Tipografia fluida — escala entre 360px e 1280px */
+  --step--1: clamp(0.78rem, 0.74rem + 0.18vw, 0.88rem);
+  --step-0: clamp(0.9rem, 0.86rem + 0.22vw, 1rem);
+  --step-1: clamp(1.05rem, 0.98rem + 0.35vw, 1.25rem);
+  --step-2: clamp(1.25rem, 1.1rem + 0.7vw, 1.6rem);
+  --step-3: clamp(1.5rem, 1.25rem + 1.2vw, 2.15rem);
+  --step-4: clamp(1.9rem, 1.4rem + 2.2vw, 3rem);
+  --step-5: clamp(2.3rem, 1.5rem + 3.4vw, 4rem);
+
+  /* Espaçamento fluido de seções */
+  --space-section: clamp(2.5rem, 1.5rem + 4vw, 5.5rem);
+  --space-gutter: clamp(1rem, 0.75rem + 1vw, 2rem);
+
+  /* Alvo mínimo de toque */
+  --tap: 2.75rem;
+
   --background: oklch(0.16 0.006 265);
   --foreground: oklch(0.97 0.002 265);
   --card: oklch(0.21 0.007 265);
@@ -71,6 +94,7 @@
   --whats: oklch(0.62 0.16 152);
   --whats-foreground: oklch(0.15 0.02 152);
 }
+
 
 .dark {
   --background: oklch(0.16 0.006 265);
