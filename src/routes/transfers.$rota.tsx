@@ -541,15 +541,25 @@ function RotaDetalhe() {
               />
             </div>
 
+            <Button className="mt-4 w-full" onClick={adicionarItem}>
+              <ShoppingBag className="size-4" /> Adicionar ao carrinho
+            </Button>
+
             {user ? (
-              <Button className="mt-4 w-full" disabled={agendando} onClick={() => void agendar()}>
+              <Button
+                variant="secondary"
+                className="mt-2 w-full"
+                disabled={agendando}
+                onClick={() => void agendar()}
+              >
                 <CalendarCheck className="size-4" /> Agendar esta corrida
               </Button>
             ) : (
-              <Button className="mt-4 w-full" onClick={irParaLoginComRascunho}>
+              <Button variant="secondary" className="mt-2 w-full" onClick={irParaLoginComRascunho}>
                 <CalendarCheck className="size-4" /> Entrar para agendar
               </Button>
             )}
+
 
             <Button
               asChild
