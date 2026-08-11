@@ -40,6 +40,8 @@ import { listRotas } from "@/lib/rotas.functions";
 import { mensagemReserva, whatsappLink } from "@/lib/whatsapp";
 import { lerRascunho, limparRascunho } from "@/lib/reserva";
 import { adicionarAoCarrinho } from "@/lib/carrinho";
+import { RotaDetalheSkeleton } from "@/components/site/Skeletons";
+import { ErroCarregamento } from "@/components/site/ErroCarregamento";
 
 const OUTRO_EMBARQUE = "outro";
 
@@ -72,6 +74,31 @@ export const Route = createFileRoute("/transfers/$rota")({
     };
   },
   component: RotaDetalhe,
+  pendingMs: 200,
+  pendingMinMs: 300,
+  pendingComponent: () => (
+    <div className="min-h-screen">
+      <Header />
+      <RotaDetalheSkeleton />
+      <Footer />
+    </div>
+  ),
+  errorComponent: () => (
+    <ErroCarregamento
+      titulo="Não conseguimos carregar este trecho"
+      descricao="A conexão pode ter oscilado. Tente de novo ou veja a lista completa de transfers."
+      voltarPara="/transfers"
+      voltarLabel="Ver todos os transfers"
+    />
+  ),
+  notFoundComponent: () => (
+    <ErroCarregamento
+      titulo="Trecho não encontrado"
+      descricao="Esse trecho saiu do ar ou o endereço está incorreto. Veja os trechos disponíveis."
+      voltarPara="/transfers"
+      voltarLabel="Ver todos os transfers"
+    />
+  ),
 });
 
 const diferenciais = [
