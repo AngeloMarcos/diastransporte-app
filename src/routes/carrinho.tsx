@@ -132,7 +132,7 @@ function Carrinho() {
         ) : itens.length === 0 ? (
           <div className="mt-10 rounded-lg border border-border bg-card p-8 text-center">
             <ShoppingBag className="mx-auto size-8 text-primary" />
-            <p className="mt-4 font-display text-xl">Carrinho vazio</p>
+            <p className="mt-4 font-display text-fluid-lg">Carrinho vazio</p>
             <p className="mt-2 text-sm text-muted-foreground">
               Escolha um trecho e adicione ao carrinho para reservar.
             </p>

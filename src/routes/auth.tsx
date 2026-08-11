@@ -110,8 +110,8 @@ function AuthPage() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main className="mx-auto max-w-md px-4 py-16">
-        <h1 className="font-display text-3xl">
+      <main className="mx-auto max-w-md px-4 py-section">
+        <h1 className="font-display text-fluid-2xl">
           {modo === "entrar" ? "Entrar na sua conta" : "Criar conta"}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">

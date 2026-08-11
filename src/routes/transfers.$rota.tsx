@@ -265,7 +265,7 @@ function RotaDetalhe() {
 
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-8 lg:grid-cols-[1fr_360px]">
         <div>
-          <h1 className="font-display text-3xl leading-tight sm:text-4xl">
+          <h1 className="font-display text-fluid-2xl leading-tight">
             {rota.origem} <span className="text-primary">→</span> {rota.destino}
           </h1>
           <p className="mt-3 text-sm text-muted-foreground">{rota.resumo}</p>
@@ -331,10 +331,10 @@ function RotaDetalhe() {
             </div>
           </div>
 
-          <h2 className="mt-12 font-display text-2xl">Sobre o trecho</h2>
+          <h2 className="mt-12 font-display text-fluid-lg">Sobre o trecho</h2>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{rota.descricao}</p>
 
-          <h2 className="mt-10 font-display text-2xl">Tarifário 2026</h2>
+          <h2 className="mt-10 font-display text-fluid-lg">Tarifário 2026</h2>
           <div className="mt-4 overflow-hidden rounded-lg border border-border">
             <table className="w-full text-sm">
               <thead className="bg-card text-left text-xs uppercase tracking-widest text-muted-foreground">
@@ -373,7 +373,7 @@ function RotaDetalhe() {
             {rota.ida_e_volta ? "Trecho disponível nos dois sentidos." : "Trecho de ida."}
           </p>
 
-          <h2 className="mt-10 font-display text-2xl">Inclui</h2>
+          <h2 className="mt-10 font-display text-fluid-lg">Inclui</h2>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {inclui.map((i) => (
               <li key={i} className="flex gap-2">
@@ -382,7 +382,7 @@ function RotaDetalhe() {
             ))}
           </ul>
 
-          <h2 className="mt-10 font-display text-2xl">Locais de embarque</h2>
+          <h2 className="mt-10 font-display text-fluid-lg">Locais de embarque</h2>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {rota.embarque.map((e: string) => (
               <li key={e} className="flex gap-2">
@@ -391,7 +391,7 @@ function RotaDetalhe() {
             ))}
           </ul>
 
-          <h2 className="mt-10 font-display text-2xl">Perguntas frequentes</h2>
+          <h2 className="mt-10 font-display text-fluid-lg">Perguntas frequentes</h2>
           <Accordion type="single" collapsible className="mt-4">
             <AccordionItem value="1">
               <AccordionTrigger>O valor é por pessoa ou por carro?</AccordionTrigger>
@@ -607,8 +607,8 @@ function RotaDetalhe() {
         </aside>
       </div>
 
-      <section className="mx-auto max-w-6xl px-4 py-16">
-        <h2 className="font-display text-2xl">Continue explorando</h2>
+      <section className="mx-auto max-w-6xl px-4 py-section">
+        <h2 className="font-display text-fluid-lg">Continue explorando</h2>
         <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {relacionadas.map((r) => (
             <RotaCard key={r.slug} rota={r} />
@@ -624,7 +624,7 @@ function RotaDetalhe() {
             <p className="text-[11px] uppercase tracking-widest text-muted-foreground">
               Total por veículo
             </p>
-            <p className="truncate font-display text-2xl">
+            <p className="truncate font-display text-fluid-lg">
               {preco ? formatBRL(preco) : "Sob consulta"}
             </p>
           </div>

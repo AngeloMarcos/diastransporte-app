@@ -94,11 +94,11 @@ function Home() {
           className="absolute inset-0 size-full object-cover"
         />
         <div className="absolute inset-0 overlay-escuro" />
-        <div className="relative mx-auto w-full max-w-6xl px-4 py-24">
+        <div className="relative mx-auto w-full max-w-6xl px-4 py-section">
           <span className="inline-block rounded-sm border border-primary/60 px-3 py-1 text-[11px] uppercase tracking-[0.25em] text-primary">
             Tarifário temporada 2026
           </span>
-          <h1 className="mt-5 max-w-3xl font-display text-5xl leading-[0.95] sm:text-7xl">
+          <h1 className="mt-5 max-w-3xl font-display text-fluid-hero leading-[0.95]">
             {texto(conteudo, "home_hero", "titulo", "Do desembarque às dunas")}
           </h1>
           <p className="mt-5 max-w-xl text-base text-muted-foreground sm:text-lg">
@@ -149,10 +149,10 @@ function Home() {
 
       <TrustBadges />
 
-      <section className="mx-auto max-w-6xl px-4 py-20">
+      <section className="mx-auto max-w-6xl px-4 py-section">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="font-display text-3xl sm:text-4xl">
+            <h2 className="font-display text-fluid-xl">
               {texto(conteudo, "home_sobre", "titulo", "Rotas mais pedidas")}
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -178,8 +178,8 @@ function Home() {
       </section>
 
       <section className="border-y border-border bg-card">
-        <div className="mx-auto max-w-6xl px-4 py-20">
-          <h2 className="font-display text-3xl sm:text-4xl">A frota</h2>
+        <div className="mx-auto max-w-6xl px-4 py-section">
+          <h2 className="font-display text-fluid-xl">A frota</h2>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
             Dois tipos de veículo, escolhidos conforme o número de passageiros e a bagagem.
           </p>
@@ -213,8 +213,8 @@ function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-20">
-        <h2 className="font-display text-3xl sm:text-4xl">Como funciona</h2>
+      <section className="mx-auto max-w-6xl px-4 py-section">
+        <h2 className="font-display text-fluid-xl">Como funciona</h2>
         <div className="mt-8 grid gap-6 md:grid-cols-3">
           {passos.map((p) => (
             <div key={p.n} className="rounded-lg border border-border bg-card p-6">
@@ -227,8 +227,8 @@ function Home() {
       </section>
 
       <section className="border-y border-border bg-card">
-        <div className="mx-auto max-w-6xl px-4 py-20">
-          <h2 className="font-display text-3xl sm:text-4xl">Quem já viajou com a gente</h2>
+        <div className="mx-auto max-w-6xl px-4 py-section">
+          <h2 className="font-display text-fluid-xl">Quem já viajou com a gente</h2>
           <div className="mt-8 grid gap-6 md:grid-cols-3">
             {depoimentos.map((d) => (
               <blockquote
@@ -251,8 +251,8 @@ function Home() {
           className="absolute inset-0 size-full object-cover"
         />
         <div className="absolute inset-0 overlay-escuro" />
-        <div className="relative mx-auto max-w-6xl px-4 py-24 text-center">
-          <h2 className="font-display text-3xl sm:text-5xl">Reserve seu trecho agora</h2>
+        <div className="relative mx-auto max-w-6xl px-4 py-section text-center">
+          <h2 className="font-display text-fluid-2xl">Reserve seu trecho agora</h2>
           <p className="mx-auto mt-4 max-w-xl text-sm text-muted-foreground">
             Responda no WhatsApp {EMPRESA.whatsappLabel} com a data e o trecho — confirmamos a
             disponibilidade na hora.

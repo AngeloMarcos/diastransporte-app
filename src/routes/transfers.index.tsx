@@ -36,8 +36,8 @@ export const Route = createFileRoute("/transfers/")({
   errorComponent: ({ error }) => (
     <div className="min-h-screen">
       <Header />
-      <div className="mx-auto max-w-6xl px-4 py-24" role="alert">
-        <h1 className="font-display text-3xl">Não conseguimos carregar o tarifário</h1>
+      <div className="mx-auto max-w-6xl px-4 py-section" role="alert">
+        <h1 className="font-display text-fluid-2xl">Não conseguimos carregar o tarifário</h1>
         <p className="mt-3 text-sm text-muted-foreground">{error.message}</p>
       </div>
       <Footer />
@@ -51,7 +51,7 @@ function TransfersPendente() {
       <Header />
       <ListagemHeroSkeleton />
       <TrustBadges />
-      <section className="mx-auto max-w-6xl px-4 py-12">
+      <section className="mx-auto max-w-6xl px-4 py-section">
         <RotaGridSkeleton />
       </section>
       <Footer />
@@ -85,8 +85,8 @@ function Transfers() {
       <Header />
 
       <section className="border-b border-border bg-card">
-        <div className="mx-auto max-w-6xl px-4 py-16">
-          <h1 className="font-display text-4xl sm:text-5xl">Transfers particulares</h1>
+        <div className="mx-auto max-w-6xl px-4 py-section">
+          <h1 className="font-display text-fluid-2xl">Transfers particulares</h1>
           <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
             Tarifário temporada 2026. Todos os valores são por veículo (não por pessoa) e incluem
             combustível, pedágio e motorista.
@@ -96,7 +96,7 @@ function Transfers() {
 
       <TrustBadges />
 
-      <section className="mx-auto max-w-6xl px-4 py-12">
+      <section className="mx-auto max-w-6xl px-4 py-section">
         <div className="relative max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -165,7 +165,7 @@ function Transfers() {
 
         <div className="mt-12 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-card p-6">
           <div>
-            <h2 className="font-display text-xl">
+            <h2 className="font-display text-fluid-lg">
               Precisa de ida e volta ou de um trecho fora da lista?
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
