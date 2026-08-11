@@ -22,7 +22,7 @@ type Item = {
 
 export function BottomNav() {
   const { user } = useAuth();
-  const { itens } = useCarrinho();
+  const { itens: itensCarrinho } = useCarrinho();
 
   const itens: Item[] = [
     { key: "inicio", label: "Início", icon: Home, to: "/" },
@@ -32,8 +32,9 @@ export function BottomNav() {
       label: "Carrinho",
       icon: ShoppingBag,
       to: "/carrinho",
-      ...(itens.length > 0 ? { badge: itens.length } : {}),
+      ...(itensCarrinho.length > 0 ? { badge: itensCarrinho.length } : {}),
     },
+
     user
       ? { key: "conta", label: "Minhas viagens", icon: UserRound, to: "/minhas-viagens" }
       : { key: "conta", label: "Entrar", icon: LogIn, to: "/auth" },
