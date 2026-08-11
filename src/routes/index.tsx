@@ -217,8 +217,12 @@ function Home() {
                   src={v.foto}
                   alt={v.modelo}
                   loading="lazy"
-                  className="aspect-[16/10] w-full object-cover"
+                  decoding="async"
+                  width={960}
+                  height={600}
+                  className="aspect-[16/10] w-full object-cover object-center"
                 />
+
                 <div className="p-5">
                   <h3 className="font-display text-xl">{v.nome}</h3>
                   <p className="mt-1 text-sm text-muted-foreground">{v.modelo}</p>
