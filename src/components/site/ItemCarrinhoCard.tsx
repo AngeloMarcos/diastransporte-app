@@ -19,17 +19,23 @@ export function ItemCarrinhoCard({
   onRemover: (id: string) => void;
 }) {
   const [deslocamento, setDeslocamento] = useState(0);
+  const deslocamentoRef = useRef(0);
   const inicio = useRef<number | null>(null);
   const arrastando = useRef(false);
 
   const LIMITE = 96;
 
+  function mover(valor: number) {
+    deslocamentoRef.current = valor;
+    setDeslocamento(valor);
+  }
+
   function finalizar() {
-    if (deslocamento <= -LIMITE) {
+    if (deslocamentoRef.current <= -LIMITE) {
       onRemover(item.id);
       return;
     }
-    setDeslocamento(0);
+    mover(0);
   }
 
   return (
@@ -49,7 +55,7 @@ export function ItemCarrinhoCard({
         onPointerMove={(e) => {
           if (inicio.current === null) return;
           const delta = e.clientX - inicio.current;
-          setDeslocamento(Math.min(0, Math.max(-140, delta)));
+          mover(Math.min(0, Math.max(-140, delta)));
         }}
         onPointerUp={() => {
           inicio.current = null;
@@ -59,7 +65,7 @@ export function ItemCarrinhoCard({
         onPointerCancel={() => {
           inicio.current = null;
           arrastando.current = false;
-          setDeslocamento(0);
+          mover(0);
         }}
       >
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
