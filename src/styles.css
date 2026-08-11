@@ -120,6 +120,23 @@
     letter-spacing: 0.01em;
     text-transform: uppercase;
   }
+
+  /* Alvo de toque mínimo (44x44) em telas de toque, sem afetar links inline */
+  @media (pointer: coarse) {
+    button,
+    [role="button"],
+    summary,
+    label[for],
+    a.inline-flex,
+    a.flex,
+    a.grid,
+    a.inline-grid,
+    a.block,
+    [data-slot="button"] {
+      min-height: var(--tap);
+      min-width: var(--tap);
+    }
+  }
 }
 
 @utility overlay-escuro {
@@ -130,3 +147,46 @@
     oklch(0.13 0.006 265 / 0.35) 100%
   );
 }
+
+/* Tipografia fluida reutilizável */
+@utility text-fluid-xs {
+  font-size: var(--step--1);
+}
+@utility text-fluid-sm {
+  font-size: var(--step-0);
+}
+@utility text-fluid-base {
+  font-size: var(--step-1);
+}
+@utility text-fluid-lg {
+  font-size: var(--step-2);
+}
+@utility text-fluid-xl {
+  font-size: var(--step-3);
+}
+@utility text-fluid-2xl {
+  font-size: var(--step-4);
+}
+@utility text-fluid-3xl {
+  font-size: var(--step-5);
+}
+
+/* Espaçamento fluido entre breakpoints */
+@utility py-section {
+  padding-block: var(--space-section);
+}
+@utility px-gutter {
+  padding-inline: calc(var(--space-gutter) + var(--safe-left));
+  padding-inline-end: calc(var(--space-gutter) + var(--safe-right));
+}
+@utility safe-bottom {
+  padding-bottom: var(--safe-bottom);
+}
+@utility safe-top {
+  padding-top: var(--safe-top);
+}
+@utility tap-target {
+  min-height: var(--tap);
+  min-width: var(--tap);
+}
+
