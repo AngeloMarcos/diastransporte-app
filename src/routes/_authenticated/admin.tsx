@@ -184,13 +184,20 @@ function AdminPage() {
           onValueChange={(v) => setAba(v as (typeof abas)[number]["id"])}
           className="mt-6"
         >
-          <TabsList className="h-auto flex-wrap justify-start gap-1 bg-secondary/60 p-1">
-            {abas.map(({ id, label, icon: Icon }) => (
-              <TabsTrigger key={id} value={id} className="gap-1.5">
-                <Icon className="size-4" /> {label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          {/* Abas roláveis na horizontal em telas estreitas (celular/tablet retrato) */}
+          <div className="-mx-4 overflow-x-auto px-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <TabsList className="inline-flex h-auto w-max justify-start gap-1 bg-secondary/60 p-1">
+              {abas.map(({ id, label, icon: Icon }) => (
+                <TabsTrigger
+                  key={id}
+                  value={id}
+                  className="min-h-11 shrink-0 gap-1.5 whitespace-nowrap px-3 text-sm"
+                >
+                  <Icon className="size-4 shrink-0" /> {label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
 
           <TabsContent value="geral" className="mt-6">
             <AdminVisaoGeral onIrPara={setAba} />
@@ -277,7 +284,7 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
 
   return (
     <div className="space-y-8">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Agendamentos"
           value={String(lista.length)}
@@ -307,7 +314,11 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
       <div className="rounded-lg border border-border bg-card p-5">
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-display text-lg">Status dos agendamentos</h2>
-          <Button size="sm" variant="secondary" onClick={() => onIrPara("agendamentos")}>
+          <Button
+            variant="secondary"
+            className="h-11 shrink-0"
+            onClick={() => onIrPara("agendamentos")}
+          >
             Ver todos
           </Button>
         </div>
@@ -342,7 +353,11 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
       <div className="rounded-lg border border-border bg-card p-5">
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-display text-lg">Últimos agendamentos</h2>
-          <Button size="sm" variant="secondary" onClick={() => onIrPara("agendamentos")}>
+          <Button
+            variant="secondary"
+            className="h-11 shrink-0"
+            onClick={() => onIrPara("agendamentos")}
+          >
             Ver todos
           </Button>
         </div>
@@ -417,11 +432,11 @@ function NovaRotaDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm">
+        <Button size="sm" className="h-11">
           <Plus className="size-4" /> Nova rota
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[85dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nova rota</DialogTitle>
           <DialogDescription>
@@ -430,7 +445,7 @@ function NovaRotaDialog() {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
           <Campo
             label="Origem"
             value={form.origem}
@@ -479,7 +494,11 @@ function NovaRotaDialog() {
         </div>
 
         <DialogFooter>
-          <Button onClick={() => criar.mutate()} disabled={criar.isPending}>
+          <Button
+            className="h-11 w-full sm:w-auto"
+            onClick={() => criar.mutate()}
+            disabled={criar.isPending}
+          >
             {criar.isPending ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
@@ -520,17 +539,17 @@ function AdminRotas() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="relative max-w-xs flex-1">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative sm:max-w-xs sm:flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            className="pl-8"
+            className="h-11 pl-8"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar por origem ou destino"
           />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
             {filtradas.length} de {data?.length ?? 0} rotas
           </p>
@@ -622,14 +641,14 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
 
   return (
     <article className="rounded-lg border border-border bg-card p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <img src={form.foto} alt="" className="size-12 rounded-sm object-cover" />
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <img src={form.foto} alt="" className="size-12 shrink-0 rounded-sm object-cover" />
           <div>
             <h2 className="font-display text-lg">
               {rota.origem} → {rota.destino}
             </h2>
-            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               {formatBRL(rota.preco_pequeno)}
               <Badge
                 variant="outline"
@@ -642,17 +661,21 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
                 {rota.ativo ? "ativa" : "oculta"}
               </Badge>
               {rota.destaque ? <Badge variant="outline">{rota.destaque}</Badge> : null}
-            </p>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="secondary" onClick={() => setAberto((v) => !v)}>
+          <Button
+            variant="secondary"
+            className="h-11 flex-1 md:flex-none"
+            onClick={() => setAberto((v) => !v)}
+          >
             {aberto ? "Fechar" : "Editar"}
           </Button>
           <Button
             size="icon"
             variant="secondary"
-            className="size-9 text-destructive"
+            className="size-11 shrink-0 text-destructive"
             title="Remover rota"
             disabled={remover.isPending}
             onClick={() => {
@@ -676,7 +699,7 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
 
       {aberto && (
         <div className="mt-6 space-y-4 border-t border-border pt-5">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             <Campo
               label="Origem"
               value={form.origem}
@@ -745,17 +768,18 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
 
           <div>
             <Label>Foto principal</Label>
-            <div className="mt-2 flex flex-wrap items-center gap-3">
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Input
                 type="file"
                 accept="image/*"
-                className="max-w-xs"
+                className="h-11 sm:max-w-xs"
                 onChange={(e) => {
                   const arquivo = e.target.files?.[0];
                   if (arquivo) void enviarFoto(arquivo, "principal");
                 }}
               />
               <Input
+                className="h-11"
                 value={form.foto}
                 onChange={(e) => setForm({ ...form, foto: e.target.value })}
                 placeholder="ou cole a URL da imagem"
@@ -775,7 +799,7 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
                     onClick={() =>
                       setForm((f) => ({ ...f, galeria: f.galeria.filter((_, idx) => idx !== i) }))
                     }
-                    className="absolute -right-1 -top-1 rounded-full bg-destructive px-1.5 text-xs text-destructive-foreground"
+                    className="absolute -right-2 -top-2 grid size-7 place-items-center rounded-full bg-destructive text-sm leading-none text-destructive-foreground"
                   >
                     ×
                   </button>
@@ -785,7 +809,7 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
             <Input
               type="file"
               accept="image/*"
-              className="mt-3 max-w-xs"
+              className="mt-3 h-11 sm:max-w-xs"
               onChange={(e) => {
                 const arquivo = e.target.files?.[0];
                 if (arquivo) void enviarFoto(arquivo, "galeria");
@@ -793,16 +817,21 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
             />
           </div>
 
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex min-h-11 items-center gap-3 text-sm">
             <input
               type="checkbox"
+              className="size-5"
               checked={form.ativo}
               onChange={(e) => setForm({ ...form, ativo: e.target.checked })}
             />
             Rota visível no site
           </label>
 
-          <Button onClick={() => salvar.mutate()} disabled={salvar.isPending || enviandoFoto}>
+          <Button
+            className="h-11 w-full sm:w-auto"
+            onClick={() => salvar.mutate()}
+            disabled={salvar.isPending || enviandoFoto}
+          >
             {salvar.isPending || enviandoFoto ? (
               <Loader2 className="size-4 animate-spin" />
             ) : enviandoFoto ? (
@@ -830,7 +859,7 @@ function Campo({
   return (
     <div>
       <Label>{label}</Label>
-      <Input className="mt-2" value={value} onChange={(e) => onChange(e.target.value)} />
+      <Input className="mt-2 h-11" value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
@@ -848,7 +877,7 @@ function CampoNumero({
     <div>
       <Label>{label}</Label>
       <Input
-        className="mt-2"
+        className="mt-2 h-11"
         type="number"
         min={0}
         value={value ?? ""}
@@ -920,10 +949,10 @@ function AdminAgendamentos() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <Button
-          size="sm"
           variant={filtroStatus === "todos" ? "default" : "secondary"}
+          className="h-11 shrink-0 whitespace-nowrap"
           onClick={() => setFiltroStatus("todos")}
         >
           Todos ({lista.length})
@@ -931,8 +960,8 @@ function AdminAgendamentos() {
         {statusOpcoes.map((s) => (
           <Button
             key={s}
-            size="sm"
             variant={filtroStatus === s ? "default" : "secondary"}
+            className="h-11 shrink-0 whitespace-nowrap"
             onClick={() => setFiltroStatus(s)}
           >
             {STATUS_META[s].label} ({contagem[s] ?? 0})
@@ -940,10 +969,10 @@ function AdminAgendamentos() {
         ))}
       </div>
 
-      <div className="relative max-w-sm">
+      <div className="relative sm:max-w-sm">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          className="pl-8"
+          className="h-11 pl-8"
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           placeholder="Buscar por nome, telefone ou trecho"
@@ -960,10 +989,10 @@ function AdminAgendamentos() {
             const linkWhats = linkWhatsappCliente(a.contato_telefone);
             return (
               <article key={a.id} className="rounded-lg border border-border bg-card p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-display text-lg">{a.trecho}</h2>
+                      <h2 className="font-display text-lg break-words">{a.trecho}</h2>
                       <StatusBadge status={a.status} />
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -983,12 +1012,12 @@ function AdminAgendamentos() {
                     {a.observacoes ? <p className="mt-2 text-sm">{a.observacoes}</p> : null}
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2 border-t border-border pt-4 lg:border-0 lg:pt-0">
                     <Select
                       value={a.status}
                       onValueChange={(status) => atualizar.mutate({ id: a.id, status })}
                     >
-                      <SelectTrigger className="h-8 w-[150px] text-xs">
+                      <SelectTrigger className="h-11 flex-1 text-sm lg:w-[170px] lg:flex-none">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1004,7 +1033,7 @@ function AdminAgendamentos() {
                         asChild
                         size="icon"
                         variant="secondary"
-                        className="size-8"
+                        className="size-11 shrink-0"
                         title="Falar no WhatsApp"
                       >
                         <a href={linkWhats} target="_blank" rel="noreferrer">
@@ -1015,7 +1044,7 @@ function AdminAgendamentos() {
                     <Button
                       size="icon"
                       variant="secondary"
-                      className="size-8 text-destructive"
+                      className="size-11 shrink-0 text-destructive"
                       title="Remover agendamento"
                       onClick={() => {
                         if (window.confirm("Remover este agendamento?")) remover.mutate(a.id);
@@ -1105,15 +1134,16 @@ function AdminConteudo() {
 
       <div className="rounded-lg border border-dashed border-border p-5">
         <Label>Novo bloco (chave)</Label>
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
           <Input
-            className="max-w-xs"
+            className="h-11 sm:max-w-xs"
             value={novaChave}
             placeholder="ex.: home_promo"
             onChange={(e) => setNovaChave(e.target.value.replace(/[^\w-]/g, "_").toLowerCase())}
           />
           <Button
             variant="secondary"
+            className="h-11"
             disabled={!novaChave || criar.isPending}
             onClick={() => {
               criar.mutate(novaChave);
@@ -1196,7 +1226,7 @@ function ConteudoEditor({ item }: { item: ConteudoItem }) {
         ) : null}
       </div>
 
-      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
         <Campo label="Seção" value={form.secao} onChange={(v) => setForm({ ...form, secao: v })} />
         <CampoNumero
           label="Ordem"
@@ -1230,7 +1260,7 @@ function ConteudoEditor({ item }: { item: ConteudoItem }) {
         <Input
           type="file"
           accept="image/*"
-          className="mt-2 max-w-xs"
+          className="mt-2 h-11 sm:max-w-xs"
           onChange={(e) => {
             const arquivo = e.target.files?.[0];
             if (arquivo) void enviarImagem(arquivo);
@@ -1238,8 +1268,12 @@ function ConteudoEditor({ item }: { item: ConteudoItem }) {
         />
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-2">
-        <Button onClick={() => salvar.mutate()} disabled={salvar.isPending || enviando}>
+      <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+        <Button
+          className="h-11"
+          onClick={() => salvar.mutate()}
+          disabled={salvar.isPending || enviando}
+        >
           {salvar.isPending || enviando ? (
             <Loader2 className="size-4 animate-spin" />
           ) : (
@@ -1247,7 +1281,12 @@ function ConteudoEditor({ item }: { item: ConteudoItem }) {
           )}
           Salvar bloco
         </Button>
-        <Button variant="secondary" onClick={() => remover.mutate()} disabled={remover.isPending}>
+        <Button
+          variant="secondary"
+          className="h-11"
+          onClick={() => remover.mutate()}
+          disabled={remover.isPending}
+        >
           Remover
         </Button>
       </div>
@@ -1305,18 +1344,18 @@ function AdminUsuarios() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <p className="text-sm text-muted-foreground">
           {data?.length ?? 0} contas · {totalAdmins} administrador(es). Promova, remova acessos ou
           redefina senhas.
         </p>
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar por e-mail, nome ou WhatsApp"
-            className="w-72 pl-9"
+            className="h-11 w-full pl-9 sm:w-72"
           />
         </div>
       </div>
@@ -1361,8 +1400,8 @@ function UsuarioLinha({
 
   return (
     <article className="rounded-lg border border-border bg-card p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 font-medium">
             <span>{usuario.nome || "Sem nome"}</span>
             {usuario.isAdmin && (
@@ -1383,7 +1422,7 @@ function UsuarioLinha({
         </div>
         <div className="flex flex-wrap gap-2">
           {whats && (
-            <Button variant="ghost" size="sm" asChild>
+            <Button variant="ghost" className="h-11" asChild>
               <a href={whats} target="_blank" rel="noreferrer">
                 <MessageCircle className="size-4" /> WhatsApp
               </a>
@@ -1391,7 +1430,7 @@ function UsuarioLinha({
           )}
           <Button
             variant={usuario.isAdmin ? "outline" : "secondary"}
-            size="sm"
+            className="h-11"
             disabled={salvandoPapel || (euMesmo && usuario.isAdmin)}
             onClick={onAlternarAdmin}
           >
@@ -1400,7 +1439,7 @@ function UsuarioLinha({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-end gap-2">
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
         <div>
           <Label htmlFor={`senha-${usuario.id}`} className="text-xs">
             Nova senha
@@ -1411,12 +1450,12 @@ function UsuarioLinha({
             value={novaSenha}
             onChange={(e) => setNovaSenha(e.target.value)}
             placeholder="mínimo 6 caracteres"
-            className="mt-1 w-56"
+            className="mt-1 h-11 w-full sm:w-56"
           />
         </div>
         <Button
           variant="secondary"
-          size="sm"
+          className="h-11"
           disabled={novaSenha.length < 6 || salvandoSenha}
           onClick={() => {
             onRedefinirSenha(novaSenha);
