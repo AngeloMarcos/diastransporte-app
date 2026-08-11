@@ -47,6 +47,29 @@
 
 :root {
   --radius: 0.35rem;
+
+  /* Áreas seguras do dispositivo (notch / home indicator) */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* Tipografia fluida — escala entre 360px e 1280px */
+  --step--1: clamp(0.78rem, 0.74rem + 0.18vw, 0.88rem);
+  --step-0: clamp(0.9rem, 0.86rem + 0.22vw, 1rem);
+  --step-1: clamp(1.05rem, 0.98rem + 0.35vw, 1.25rem);
+  --step-2: clamp(1.25rem, 1.1rem + 0.7vw, 1.6rem);
+  --step-3: clamp(1.5rem, 1.25rem + 1.2vw, 2.15rem);
+  --step-4: clamp(1.9rem, 1.4rem + 2.2vw, 3rem);
+  --step-5: clamp(2.3rem, 1.5rem + 3.4vw, 4rem);
+
+  /* Espaçamento fluido de seções */
+  --space-section: clamp(2.5rem, 1.5rem + 4vw, 5.5rem);
+  --space-gutter: clamp(1rem, 0.75rem + 1vw, 2rem);
+
+  /* Alvo mínimo de toque */
+  --tap: 2.75rem;
+
   --background: oklch(0.16 0.006 265);
   --foreground: oklch(0.97 0.002 265);
   --card: oklch(0.21 0.007 265);
@@ -72,6 +95,7 @@
   --whats-foreground: oklch(0.15 0.02 152);
 }
 
+
 .dark {
   --background: oklch(0.16 0.006 265);
   --foreground: oklch(0.97 0.002 265);
@@ -96,6 +120,23 @@
     letter-spacing: 0.01em;
     text-transform: uppercase;
   }
+
+  /* Alvo de toque mínimo (44x44) em telas de toque, sem afetar links inline */
+  @media (pointer: coarse) {
+    button,
+    [role="button"],
+    summary,
+    label[for],
+    a.inline-flex,
+    a.flex,
+    a.grid,
+    a.inline-grid,
+    a.block,
+    [data-slot="button"] {
+      min-height: var(--tap);
+      min-width: var(--tap);
+    }
+  }
 }
 
 @utility overlay-escuro {
@@ -106,3 +147,46 @@
     oklch(0.13 0.006 265 / 0.35) 100%
   );
 }
+
+/* Tipografia fluida reutilizável */
+@utility text-fluid-xs {
+  font-size: var(--step--1);
+}
+@utility text-fluid-sm {
+  font-size: var(--step-0);
+}
+@utility text-fluid-base {
+  font-size: var(--step-1);
+}
+@utility text-fluid-lg {
+  font-size: var(--step-2);
+}
+@utility text-fluid-xl {
+  font-size: var(--step-3);
+}
+@utility text-fluid-2xl {
+  font-size: var(--step-4);
+}
+@utility text-fluid-3xl {
+  font-size: var(--step-5);
+}
+
+/* Espaçamento fluido entre breakpoints */
+@utility py-section {
+  padding-block: var(--space-section);
+}
+@utility px-gutter {
+  padding-inline: calc(var(--space-gutter) + var(--safe-left));
+  padding-inline-end: calc(var(--space-gutter) + var(--safe-right));
+}
+@utility safe-bottom {
+  padding-bottom: var(--safe-bottom);
+}
+@utility safe-top {
+  padding-top: var(--safe-top);
+}
+@utility tap-target {
+  min-height: var(--tap);
+  min-width: var(--tap);
+}
+

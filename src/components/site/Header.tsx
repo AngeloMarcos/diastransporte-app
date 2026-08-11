@@ -1,7 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, LogIn, LogOut, Menu, Phone, UserRound } from "lucide-react";
-import { useState } from "react";
+import { LayoutDashboard, LogIn, LogOut, Phone, UserRound } from "lucide-react";
 
 import logo from "@/assets/logo.jpeg.asset.json";
 import { EMPRESA } from "@/data/rotas";
@@ -17,7 +16,6 @@ const links = [
 ] as const;
 
 export function Header() {
-  const [aberto, setAberto] = useState(false);
   const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -30,21 +28,24 @@ export function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/85 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-        <Link to="/" className="flex items-center gap-2.5">
+    <header className="sticky top-0 z-50 border-b border-border bg-background/85 pt-[var(--safe-top)] backdrop-blur">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
+        <Link to="/" className="flex min-w-0 min-h-11 items-center gap-2.5">
           <img
             src={logo.url}
             alt="Logo Dias Transporte"
-            className="h-11 w-11 rounded-sm object-contain"
+            className="h-11 w-11 shrink-0 rounded-sm object-contain"
           />
-          <span className="leading-tight">
-            <span className="block font-display text-base tracking-wide">{EMPRESA.nome}</span>
-            <span className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          <span className="min-w-0 leading-tight">
+            <span className="block truncate font-display text-base tracking-wide">
+              {EMPRESA.nome}
+            </span>
+            <span className="block truncate text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {EMPRESA.base}
             </span>
           </span>
         </Link>
+
 
         <nav className="hidden items-center gap-6 md:flex">
           {links.map((l) => (
@@ -98,71 +99,28 @@ export function Header() {
           </Button>
         </nav>
 
-        <button
-          type="button"
-          onClick={() => setAberto((v) => !v)}
-          aria-label="Abrir menu"
-          className="rounded-sm border border-border p-2 text-foreground md:hidden"
-        >
-          <Menu className="size-5" />
-        </button>
+        {/* Mobile: uma única ação secundária (navegação fica na barra inferior). */}
+        {isAdmin ? (
+          <Link
+            to="/admin"
+            aria-label="Painel admin"
+            className="inline-grid size-11 shrink-0 place-items-center rounded-sm border border-border text-primary md:hidden"
+          >
+            <LayoutDashboard className="size-5" />
+          </Link>
+        ) : (
+          <a
+            href={whatsappLink("Olá! Quero informações sobre transfer.")}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Falar no WhatsApp"
+            className="inline-grid size-11 shrink-0 place-items-center rounded-sm bg-whats text-whats-foreground md:hidden"
+          >
+            <Phone className="size-5" />
+          </a>
+        )}
       </div>
 
-      {aberto && (
-        <div className="border-t border-border bg-card px-4 py-3 md:hidden">
-          <div className="flex flex-col gap-3">
-            {links.map((l) => (
-              <Link
-                key={l.to}
-                to={l.to}
-                onClick={() => setAberto(false)}
-                className="text-sm uppercase tracking-wide text-muted-foreground"
-                activeProps={{ className: "text-foreground" }}
-              >
-                {l.label}
-              </Link>
-            ))}
-            {user ? (
-              <>
-                <Link
-                  to="/minhas-viagens"
-                  onClick={() => setAberto(false)}
-                  className="text-sm uppercase tracking-wide text-muted-foreground"
-                >
-                  Minhas viagens
-                </Link>
-                {isAdmin && (
-                  <Link
-                    to="/admin"
-                    onClick={() => setAberto(false)}
-                    className="text-sm uppercase tracking-wide text-primary"
-                  >
-                    Painel admin
-                  </Link>
-                )}
-                <Button size="sm" variant="secondary" onClick={() => void sair()}>
-                  <LogOut className="size-4" /> Sair
-                </Button>
-              </>
-            ) : (
-              <Button asChild size="sm" variant="secondary">
-                <Link to="/auth" onClick={() => setAberto(false)}>
-                  <LogIn className="size-4" /> Entrar / criar conta
-                </Link>
-              </Button>
-            )}
-            <Button asChild size="sm" className="bg-whats text-whats-foreground hover:bg-whats/90">
-              <a
-                href={whatsappLink("Olá! Quero informações sobre transfer.")}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <Phone className="size-4" /> Falar no WhatsApp
-              </a>
-            </Button>
-          </div>
-        </div>
-      )}
     </header>
   );
 }
