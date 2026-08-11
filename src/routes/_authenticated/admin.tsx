@@ -1435,6 +1435,8 @@ function UsuarioLinha({
   onRedefinirSenha: (senha: string) => void;
 }) {
   const [novaSenha, setNovaSenha] = useState("");
+  const [confirmando, setConfirmando] = useState(false);
+
   const whats = linkWhatsappCliente(usuario.telefone || null);
 
   return (
