@@ -198,3 +198,41 @@
   min-width: var(--tap);
 }
 
+
+@utility text-fluid-hero {
+  font-size: var(--step-6);
+}
+
+/* Transição suave entre páginas (View Transitions) — sem flash branco */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root) {
+    animation: dt-fade-out 160ms ease both;
+  }
+  ::view-transition-new(root) {
+    animation: dt-fade-in 220ms ease both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+
+@keyframes dt-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dt-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
