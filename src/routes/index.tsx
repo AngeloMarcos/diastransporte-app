@@ -276,8 +276,12 @@ function Home() {
           src={fotos.frotaPorDoSol}
           alt="Frota da Dias Transporte ao pôr do sol"
           loading="lazy"
-          className="absolute inset-0 size-full object-cover"
+          decoding="async"
+          width={1920}
+          height={1080}
+          className="absolute inset-0 size-full object-cover object-center"
         />
+
         <div className="absolute inset-0 overlay-escuro" />
         <div className="relative mx-auto max-w-6xl px-4 py-section text-center">
           <h2 className="font-display text-fluid-2xl">Reserve seu trecho agora</h2>
