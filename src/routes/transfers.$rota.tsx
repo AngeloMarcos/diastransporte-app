@@ -36,11 +36,9 @@ import {
 } from "@/components/ui/accordion";
 import { toast } from "sonner";
 import { formatBRL, precoFinal, type Rota } from "@/data/rotas";
-import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { listRotas } from "@/lib/rotas.functions";
 import { mensagemReserva, whatsappLink } from "@/lib/whatsapp";
-import { lerRascunho, limparRascunho, salvarRascunho, salvarRedirectPosLogin } from "@/lib/reserva";
+import { lerRascunho, limparRascunho } from "@/lib/reserva";
 import { adicionarAoCarrinho } from "@/lib/carrinho";
 
 const OUTRO_EMBARQUE = "outro";
@@ -93,7 +91,6 @@ const inclui = [
 function RotaDetalhe() {
   const loaderData = Route.useLoaderData() as { rota: Rota; rotas: Rota[] };
   const { rota, rotas } = loaderData;
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [indice, setIndice] = useState(0);
   const [data, setData] = useState("");
@@ -104,7 +101,6 @@ function RotaDetalhe() {
   const [embarqueEscolha, setEmbarqueEscolha] = useState("");
   const [embarqueOutro, setEmbarqueOutro] = useState("");
   const [observacoes, setObservacoes] = useState("");
-  const [agendando, setAgendando] = useState(false);
 
   const maxPassageiros = carro === "pequeno" ? 4 : 5;
   const preco = precoFinal(rota, carro, periodo);
@@ -569,7 +565,7 @@ function RotaDetalhe() {
               {preco ? formatBRL(preco) : "Sob consulta"}
             </p>
           </div>
-          <Button className="min-h-11 shrink-0" onClick={adicionarItem}>
+          <Button className="min-h-11 shrink-0" onClick={adicionarEContinuar}>
             <ShoppingBag className="size-4" /> Adicionar
           </Button>
         </div>
