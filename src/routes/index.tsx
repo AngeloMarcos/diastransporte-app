@@ -12,6 +12,8 @@ import { listRotas } from "@/lib/rotas.functions";
 import { listConteudo, type ConteudoRow } from "@/lib/conteudo.functions";
 import { mapearConteudo, texto } from "@/lib/conteudo";
 import { whatsappLink } from "@/lib/whatsapp";
+import { HomeSkeleton } from "@/components/site/Skeletons";
+import { ErroCarregamento } from "@/components/site/ErroCarregamento";
 
 export const Route = createFileRoute("/")({
   loader: async () => ({ rotas: await listRotas(), conteudo: await listConteudo() }),
@@ -33,6 +35,22 @@ export const Route = createFileRoute("/")({
     ],
   }),
   component: Home,
+  pendingMs: 200,
+  pendingMinMs: 300,
+  pendingComponent: () => (
+    <div className="min-h-screen">
+      <Header />
+      <HomeSkeleton />
+      <Footer />
+    </div>
+  ),
+  errorComponent: () => (
+    <ErroCarregamento
+      titulo="Não conseguimos carregar a página inicial"
+      voltarPara="/transfers"
+      voltarLabel="Ver transfers"
+    />
+  ),
 });
 
 const passos = [

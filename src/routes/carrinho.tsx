@@ -15,6 +15,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCarrinho } from "@/lib/carrinho";
 import { salvarRedirectPosLogin } from "@/lib/reserva";
 import { mensagemCarrinho, whatsappLink } from "@/lib/whatsapp";
+import { CarrinhoSkeleton } from "@/components/site/Skeletons";
+import { ErroCarregamento } from "@/components/site/ErroCarregamento";
 
 export const Route = createFileRoute("/carrinho")({
   head: () => ({
@@ -35,6 +37,25 @@ export const Route = createFileRoute("/carrinho")({
     ],
   }),
   component: Carrinho,
+  pendingMs: 200,
+  pendingMinMs: 300,
+  pendingComponent: () => (
+    <div className="min-h-screen">
+      <Header />
+      <main className="mx-auto max-w-3xl px-gutter pb-8 pt-8">
+        <CarrinhoSkeleton />
+      </main>
+      <Footer />
+    </div>
+  ),
+  errorComponent: () => (
+    <ErroCarregamento
+      titulo="Não conseguimos abrir seu carrinho"
+      descricao="Seus itens continuam salvos neste navegador. Tente de novo em instantes."
+      voltarPara="/transfers"
+      voltarLabel="Ver transfers"
+    />
+  ),
 });
 
 function Carrinho() {
@@ -128,7 +149,7 @@ function Carrinho() {
         </p>
 
         {!pronto ? (
-          <p className="mt-10 text-sm text-muted-foreground">Carregando…</p>
+          <CarrinhoSkeleton />
         ) : itens.length === 0 ? (
           <div className="mt-10 rounded-lg border border-border bg-card p-8 text-center">
             <ShoppingBag className="mx-auto size-8 text-primary" />
