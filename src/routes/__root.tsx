@@ -14,6 +14,7 @@ import { BottomNav } from "@/components/site/BottomNav";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { registerOfflineShell } from "../lib/pwa";
 
 function NotFoundComponent() {
   return (
@@ -142,6 +143,10 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  useEffect(() => {
+    registerOfflineShell();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
