@@ -11,7 +11,9 @@ import {
   Minus,
   Plus,
   ShieldCheck,
+  ShoppingBag,
   Snowflake,
+
   UserRound,
 } from "lucide-react";
 import { Header } from "@/components/site/Header";
