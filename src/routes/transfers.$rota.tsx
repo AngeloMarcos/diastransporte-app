@@ -36,11 +36,9 @@ import {
 } from "@/components/ui/accordion";
 import { toast } from "sonner";
 import { formatBRL, precoFinal, type Rota } from "@/data/rotas";
-import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { listRotas } from "@/lib/rotas.functions";
 import { mensagemReserva, whatsappLink } from "@/lib/whatsapp";
-import { lerRascunho, limparRascunho, salvarRascunho, salvarRedirectPosLogin } from "@/lib/reserva";
+import { lerRascunho, limparRascunho } from "@/lib/reserva";
 import { adicionarAoCarrinho } from "@/lib/carrinho";
 
 const OUTRO_EMBARQUE = "outro";
@@ -93,7 +91,6 @@ const inclui = [
 function RotaDetalhe() {
   const loaderData = Route.useLoaderData() as { rota: Rota; rotas: Rota[] };
   const { rota, rotas } = loaderData;
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [indice, setIndice] = useState(0);
   const [data, setData] = useState("");
@@ -104,7 +101,6 @@ function RotaDetalhe() {
   const [embarqueEscolha, setEmbarqueEscolha] = useState("");
   const [embarqueOutro, setEmbarqueOutro] = useState("");
   const [observacoes, setObservacoes] = useState("");
-  const [agendando, setAgendando] = useState(false);
 
   const maxPassageiros = carro === "pequeno" ? 4 : 5;
   const preco = precoFinal(rota, carro, periodo);
@@ -140,31 +136,15 @@ function RotaDetalhe() {
 
   const trecho = `${rota.origem} → ${rota.destino}`;
 
-  function irParaLoginComRascunho() {
-    salvarRascunho({
-      slug: rota.slug,
-      origem: rota.origem,
-      destino: rota.destino,
-      data,
-      hora,
-      periodo,
-      carro,
-      passageiros,
-      embarqueLocal,
-      observacoes,
-    });
-    salvarRedirectPosLogin(`/transfers/${rota.slug}`);
-    void navigate({ to: "/auth" });
-  }
-
-  function adicionarItem() {
+  /** Único caminho que cria a reserva: joga no carrinho. */
+  function adicionarItem(): boolean {
     if (!data) {
       toast.error("Escolha a data do embarque.");
-      return;
+      return false;
     }
     if (!embarqueLocal) {
       toast.error("Escolha (ou informe) o local de embarque.");
-      return;
+      return false;
     }
     adicionarAoCarrinho({
       slug: rota.slug,
@@ -181,53 +161,20 @@ function RotaDetalhe() {
       observacoes,
       valor: preco ?? null,
     });
+    return true;
+  }
+
+  function adicionarEContinuar() {
+    if (!adicionarItem()) return;
     toast.success("Adicionado ao carrinho.", {
       action: { label: "Ver carrinho", onClick: () => void navigate({ to: "/carrinho" }) },
     });
   }
 
-  async function agendar() {
-    if (!user) return;
-    if (!data) {
-      toast.error("Escolha a data do embarque.");
-      return;
-    }
-    if (!embarqueLocal) {
-      toast.error("Escolha (ou informe) o local de embarque.");
-      return;
-    }
-    setAgendando(true);
-    try {
-      const { data: perfil } = await supabase
-        .from("profiles")
-        .select("nome,telefone")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      const { error } = await supabase.from("agendamentos").insert({
-        user_id: user.id,
-        rota_id: rota.id ?? null,
-        trecho,
-        data_viagem: data || null,
-        hora: hora || null,
-        periodo: periodo === "noite" ? "noite" : "dia",
-        carro,
-        passageiros,
-        valor: preco ?? null,
-        embarque_local: embarqueLocal || null,
-        observacoes: observacoes || null,
-        contato_nome: perfil?.nome ?? user.email ?? null,
-        contato_telefone: perfil?.telefone ?? null,
-      });
-      if (error) throw error;
-
-      toast.success("Corrida agendada! Vamos confirmar pelo WhatsApp.");
-      window.open(link, "_blank", "noreferrer");
-    } catch (erro) {
-      toast.error(erro instanceof Error ? erro.message : "Não foi possível agendar.");
-    } finally {
-      setAgendando(false);
-    }
+  /** Atalho: mesma função de adicionar + vai direto ao checkout. */
+  function reservarAgora() {
+    if (!adicionarItem()) return;
+    void navigate({ to: "/carrinho" });
   }
 
   const link = whatsappLink(
@@ -572,24 +519,13 @@ function RotaDetalhe() {
               />
             </div>
 
-            <Button className="mt-4 w-full" onClick={adicionarItem}>
+            <Button className="mt-4 w-full" onClick={adicionarEContinuar}>
               <ShoppingBag className="size-4" /> Adicionar ao carrinho
             </Button>
 
-            {user ? (
-              <Button
-                variant="secondary"
-                className="mt-2 w-full"
-                disabled={agendando}
-                onClick={() => void agendar()}
-              >
-                <CalendarCheck className="size-4" /> Agendar esta corrida
-              </Button>
-            ) : (
-              <Button variant="secondary" className="mt-2 w-full" onClick={irParaLoginComRascunho}>
-                <CalendarCheck className="size-4" /> Entrar para agendar
-              </Button>
-            )}
+            <Button variant="secondary" className="mt-2 w-full" onClick={reservarAgora}>
+              <CalendarCheck className="size-4" /> Reservar agora
+            </Button>
 
             <Button
               asChild
@@ -600,7 +536,7 @@ function RotaDetalhe() {
               </a>
             </Button>
             <p className="mt-3 text-xs text-muted-foreground">
-              O agendamento fica registrado na sua conta e chega no nosso WhatsApp. Cancelamento
+              &quot;Reservar agora&quot; leva você direto ao carrinho para finalizar. Cancelamento
               grátis até 24h antes.
             </p>
           </div>
@@ -628,7 +564,7 @@ function RotaDetalhe() {
               {preco ? formatBRL(preco) : "Sob consulta"}
             </p>
           </div>
-          <Button className="min-h-11 shrink-0" onClick={adicionarItem}>
+          <Button className="min-h-11 shrink-0" onClick={adicionarEContinuar}>
             <ShoppingBag className="size-4" /> Adicionar
           </Button>
         </div>
