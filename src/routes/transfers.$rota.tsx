@@ -173,6 +173,10 @@ function RotaDetalhe() {
       toast.error("Escolha (ou informe) o local de embarque.");
       return false;
     }
+    if (!rota.id) {
+      toast.error("Esta rota está indisponível para reserva no momento.");
+      return false;
+    }
     adicionarAoCarrinho({
       slug: rota.slug,
       rotaId: rota.id,
