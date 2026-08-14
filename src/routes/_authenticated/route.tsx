@@ -3,19 +3,36 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { MODO_VPS } from "@/lib/vps/config";
 import { sessaoAtual } from "@/lib/vps/sessao.functions";
+import { salvarRedirectPosLogin } from "@/lib/reserva";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     // Deploy próprio: a sessão é um cookie HttpOnly validado no servidor.
     if (MODO_VPS) {
       const sessao = await sessaoAtual().catch(() => null);
-      if (!sessao) throw redirect({ to: "/auth" });
+      if (!sessao) {
+        salvarRedirectPosLogin(location.href);
+        throw redirect({ to: "/auth" });
+      }
       return { user: { id: sessao.id, email: sessao.email } };
     }
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) throw redirect({ to: "/auth" });
-    return { user: data.user };
+    // getSession() lê a sessão local (e aguarda o refresh automático em
+    // andamento, se houver) em vez de bater no servidor como getUser() fazia.
+    // getUser() era um round-trip de rede a cada navegação pra /admin ou
+    // /minhas-viagens: qualquer instabilidade de conexão (comum em celular)
+    // ou uma corrida com o refresh do token (ex.: token expirou enquanto a
+    // aba ficou em segundo plano) derrubava o usuário pra /auth mesmo com uma
+    // sessão válida — sensação de "deslogamento automático". A validação
+    // criptográfica de verdade continua acontecendo no servidor (RLS e
+    // requireSupabaseAuth), então isto aqui só precisa decidir se mostra ou
+    // não a tela; não é a linha de defesa de segurança.
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) {
+      salvarRedirectPosLogin(location.href);
+      throw redirect({ to: "/auth" });
+    }
+    return { user: data.session.user };
   },
   component: () => <Outlet />,
 });
