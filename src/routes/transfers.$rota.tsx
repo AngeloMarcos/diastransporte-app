@@ -175,7 +175,7 @@ function RotaDetalhe() {
     }
     adicionarAoCarrinho({
       slug: rota.slug,
-      rotaId: rota.id ?? null,
+      rotaId: rota.id,
       trecho,
       origem: rota.origem,
       destino: rota.destino,
