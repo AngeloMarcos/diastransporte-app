@@ -23,7 +23,7 @@ export function Header() {
   async function sair() {
     await queryClient.cancelQueries();
     queryClient.clear();
-    await supabase.auth.signOut();
+    await encerrarSessaoAtual();
     void navigate({ to: "/auth", replace: true });
   }
 
