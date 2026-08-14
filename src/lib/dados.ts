@@ -7,6 +7,7 @@ import type { AgendamentoRow, ConteudoBloco, NovaReserva, UsuarioAdmin } from "@
 import { ROTA_COLUMNS, type RotaRow } from "@/lib/rotasMap";
 import { definirPapelAdmin, listUsuarios, redefinirSenhaUsuario } from "@/lib/usuarios.functions";
 import { MODO_VPS } from "@/lib/vps/config";
+import { sessaoAtual } from "@/lib/vps/sessao.functions";
 import {
   vpsAtualizarStatus,
   vpsCriarBloco,
@@ -235,4 +236,21 @@ export async function enviarImagem(arquivo: File, prefixo: string): Promise<stri
     .createSignedUrl(caminho, 60 * 60 * 24 * 365 * 20);
   if (erroUrl || !data) throw erroUrl ?? new Error("Falha ao gerar link da imagem.");
   return data.signedUrl;
+}
+
+// ------------------------------------------------------------------ perfil
+/** Nome/telefone salvos do cliente, para pré-preencher o checkout. */
+export async function perfilContato(
+  userId: string,
+): Promise<{ nome: string | null; telefone: string | null } | null> {
+  if (MODO_VPS) {
+    const sessao = await sessaoAtual();
+    return sessao ? { nome: sessao.nome || null, telefone: sessao.telefone || null } : null;
+  }
+  const { data } = await supabase
+    .from("profiles")
+    .select("nome,telefone")
+    .eq("id", userId)
+    .maybeSingle();
+  return data ?? null;
 }
