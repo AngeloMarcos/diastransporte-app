@@ -108,27 +108,38 @@ function Carrinho() {
     }
     setEnviando(true);
     try {
-      const { error } = await supabase.from("agendamentos").insert(
-        itens.map((i) => ({
-          user_id: user.id,
-          rota_id: i.rotaId ?? null,
-          trecho: i.trecho,
-          data_viagem: i.data || null,
-          hora: i.hora || null,
-          periodo: i.periodo === "noite" ? "noite" : "dia",
-          carro: i.carro,
-          passageiros: i.passageiros,
-          valor: i.valor ?? null,
-          embarque_local: i.embarqueLocal || null,
-          observacoes: i.observacoes || null,
-          contato_nome: nome || user.email || null,
-          contato_telefone: telefone || null,
-        })),
-      );
+      // O valor NÃO é enviado: o banco calcula o preço oficial da rota.
+      const { data: gravados, error } = await supabase
+        .from("agendamentos")
+        .insert(
+          itens.map((i) => ({
+            user_id: user.id,
+            rota_id: i.rotaId,
+            trecho: i.trecho,
+            data_viagem: i.data || null,
+            hora: i.hora || null,
+            periodo: i.periodo === "noite" ? "noite" : "dia",
+            carro: i.carro,
+            passageiros: i.passageiros,
+            embarque_local: i.embarqueLocal || null,
+            observacoes: i.observacoes || null,
+            contato_nome: nome || user.email || null,
+            contato_telefone: telefone || null,
+          })),
+        )
+        .select("valor");
       if (error) throw error;
+      const totalOficial = (gravados ?? []).reduce((s, r) => s + (r.valor ?? 0), 0);
+      const divergente =
+        (gravados ?? []).length > 0 &&
+        totalOficial !== itens.reduce((s, i) => s + (i.valor ?? 0), 0);
       const destino = link;
       limpar();
-      toast.success("Reserva registrada! Vamos confirmar pelo WhatsApp.");
+      if (divergente) {
+        toast.success("Reserva registrada com o preço atualizado da tabela oficial.");
+      } else {
+        toast.success("Reserva registrada! Vamos confirmar pelo WhatsApp.");
+      }
       window.open(destino, "_blank", "noreferrer");
       void navigate({ to: "/minhas-viagens" });
     } catch (erro) {

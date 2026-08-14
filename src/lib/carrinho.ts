@@ -7,7 +7,8 @@ import { useCallback, useEffect, useState } from "react";
 export type ItemCarrinho = {
   id: string;
   slug: string;
-  rotaId?: string | null;
+  /** Obrigatório: o banco calcula o preço oficial a partir da rota. */
+  rotaId: string;
   trecho: string;
   origem: string;
   destino: string;
@@ -37,7 +38,9 @@ export function lerCarrinho(): ItemCarrinho[] {
     const bruto = storage()?.getItem(CHAVE);
     if (!bruto) return [];
     const dados = JSON.parse(bruto) as ItemCarrinho[];
-    return Array.isArray(dados) ? dados : [];
+    if (!Array.isArray(dados)) return [];
+    // Itens antigos sem rotaId não podem ser reservados (o banco exige a rota).
+    return dados.filter((i) => typeof i?.rotaId === "string" && i.rotaId.length > 0);
   } catch {
     return [];
   }

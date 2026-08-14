@@ -45,6 +45,7 @@ export const listUsuarios = createServerFn({ method: "GET" })
     );
     const contagem = new Map<string, number>();
     for (const a of agendamentos ?? []) {
+      if (!a.user_id) continue;
       contagem.set(a.user_id, (contagem.get(a.user_id) ?? 0) + 1);
     }
 

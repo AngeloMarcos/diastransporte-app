@@ -27,11 +27,11 @@ export type Database = {
           observacoes: string | null
           passageiros: number
           periodo: string
-          rota_id: string | null
+          rota_id: string
           status: string
           trecho: string
           updated_at: string
-          user_id: string
+          user_id: string | null
           valor: number | null
         }
         Insert: {
@@ -46,11 +46,11 @@ export type Database = {
           observacoes?: string | null
           passageiros?: number
           periodo?: string
-          rota_id?: string | null
+          rota_id: string
           status?: string
           trecho: string
           updated_at?: string
-          user_id: string
+          user_id?: string | null
           valor?: number | null
         }
         Update: {
@@ -65,11 +65,11 @@ export type Database = {
           observacoes?: string | null
           passageiros?: number
           periodo?: string
-          rota_id?: string | null
+          rota_id?: string
           status?: string
           trecho?: string
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
           valor?: number | null
         }
         Relationships: [
