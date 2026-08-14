@@ -51,9 +51,15 @@ function AuthPage() {
   const [rascunho, setRascunho] = useState<RascunhoReserva | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) seguirAposEntrar(navigate);
-    });
+    if (MODO_VPS) {
+      void sessaoAtual().then((sessao) => {
+        if (sessao) seguirAposEntrar(navigate);
+      });
+    } else {
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session) seguirAposEntrar(navigate);
+      });
+    }
     // Lido só no cliente (depois da hidratação) pra não divergir do HTML do SSR.
     setRascunho(lerRascunho());
   }, [navigate]);
@@ -66,7 +72,17 @@ function AuthPage() {
     }
     setEnviando(true);
     try {
-      if (modo === "entrar") {
+      // Deploy próprio: login pela sessão em cookie (src/lib/vps/sessao.functions.ts).
+      if (MODO_VPS) {
+        if (modo === "entrar") {
+          await entrar({ data: { email, senha } });
+          toast.success("Bem-vindo de volta!");
+        } else {
+          await criarConta({ data: { email, senha, nome, telefone } });
+          toast.success("Conta criada!");
+        }
+        seguirAposEntrar(navigate);
+      } else if (modo === "entrar") {
         const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
         if (error) throw error;
         toast.success("Bem-vindo de volta!");
