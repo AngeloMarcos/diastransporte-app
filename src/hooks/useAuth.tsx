@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 
 import { supabase } from "@/integrations/supabase/client";
+import { MODO_VPS } from "@/lib/vps/config";
+import { sair, sessaoAtual, type SessaoAtual } from "@/lib/vps/sessao.functions";
 
 /**
  * Mantém public.profiles em sincronia com o e-mail/nome do Auth.
