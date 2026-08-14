@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { consumirRedirectPosLogin, lerRascunho, type RascunhoReserva } from "@/lib/reserva";
+import { MODO_VPS } from "@/lib/vps/config";
+import { criarConta, entrar, sessaoAtual } from "@/lib/vps/sessao.functions";
 
 function seguirAposEntrar(navigate: ReturnType<typeof useNavigate>) {
   const redirect = consumirRedirectPosLogin();
