@@ -210,14 +210,17 @@ function AuthPage() {
             {modo === "entrar" ? "Entrar" : "Criar conta"}
           </Button>
 
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full"
-            onClick={() => void entrarComGoogle()}
-          >
-            Continuar com Google
-          </Button>
+          {/* O login com Google é do backend gerenciado; no deploy próprio some. */}
+          {!MODO_VPS && (
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              onClick={() => void entrarComGoogle()}
+            >
+              Continuar com Google
+            </Button>
+          )}
 
           <button
             type="button"
