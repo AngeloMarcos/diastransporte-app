@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 
 import { supabase } from "@/integrations/supabase/client";
+import { MODO_VPS } from "@/lib/vps/config";
+import { sair, sessaoAtual, type SessaoAtual } from "@/lib/vps/sessao.functions";
 
 /**
  * Mantém public.profiles em sincronia com o e-mail/nome do Auth.
@@ -39,6 +41,18 @@ async function sincronizarPerfil(user: User) {
   );
 }
 
+/** Converte a sessão própria (VPS) no mesmo formato que as telas já usam. */
+function usuarioDoModoVps(sessao: NonNullable<SessaoAtual>): User {
+  return {
+    id: sessao.id,
+    email: sessao.email,
+    user_metadata: { nome: sessao.nome, telefone: sessao.telefone },
+    app_metadata: {},
+    aud: "authenticated",
+    created_at: "",
+  } as User;
+}
+
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -46,6 +60,28 @@ export function useAuth() {
 
   useEffect(() => {
     let ativo = true;
+
+    // Deploy próprio: a sessão vem do cookie HttpOnly, lida no servidor.
+    if (MODO_VPS) {
+      sessaoAtual()
+        .then((sessao) => {
+          if (!ativo) return;
+          setUser(sessao ? usuarioDoModoVps(sessao) : null);
+          setIsAdmin(Boolean(sessao?.admin));
+        })
+        .catch(() => {
+          if (ativo) {
+            setUser(null);
+            setIsAdmin(false);
+          }
+        })
+        .finally(() => {
+          if (ativo) setCarregando(false);
+        });
+      return () => {
+        ativo = false;
+      };
+    }
 
     async function aplicar(session: Session | null) {
       if (!ativo) return;
@@ -79,4 +115,13 @@ export function useAuth() {
   }, []);
 
   return { user, isAdmin, carregando };
+}
+
+/** Encerra a sessão na infraestrutura ativa. */
+export async function encerrarSessaoAtual() {
+  if (MODO_VPS) {
+    await sair();
+    return;
+  }
+  await supabase.auth.signOut();
 }

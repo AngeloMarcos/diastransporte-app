@@ -5,8 +5,9 @@ import { CalendarDays, Car, MapPin, MessageCircle, Users } from "lucide-react";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
 import { formatBRL } from "@/data/rotas";
+import { useAuth } from "@/hooks/useAuth";
+import { listarMinhasViagens } from "@/lib/dados";
 import { whatsappLink } from "@/lib/whatsapp";
 
 export const Route = createFileRoute("/_authenticated/minhas-viagens")({
@@ -30,16 +31,12 @@ const rotuloStatus: Record<string, string> = {
 };
 
 function MinhasViagens() {
+  const { user } = useAuth();
+  const usuarioId = user?.id ?? "";
   const { data, isLoading } = useQuery({
-    queryKey: ["meus-agendamentos"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agendamentos")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryKey: ["meus-agendamentos", usuarioId],
+    queryFn: () => listarMinhasViagens(usuarioId),
+    enabled: Boolean(usuarioId),
   });
 
   return (

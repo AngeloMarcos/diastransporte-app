@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { consumirRedirectPosLogin, lerRascunho, type RascunhoReserva } from "@/lib/reserva";
+import { MODO_VPS } from "@/lib/vps/config";
+import { criarConta, entrar, sessaoAtual } from "@/lib/vps/sessao.functions";
 
 function seguirAposEntrar(navigate: ReturnType<typeof useNavigate>) {
   const redirect = consumirRedirectPosLogin();
@@ -51,9 +53,15 @@ function AuthPage() {
   const [rascunho, setRascunho] = useState<RascunhoReserva | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) seguirAposEntrar(navigate);
-    });
+    if (MODO_VPS) {
+      void sessaoAtual().then((sessao) => {
+        if (sessao) seguirAposEntrar(navigate);
+      });
+    } else {
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session) seguirAposEntrar(navigate);
+      });
+    }
     // Lido só no cliente (depois da hidratação) pra não divergir do HTML do SSR.
     setRascunho(lerRascunho());
   }, [navigate]);
@@ -66,7 +74,17 @@ function AuthPage() {
     }
     setEnviando(true);
     try {
-      if (modo === "entrar") {
+      // Deploy próprio: login pela sessão em cookie (src/lib/vps/sessao.functions.ts).
+      if (MODO_VPS) {
+        if (modo === "entrar") {
+          await entrar({ data: { email, senha } });
+          toast.success("Bem-vindo de volta!");
+        } else {
+          await criarConta({ data: { email, senha, nome, telefone } });
+          toast.success("Conta criada!");
+        }
+        seguirAposEntrar(navigate);
+      } else if (modo === "entrar") {
         const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
         if (error) throw error;
         toast.success("Bem-vindo de volta!");
@@ -192,14 +210,17 @@ function AuthPage() {
             {modo === "entrar" ? "Entrar" : "Criar conta"}
           </Button>
 
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full"
-            onClick={() => void entrarComGoogle()}
-          >
-            Continuar com Google
-          </Button>
+          {/* O login com Google é do backend gerenciado; no deploy próprio some. */}
+          {!MODO_VPS && (
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              onClick={() => void entrarComGoogle()}
+            >
+              Continuar com Google
+            </Button>
+          )}
 
           <button
             type="button"

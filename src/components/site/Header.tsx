@@ -6,8 +6,7 @@ import logo from "@/assets/logo.jpeg.asset.json";
 import { EMPRESA } from "@/data/rotas";
 import { whatsappLink } from "@/lib/whatsapp";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { encerrarSessaoAtual, useAuth } from "@/hooks/useAuth";
 
 const links = [
   { to: "/transfers", label: "Transfers" },
@@ -23,7 +22,7 @@ export function Header() {
   async function sair() {
     await queryClient.cancelQueries();
     queryClient.clear();
-    await supabase.auth.signOut();
+    await encerrarSessaoAtual();
     void navigate({ to: "/auth", replace: true });
   }
 

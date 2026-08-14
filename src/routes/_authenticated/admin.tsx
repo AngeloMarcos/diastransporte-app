@@ -59,7 +59,23 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  atualizarStatusAgendamento,
+  criarBlocoConteudo,
+  criarRota,
+  definirAdmin,
+  enviarImagem as uploadImagem,
+  listarAgendamentos,
+  listarConteudoAdmin,
+  listarRotasAdmin,
+  listarUsuarios,
+  redefinirSenha,
+  removerAgendamento,
+  removerBlocoConteudo,
+  removerRota,
+  salvarBlocoConteudo,
+  salvarRota,
+} from "@/lib/dados";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { formatBRL } from "@/data/rotas";
@@ -262,26 +278,12 @@ function StatCard({
 function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["id"]) => void }) {
   const { data: agendamentos, isLoading: carregandoAgendamentos } = useQuery({
     queryKey: ["admin-agendamentos"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agendamentos")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => listarAgendamentos(),
   });
 
   const { data: rotas, isLoading: carregandoRotas } = useQuery({
     queryKey: ["admin-rotas"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("rotas")
-        .select(ROTA_COLUMNS)
-        .order("popularidade", { ascending: false });
-      if (error) throw error;
-      return data as unknown as RotaRow[];
-    },
+    queryFn: () => listarRotasAdmin(),
   });
 
   if (carregandoAgendamentos || carregandoRotas) {
@@ -422,7 +424,7 @@ function NovaRotaDialog() {
       if (!form.origem.trim() || !form.destino.trim()) {
         throw new Error("Preencha origem e destino.");
       }
-      const { error } = await supabase.from("rotas").insert({
+      await criarRota({
         slug: slugAtual || `rota-${Date.now()}`,
         origem: form.origem,
         destino: form.destino,
@@ -430,9 +432,7 @@ function NovaRotaDialog() {
         distancia: form.distancia,
         preco_pequeno: Number(form.preco_pequeno) || 0,
         resumo: form.resumo,
-        ativo: false,
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       toast.success("Rota criada como oculta. Edite os detalhes e ative quando estiver pronta.");
@@ -532,14 +532,7 @@ function AdminRotas() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-rotas"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("rotas")
-        .select(ROTA_COLUMNS)
-        .order("popularidade", { ascending: false });
-      if (error) throw error;
-      return data as unknown as RotaRow[];
-    },
+    queryFn: () => listarRotasAdmin(),
   });
 
   const filtradas = useMemo(() => {
@@ -589,28 +582,7 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
 
   const salvar = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
-        .from("rotas")
-        .update({
-          origem: form.origem,
-          destino: form.destino,
-          duracao: form.duracao,
-          distancia: form.distancia,
-          preco_pequeno: Number(form.preco_pequeno) || 0,
-          preco_grande: form.preco_grande === null ? null : Number(form.preco_grande),
-          preco_pequeno_noite:
-            form.preco_pequeno_noite === null ? null : Number(form.preco_pequeno_noite),
-          preco_grande_noite:
-            form.preco_grande_noite === null ? null : Number(form.preco_grande_noite),
-          destaque: form.destaque || null,
-          resumo: form.resumo,
-          descricao: form.descricao,
-          foto: form.foto,
-          galeria: form.galeria,
-          ativo: form.ativo,
-        })
-        .eq("id", rota.id);
-      if (error) throw error;
+      await salvarRota({ ...form, id: rota.id });
     },
     onSuccess: () => {
       toast.success("Rota atualizada.");
@@ -621,8 +593,7 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
 
   const remover = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("rotas").delete().eq("id", rota.id);
-      if (error) throw error;
+      await removerRota(rota.id);
     },
     onSuccess: () => {
       toast.success("Rota removida.");
@@ -634,17 +605,11 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
   async function enviarFoto(arquivo: File, destino: "principal" | "galeria") {
     setEnviandoFoto(true);
     try {
-      const caminho = `${rota.slug}/${Date.now()}-${arquivo.name.replace(/[^\w.-]/g, "_")}`;
-      const { error } = await supabase.storage.from("rotas").upload(caminho, arquivo);
-      if (error) throw error;
-      const { data, error: erroUrl } = await supabase.storage
-        .from("rotas")
-        .createSignedUrl(caminho, 60 * 60 * 24 * 365 * 20);
-      if (erroUrl || !data) throw erroUrl ?? new Error("Falha ao gerar link da imagem.");
+      const url = await uploadImagem(arquivo, rota.slug);
       setForm((f) =>
         destino === "principal"
-          ? { ...f, foto: data.signedUrl, galeria: [data.signedUrl, ...f.galeria] }
-          : { ...f, galeria: [...f.galeria, data.signedUrl] },
+          ? { ...f, foto: url, galeria: [url, ...f.galeria] }
+          : { ...f, galeria: [...f.galeria, url] },
       );
       toast.success("Foto enviada. Clique em salvar para publicar.");
     } catch (e) {
@@ -928,20 +893,12 @@ function AdminAgendamentos() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-agendamentos"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agendamentos")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => listarAgendamentos(),
   });
 
   const atualizar = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from("agendamentos").update({ status }).eq("id", id);
-      if (error) throw error;
+      await atualizarStatusAgendamento(id, status);
     },
     onSuccess: () => {
       toast.success("Status atualizado.");
@@ -952,8 +909,7 @@ function AdminAgendamentos() {
 
   const remover = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("agendamentos").delete().eq("id", id);
-      if (error) throw error;
+      await removerAgendamento(id);
     },
     onSuccess: () => {
       toast.success("Agendamento removido.");
@@ -1108,21 +1064,12 @@ function AdminConteudo() {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["admin-conteudo"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("conteudo_site")
-        .select("id, chave, secao, titulo, texto, imagem, ordem")
-        .order("secao", { ascending: true })
-        .order("ordem", { ascending: true });
-      if (error) throw error;
-      return data as unknown as ConteudoItem[];
-    },
+    queryFn: () => listarConteudoAdmin(),
   });
 
   const criar = useMutation({
     mutationFn: async (chave: string) => {
-      const { error } = await supabase.from("conteudo_site").insert({ chave, secao: "geral" });
-      if (error) throw error;
+      await criarBlocoConteudo(chave);
     },
     onSuccess: () => {
       toast.success("Bloco criado.");
@@ -1196,17 +1143,7 @@ function ConteudoEditor({ item }: { item: ConteudoItem }) {
 
   const salvar = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
-        .from("conteudo_site")
-        .update({
-          secao: form.secao,
-          titulo: form.titulo,
-          texto: form.texto,
-          imagem: form.imagem,
-          ordem: Number(form.ordem) || 0,
-        })
-        .eq("id", item.id);
-      if (error) throw error;
+      await salvarBlocoConteudo(form);
     },
     onSuccess: () => {
       toast.success("Conteúdo atualizado.");
@@ -1217,8 +1154,7 @@ function ConteudoEditor({ item }: { item: ConteudoItem }) {
 
   const remover = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("conteudo_site").delete().eq("id", item.id);
-      if (error) throw error;
+      await removerBlocoConteudo(item.id);
     },
     onSuccess: () => {
       toast.success("Bloco removido.");
@@ -1229,14 +1165,8 @@ function ConteudoEditor({ item }: { item: ConteudoItem }) {
   async function enviarImagem(arquivo: File) {
     setEnviando(true);
     try {
-      const caminho = `conteudo/${item.chave}/${Date.now()}-${arquivo.name.replace(/[^\w.-]/g, "_")}`;
-      const { error } = await supabase.storage.from("rotas").upload(caminho, arquivo);
-      if (error) throw error;
-      const { data, error: erroUrl } = await supabase.storage
-        .from("rotas")
-        .createSignedUrl(caminho, 60 * 60 * 24 * 365 * 20);
-      if (erroUrl || !data) throw erroUrl ?? new Error("Falha ao gerar link da imagem.");
-      setForm((f) => ({ ...f, imagem: data.signedUrl }));
+      const url = await uploadImagem(arquivo, `conteudo/${item.chave}`);
+      setForm((f) => ({ ...f, imagem: url }));
       toast.success("Imagem enviada. Clique em salvar para publicar.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao enviar imagem.");
