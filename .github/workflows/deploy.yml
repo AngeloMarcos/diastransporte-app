@@ -1,0 +1,58 @@
+name: Deploy VPS
+
+# Publica na VPS a cada push na main. Segredos necessários no repositório
+# (Settings → Secrets and variables → Actions):
+#   SSH_HOST  → IP ou host da VPS
+#   SSH_USER  → usuário com sudo/docker
+#   SSH_KEY   → chave privada SSH (a pública fica em ~/.ssh/authorized_keys na VPS)
+#   SSH_PORT  → opcional (padrão 22)
+# O diretório do projeto na VPS é definido em APP_DIR abaixo.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: true
+
+env:
+  APP_DIR: /opt/dias-transporte
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configurar chave SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "${{ secrets.SSH_PORT || 22 }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Atualizar, migrar e reiniciar
+        run: |
+          ssh -i ~/.ssh/id_deploy -p "${{ secrets.SSH_PORT || 22 }}" \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" bash -euo pipefail <<'REMOTO'
+          cd ${{ env.APP_DIR }}
+          git fetch --all
+          git reset --hard origin/main
+          docker compose build app
+          docker compose up -d db
+          # Migrations rodam dentro do container recém-construído, com a role de DDL.
+          docker compose run --rm --entrypoint sh app -c \
+            'DATABASE_URL_MIGRATION="$DATABASE_URL_MIGRATION" node db/migrate.mjs'
+          docker compose up -d app
+          docker image prune -f
+          REMOTO
+
+      - name: Conferir se o site responde
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS -o /dev/null "${{ vars.APP_URL || 'https://wander-book-craft.lovable.app' }}"; then
+              echo "site respondendo"; exit 0
+            fi
+            sleep 5
+          done
+          echo "site não respondeu depois do deploy"; exit 1

@@ -17,8 +17,10 @@ import { Route as ContatoRouteImport } from './routes/contato'
 import { Route as FrotaRouteImport } from './routes/frota'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedMinhasViagensRouteImport } from './routes/_authenticated/minhas-viagens'
+import { Route as ApiUploadsRouteImport } from './routes/api/uploads'
 import { Route as TransfersIndexRouteImport } from './routes/transfers.index'
 import { Route as TransfersRotaRouteImport } from './routes/transfers.$rota'
+import { Route as ApiUploadsArquivoRouteImport } from './routes/api/uploads.$arquivo'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -60,6 +62,11 @@ const AuthenticatedMinhasViagensRoute =
     path: '/minhas-viagens',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const ApiUploadsRoute = ApiUploadsRouteImport.update({
+  id: '/api/uploads',
+  path: '/api/uploads',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TransfersIndexRoute = TransfersIndexRouteImport.update({
   id: '/transfers/',
   path: '/transfers/',
@@ -70,6 +77,11 @@ const TransfersRotaRoute = TransfersRotaRouteImport.update({
   path: '/transfers/$rota',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiUploadsArquivoRoute = ApiUploadsArquivoRouteImport.update({
+  id: '/$arquivo',
+  path: '/$arquivo',
+  getParentRoute: () => ApiUploadsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -79,8 +91,10 @@ export interface FileRoutesByFullPath {
   '/frota': typeof FrotaRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
+  '/api/uploads': typeof ApiUploadsRouteWithChildren
   '/transfers/$rota': typeof TransfersRotaRoute
   '/transfers/': typeof TransfersIndexRoute
+  '/api/uploads/$arquivo': typeof ApiUploadsArquivoRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -90,8 +104,10 @@ export interface FileRoutesByTo {
   '/frota': typeof FrotaRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
+  '/api/uploads': typeof ApiUploadsRouteWithChildren
   '/transfers/$rota': typeof TransfersRotaRoute
   '/transfers': typeof TransfersIndexRoute
+  '/api/uploads/$arquivo': typeof ApiUploadsArquivoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -103,8 +119,10 @@ export interface FileRoutesById {
   '/frota': typeof FrotaRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
+  '/api/uploads': typeof ApiUploadsRouteWithChildren
   '/transfers/$rota': typeof TransfersRotaRoute
   '/transfers/': typeof TransfersIndexRoute
+  '/api/uploads/$arquivo': typeof ApiUploadsArquivoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -116,8 +134,10 @@ export interface FileRouteTypes {
     | '/frota'
     | '/admin'
     | '/minhas-viagens'
+    | '/api/uploads'
     | '/transfers/$rota'
     | '/transfers/'
+    | '/api/uploads/$arquivo'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -127,8 +147,10 @@ export interface FileRouteTypes {
     | '/frota'
     | '/admin'
     | '/minhas-viagens'
+    | '/api/uploads'
     | '/transfers/$rota'
     | '/transfers'
+    | '/api/uploads/$arquivo'
   id:
     | '__root__'
     | '/'
@@ -139,8 +161,10 @@ export interface FileRouteTypes {
     | '/frota'
     | '/_authenticated/admin'
     | '/_authenticated/minhas-viagens'
+    | '/api/uploads'
     | '/transfers/$rota'
     | '/transfers/'
+    | '/api/uploads/$arquivo'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -150,6 +174,7 @@ export interface RootRouteChildren {
   CarrinhoRoute: typeof CarrinhoRoute
   ContatoRoute: typeof ContatoRoute
   FrotaRoute: typeof FrotaRoute
+  ApiUploadsRoute: typeof ApiUploadsRouteWithChildren
   TransfersRotaRoute: typeof TransfersRotaRoute
   TransfersIndexRoute: typeof TransfersIndexRoute
 }
@@ -212,6 +237,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMinhasViagensRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/uploads': {
+      id: '/api/uploads'
+      path: '/api/uploads'
+      fullPath: '/api/uploads'
+      preLoaderRoute: typeof ApiUploadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/transfers/': {
       id: '/transfers/'
       path: '/transfers'
@@ -225,6 +257,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/transfers/$rota'
       preLoaderRoute: typeof TransfersRotaRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/uploads/$arquivo': {
+      id: '/api/uploads/$arquivo'
+      path: '/$arquivo'
+      fullPath: '/api/uploads/$arquivo'
+      preLoaderRoute: typeof ApiUploadsArquivoRouteImport
+      parentRoute: typeof ApiUploadsRoute
     }
   }
 }
@@ -242,6 +281,18 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface ApiUploadsRouteChildren {
+  ApiUploadsArquivoRoute: typeof ApiUploadsArquivoRoute
+}
+
+const ApiUploadsRouteChildren: ApiUploadsRouteChildren = {
+  ApiUploadsArquivoRoute: ApiUploadsArquivoRoute,
+}
+
+const ApiUploadsRouteWithChildren = ApiUploadsRoute._addFileChildren(
+  ApiUploadsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
@@ -249,6 +300,7 @@ const rootRouteChildren: RootRouteChildren = {
   CarrinhoRoute: CarrinhoRoute,
   ContatoRoute: ContatoRoute,
   FrotaRoute: FrotaRoute,
+  ApiUploadsRoute: ApiUploadsRouteWithChildren,
   TransfersRotaRoute: TransfersRotaRoute,
   TransfersIndexRoute: TransfersIndexRoute,
 }

@@ -1,0 +1,41 @@
+# Stack do Dias Transporte na VPS: app + Postgres + volume de uploads.
+# Copie .env.example para .env e ajuste antes de subir.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dias}
+      POSTGRES_USER: ${POSTGRES_USER:-dias_migration}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dias_migration} -d ${POSTGRES_DB:-dias}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Sem ports: publicado só na rede interna. Para pg_dump remoto, use SSH tunnel.
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?defina DATABASE_URL no .env}
+      DATABASE_URL_MIGRATION: ${DATABASE_URL_MIGRATION:-}
+      SESSION_SECRET: ${SESSION_SECRET:?defina SESSION_SECRET no .env}
+      APP_URL: ${APP_URL:?defina APP_URL no .env}
+      UPLOADS_DIR: /var/lib/dias-transporte/uploads
+      VITE_AUTH_MODE: vps
+      PORT: 3000
+    volumes:
+      - uploads:/var/lib/dias-transporte/uploads
+    ports:
+      - "127.0.0.1:3000:3000" # o Caddy/Nginx do host faz o proxy e o HTTPS
+
+volumes:
+  db:
+  uploads:
