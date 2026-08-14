@@ -59,7 +59,23 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  atualizarStatusAgendamento,
+  criarBlocoConteudo,
+  criarRota,
+  definirAdmin,
+  enviarImagem as uploadImagem,
+  listarAgendamentos,
+  listarConteudoAdmin,
+  listarRotasAdmin,
+  listarUsuarios,
+  redefinirSenha,
+  removerAgendamento,
+  removerBlocoConteudo,
+  removerRota,
+  salvarBlocoConteudo,
+  salvarRota,
+} from "@/lib/dados";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { formatBRL } from "@/data/rotas";
@@ -589,7 +605,7 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
   async function enviarFoto(arquivo: File, destino: "principal" | "galeria") {
     setEnviandoFoto(true);
     try {
-      const url = await enviarImagem(arquivo, rota.slug);
+      const url = await uploadImagem(arquivo, rota.slug);
       setForm((f) =>
         destino === "principal"
           ? { ...f, foto: url, galeria: [url, ...f.galeria] }
@@ -1048,15 +1064,7 @@ function AdminConteudo() {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["admin-conteudo"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("conteudo_site")
-        .select("id, chave, secao, titulo, texto, imagem, ordem")
-        .order("secao", { ascending: true })
-        .order("ordem", { ascending: true });
-      if (error) throw error;
-      return data as unknown as ConteudoItem[];
-    },
+    queryFn: () => listarConteudoAdmin(),
   });
 
   const criar = useMutation({
@@ -1135,17 +1143,7 @@ function ConteudoEditor({ item }: { item: ConteudoItem }) {
 
   const salvar = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
-        .from("conteudo_site")
-        .update({
-          secao: form.secao,
-          titulo: form.titulo,
-          texto: form.texto,
-          imagem: form.imagem,
-          ordem: Number(form.ordem) || 0,
-        })
-        .eq("id", item.id);
-      if (error) throw error;
+      await salvarBlocoConteudo(form);
     },
     onSuccess: () => {
       toast.success("Conteúdo atualizado.");
@@ -1167,14 +1165,8 @@ function ConteudoEditor({ item }: { item: ConteudoItem }) {
   async function enviarImagem(arquivo: File) {
     setEnviando(true);
     try {
-      const caminho = `conteudo/${item.chave}/${Date.now()}-${arquivo.name.replace(/[^\w.-]/g, "_")}`;
-      const { error } = await supabase.storage.from("rotas").upload(caminho, arquivo);
-      if (error) throw error;
-      const { data, error: erroUrl } = await supabase.storage
-        .from("rotas")
-        .createSignedUrl(caminho, 60 * 60 * 24 * 365 * 20);
-      if (erroUrl || !data) throw erroUrl ?? new Error("Falha ao gerar link da imagem.");
-      setForm((f) => ({ ...f, imagem: data.signedUrl }));
+      const url = await uploadImagem(arquivo, `conteudo/${item.chave}`);
+      setForm((f) => ({ ...f, imagem: url }));
       toast.success("Imagem enviada. Clique em salvar para publicar.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao enviar imagem.");
