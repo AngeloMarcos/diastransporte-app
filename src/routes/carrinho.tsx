@@ -11,8 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatBRL } from "@/data/rotas";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { useCarrinho } from "@/lib/carrinho";
+import { criarReservas, perfilContato } from "@/lib/dados";
 import { salvarRedirectPosLogin } from "@/lib/reserva";
 import { mensagemCarrinho, whatsappLink } from "@/lib/whatsapp";
 import { CarrinhoSkeleton } from "@/components/site/Skeletons";
@@ -69,13 +69,9 @@ function Carrinho() {
   useEffect(() => {
     if (!user) return;
     void (async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("nome,telefone")
-        .eq("id", user.id)
-        .maybeSingle();
-      setNome((atual) => atual || data?.nome || user.email || "");
-      setTelefone((atual) => atual || data?.telefone || "");
+      const perfil = await perfilContato(user.id).catch(() => null);
+      setNome((atual) => atual || perfil?.nome || user.email || "");
+      setTelefone((atual) => atual || perfil?.telefone || "");
     })();
   }, [user]);
 
@@ -109,27 +105,23 @@ function Carrinho() {
     setEnviando(true);
     try {
       // O valor NÃO é enviado: o banco calcula o preço oficial da rota.
-      const { data: gravados, error } = await supabase
-        .from("agendamentos")
-        .insert(
-          itens.map((i) => ({
-            user_id: user.id,
-            rota_id: i.rotaId,
-            trecho: i.trecho,
-            data_viagem: i.data || null,
-            hora: i.hora || null,
-            periodo: i.periodo === "noite" ? "noite" : "dia",
-            carro: i.carro,
-            passageiros: i.passageiros,
-            embarque_local: i.embarqueLocal || null,
-            observacoes: i.observacoes || null,
-            contato_nome: nome || user.email || null,
-            contato_telefone: telefone || null,
-          })),
-        )
-        .select("valor");
-      if (error) throw error;
-      const totalOficial = (gravados ?? []).reduce((s, r) => s + (r.valor ?? 0), 0);
+      const gravados = await criarReservas(
+        itens.map((i) => ({
+          rota_id: i.rotaId,
+          trecho: i.trecho,
+          data_viagem: i.data || null,
+          hora: i.hora || null,
+          periodo: i.periodo === "noite" ? ("noite" as const) : ("dia" as const),
+          carro: i.carro === "grande" ? ("grande" as const) : ("pequeno" as const),
+          passageiros: i.passageiros,
+          embarque_local: i.embarqueLocal || null,
+          observacoes: i.observacoes || null,
+          contato_nome: nome || user.email || null,
+          contato_telefone: telefone || null,
+        })),
+        user.id,
+      );
+      const totalOficial = gravados.reduce((s, r) => s + (r.valor ?? 0), 0);
       const divergente =
         (gravados ?? []).length > 0 &&
         totalOficial !== itens.reduce((s, i) => s + (i.valor ?? 0), 0);

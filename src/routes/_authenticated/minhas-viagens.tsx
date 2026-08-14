@@ -32,14 +32,7 @@ const rotuloStatus: Record<string, string> = {
 function MinhasViagens() {
   const { data, isLoading } = useQuery({
     queryKey: ["meus-agendamentos"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agendamentos")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => listarMinhasViagens(usuarioId),
   });
 
   return (
