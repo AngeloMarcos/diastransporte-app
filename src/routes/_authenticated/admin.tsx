@@ -1,10 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  BellRing,
   CalendarCheck,
+  Check,
   FileText,
   KeyRound,
   LayoutDashboard,
@@ -79,6 +81,12 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { formatBRL } from "@/data/rotas";
+import {
+  pedirPermissaoNotificacao,
+  permissaoNotificacao,
+  notificarNovaSolicitacao,
+  tocarAlerta,
+} from "@/lib/notificacoes";
 import { ROTA_COLUMNS, type RotaRow } from "@/lib/rotasMap";
 import {
   definirPapelAdmin,
@@ -135,6 +143,17 @@ function contarStatus(lista: { status: string }[]) {
   }, {});
 }
 
+/** "Hoje" / "Amanhã" / dd/mm — pra triagem rápida de viagens próximas. */
+function rotuloData(dataViagem: string): string {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const data = new Date(`${dataViagem}T00:00:00`);
+  const diffDias = Math.round((data.getTime() - hoje.getTime()) / 86_400_000);
+  if (diffDias === 0) return "Hoje";
+  if (diffDias === 1) return "Amanhã";
+  return data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+
 function StatusBadge({ status }: { status: string }) {
   const meta = STATUS_META[status as (typeof statusOpcoes)[number]];
   return (
@@ -180,6 +199,8 @@ function AdminPage() {
   const { user, isAdmin, carregando } = useAuth();
   const navigate = useNavigate();
   const [aba, setAba] = useState<(typeof abas)[number]["id"]>("geral");
+  const [permissaoNotif, setPermissaoNotif] = useState<NotificationPermission | null>(null);
+  const idsPendentesVistos = useRef<Set<string> | null>(null);
 
   useEffect(() => {
     if (!carregando && !isAdmin) {
@@ -187,6 +208,43 @@ function AdminPage() {
       void navigate({ to: "/minhas-viagens", replace: true });
     }
   }, [carregando, isAdmin, navigate]);
+
+  useEffect(() => {
+    setPermissaoNotif(permissaoNotificacao());
+  }, []);
+
+  // Fica sempre "ligado" (não depende de qual aba está montada) pra avisar de
+  // solicitações novas mesmo se o admin estiver em outra aba do painel — e
+  // mantém o cache de ["admin-agendamentos"] quente pras outras abas.
+  const { data: agendamentosLive } = useQuery({
+    queryKey: ["admin-agendamentos"],
+    queryFn: () => listarAgendamentos(),
+    enabled: isAdmin,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
+  });
+
+  useEffect(() => {
+    if (!agendamentosLive) return;
+    const pendentesAgora = agendamentosLive.filter((a) => a.status === "pendente");
+    const idsAgora = new Set(pendentesAgora.map((a) => a.id));
+    const vistosAntes = idsPendentesVistos.current;
+    if (vistosAntes) {
+      const novos = pendentesAgora.filter((a) => !vistosAntes.has(a.id));
+      if (novos.length) {
+        tocarAlerta();
+        for (const a of novos) {
+          const detalhe = `${a.contato_nome ?? "Sem nome"} · ${a.data_viagem ?? "data a combinar"}`;
+          toast.message(`Nova solicitação: ${a.trecho}`, { description: detalhe });
+          notificarNovaSolicitacao(`Nova solicitação: ${a.trecho}`, detalhe);
+        }
+      }
+    }
+    idsPendentesVistos.current = idsAgora;
+  }, [agendamentosLive]);
+
+  const pendentesCount = (agendamentosLive ?? []).filter((a) => a.status === "pendente").length;
 
   if (carregando || !isAdmin) {
     return (
@@ -209,6 +267,21 @@ function AdminPage() {
           {user?.email ? `Logado como ${user.email} · ` : ""}
           Acompanhe agendamentos, edite rotas, preços, fotos e o conteúdo do site.
         </p>
+        {permissaoNotif === "default" && (
+          <button
+            type="button"
+            onClick={() => void pedirPermissaoNotificacao().then(setPermissaoNotif)}
+            className="mt-3 inline-flex min-h-11 items-center gap-1.5 text-sm text-primary underline-offset-4 hover:underline"
+          >
+            <BellRing className="size-4" /> Ativar aviso no navegador para novas solicitações
+          </button>
+        )}
+        {permissaoNotif === "denied" && (
+          <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <BellRing className="size-3.5" /> Notificações do navegador bloqueadas — o aviso sonoro
+            no painel continua funcionando.
+          </p>
+        )}
 
         <Tabs
           value={aba}
@@ -225,6 +298,11 @@ function AdminPage() {
                   className="min-h-11 shrink-0 gap-1.5 whitespace-nowrap px-3 text-sm"
                 >
                   <Icon className="size-4 shrink-0" /> {label}
+                  {id === "agendamentos" && pendentesCount > 0 && (
+                    <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+                      {pendentesCount}
+                    </span>
+                  )}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -299,6 +377,19 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
   const rotasAtivas = rotasLista.filter((r) => r.ativo).length;
   const recentes = lista.slice(0, 5);
 
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const em7dias = new Date(hoje);
+  em7dias.setDate(hoje.getDate() + 7);
+  const proximas = lista
+    .filter((a) => a.status !== "cancelado" && a.data_viagem)
+    .filter((a) => {
+      const d = new Date(`${a.data_viagem}T00:00:00`);
+      return d >= hoje && d <= em7dias;
+    })
+    .sort((a, b) => (a.data_viagem ?? "").localeCompare(b.data_viagem ?? ""))
+    .slice(0, 6);
+
   return (
     <div className="space-y-8">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -364,6 +455,39 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
           </>
         ) : (
           <p className="mt-4 text-sm text-muted-foreground">Nenhum agendamento ainda.</p>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-display text-lg">Próximas viagens (7 dias)</h2>
+          <Button
+            variant="secondary"
+            className="h-11 shrink-0"
+            onClick={() => onIrPara("agendamentos")}
+          >
+            Ver todos
+          </Button>
+        </div>
+        {proximas.length ? (
+          <div className="mt-4 divide-y divide-border">
+            {proximas.map((a) => (
+              <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                <div>
+                  <p className="text-sm font-medium">{a.trecho}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {rotuloData(a.data_viagem as string)}
+                    {a.hora ? ` · ${a.hora}` : ""} · {a.contato_nome ?? "sem nome"}
+                  </p>
+                </div>
+                <StatusBadge status={a.status} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-muted-foreground">
+            Nenhuma viagem prevista para os próximos 7 dias.
+          </p>
         )}
       </div>
 
@@ -1000,6 +1124,15 @@ function AdminAgendamentos() {
                   </div>
 
                   <div className="flex items-center gap-2 border-t border-border pt-4 lg:border-0 lg:pt-0">
+                    {a.status === "pendente" && (
+                      <Button
+                        className="h-11 shrink-0"
+                        disabled={atualizar.isPending}
+                        onClick={() => atualizar.mutate({ id: a.id, status: "confirmado" })}
+                      >
+                        <Check className="size-4" /> Confirmar
+                      </Button>
+                    )}
                     <Select
                       value={a.status}
                       onValueChange={(status) => atualizar.mutate({ id: a.id, status })}
@@ -1479,7 +1612,6 @@ function UsuarioLinha({
           </AlertDialogContent>
         </AlertDialog>
       </div>
-
     </article>
   );
 }
