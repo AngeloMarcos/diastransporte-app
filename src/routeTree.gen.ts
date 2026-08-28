@@ -15,6 +15,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CarrinhoRouteImport } from './routes/carrinho'
 import { Route as ContatoRouteImport } from './routes/contato'
 import { Route as FrotaRouteImport } from './routes/frota'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedMinhasViagensRouteImport } from './routes/_authenticated/minhas-viagens'
 import { Route as ApiUploadsRouteImport } from './routes/api/uploads'
@@ -49,6 +50,11 @@ const ContatoRoute = ContatoRouteImport.update({
 const FrotaRoute = FrotaRouteImport.update({
   id: '/frota',
   path: '/frota',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
@@ -89,6 +95,7 @@ export interface FileRoutesByFullPath {
   '/carrinho': typeof CarrinhoRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
   '/api/uploads': typeof ApiUploadsRouteWithChildren
@@ -102,6 +109,7 @@ export interface FileRoutesByTo {
   '/carrinho': typeof CarrinhoRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
   '/api/uploads': typeof ApiUploadsRouteWithChildren
@@ -117,6 +125,7 @@ export interface FileRoutesById {
   '/carrinho': typeof CarrinhoRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
   '/api/uploads': typeof ApiUploadsRouteWithChildren
@@ -132,6 +141,7 @@ export interface FileRouteTypes {
     | '/carrinho'
     | '/contato'
     | '/frota'
+    | '/sitemap.xml'
     | '/admin'
     | '/minhas-viagens'
     | '/api/uploads'
@@ -145,6 +155,7 @@ export interface FileRouteTypes {
     | '/carrinho'
     | '/contato'
     | '/frota'
+    | '/sitemap.xml'
     | '/admin'
     | '/minhas-viagens'
     | '/api/uploads'
@@ -159,6 +170,7 @@ export interface FileRouteTypes {
     | '/carrinho'
     | '/contato'
     | '/frota'
+    | '/sitemap.xml'
     | '/_authenticated/admin'
     | '/_authenticated/minhas-viagens'
     | '/api/uploads'
@@ -174,6 +186,7 @@ export interface RootRouteChildren {
   CarrinhoRoute: typeof CarrinhoRoute
   ContatoRoute: typeof ContatoRoute
   FrotaRoute: typeof FrotaRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiUploadsRoute: typeof ApiUploadsRouteWithChildren
   TransfersRotaRoute: typeof TransfersRotaRoute
   TransfersIndexRoute: typeof TransfersIndexRoute
@@ -221,6 +234,13 @@ declare module '@tanstack/react-router' {
       path: '/frota'
       fullPath: '/frota'
       preLoaderRoute: typeof FrotaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/admin': {
@@ -300,6 +320,7 @@ const rootRouteChildren: RootRouteChildren = {
   CarrinhoRoute: CarrinhoRoute,
   ContatoRoute: ContatoRoute,
   FrotaRoute: FrotaRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiUploadsRoute: ApiUploadsRouteWithChildren,
   TransfersRotaRoute: TransfersRotaRoute,
   TransfersIndexRoute: TransfersIndexRoute,

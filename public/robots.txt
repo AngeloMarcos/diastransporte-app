@@ -12,3 +12,6 @@ Allow: /
 
 User-agent: *
 Allow: /
+
+# Atualizar este domínio quando o site migrar para a VPS própria.
+Sitemap: https://wander-book-craft.lovable.app/sitemap.xml

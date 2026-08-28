@@ -10,6 +10,7 @@ import { MODO_VPS } from "@/lib/vps/config";
 import { sessaoAtual } from "@/lib/vps/sessao.functions";
 import {
   vpsAtualizarStatus,
+  vpsCancelarMinhaViagem,
   vpsCriarBloco,
   vpsCriarReservas,
   vpsCriarRota,
@@ -116,6 +117,25 @@ export async function listarMinhasViagens(userId: string): Promise<AgendamentoRo
     .order("created_at", { ascending: false });
   erro(error);
   return (data ?? []) as AgendamentoRow[];
+}
+
+/** Autoatendimento: o próprio cliente cancela uma reserva pendente/confirmada dele. */
+export async function cancelarMinhaViagem(id: string, userId: string): Promise<void> {
+  if (MODO_VPS) {
+    await vpsCancelarMinhaViagem({ data: { id } });
+    return;
+  }
+  const { data, error } = await supabase
+    .from("agendamentos")
+    .update({ status: "cancelado" })
+    .eq("id", id)
+    .eq("user_id", userId)
+    .in("status", ["pendente", "confirmado"])
+    .select("id");
+  erro(error);
+  if (!data?.length) {
+    throw new Error("Não foi possível cancelar (reserva não encontrada ou já concluída).");
+  }
 }
 
 export async function criarReservas(

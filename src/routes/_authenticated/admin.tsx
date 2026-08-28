@@ -28,6 +28,7 @@ import { toast } from "sonner";
 
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
+import { StatusBadge } from "@/components/site/StatusBadge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -87,6 +88,7 @@ import {
   notificarNovaSolicitacao,
   tocarAlerta,
 } from "@/lib/notificacoes";
+import { contarStatus, statusOpcoes, STATUS_META } from "@/lib/status";
 import { ROTA_COLUMNS, type RotaRow } from "@/lib/rotasMap";
 import {
   definirPapelAdmin,
@@ -108,41 +110,6 @@ export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminPage,
 });
 
-const statusOpcoes = ["pendente", "confirmado", "concluido", "cancelado"] as const;
-
-const STATUS_META: Record<
-  (typeof statusOpcoes)[number],
-  { label: string; badgeClass: string; barClass: string }
-> = {
-  pendente: {
-    label: "Pendente",
-    badgeClass: "border-amber-500/30 bg-amber-500/10 text-amber-400",
-    barClass: "bg-amber-500",
-  },
-  confirmado: {
-    label: "Confirmado",
-    badgeClass: "border-blue-500/30 bg-blue-500/10 text-blue-400",
-    barClass: "bg-blue-500",
-  },
-  concluido: {
-    label: "Concluído",
-    badgeClass: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
-    barClass: "bg-emerald-500",
-  },
-  cancelado: {
-    label: "Cancelado",
-    badgeClass: "border-red-500/30 bg-red-500/10 text-red-400",
-    barClass: "bg-red-500",
-  },
-};
-
-function contarStatus(lista: { status: string }[]) {
-  return statusOpcoes.reduce<Record<string, number>>((acc, s) => {
-    acc[s] = lista.filter((a) => a.status === s).length;
-    return acc;
-  }, {});
-}
-
 /** "Hoje" / "Amanhã" / dd/mm — pra triagem rápida de viagens próximas. */
 function rotuloData(dataViagem: string): string {
   const hoje = new Date();
@@ -152,21 +119,6 @@ function rotuloData(dataViagem: string): string {
   if (diffDias === 0) return "Hoje";
   if (diffDias === 1) return "Amanhã";
   return data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const meta = STATUS_META[status as (typeof statusOpcoes)[number]];
-  return (
-    <Badge
-      variant="outline"
-      className={cn(
-        "capitalize",
-        meta?.badgeClass ?? "border-border bg-muted text-muted-foreground",
-      )}
-    >
-      {meta?.label ?? status}
-    </Badge>
-  );
 }
 
 function slugify(texto: string) {

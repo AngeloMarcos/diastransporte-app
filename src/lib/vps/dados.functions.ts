@@ -134,6 +134,29 @@ export const vpsMinhasViagens = createServerFn({ method: "GET" }).handler(
   },
 );
 
+// Autoatendimento: o próprio cliente cancela uma viagem dele (não exige
+// admin, diferente de vpsAtualizarStatus). Só sai de pendente/confirmado —
+// nunca reabre uma cancelada nem mexe em concluída — e só a própria linha,
+// filtrando por user_id direto na query em vez de confiar só na sessão.
+export const vpsCancelarMinhaViagem = createServerFn({ method: "POST" })
+  .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    const usuario = await ctx.usuario();
+    const linhas = await ctx.sql<{ id: string }[]>`
+      UPDATE public.agendamentos
+         SET status = 'cancelado'
+       WHERE id = ${data.id}
+         AND user_id = ${usuario.id}
+         AND status IN ('pendente', 'confirmado')
+       RETURNING id
+    `;
+    if (!linhas[0]) {
+      throw new Error("Não foi possível cancelar (reserva não encontrada ou já concluída).");
+    }
+    return { ok: true };
+  });
+
 const reserva = z.object({
   rota_id: z.string().uuid(),
   trecho: z.string().min(1).max(200),
@@ -290,9 +313,7 @@ export const vpsListUsuarios = createServerFn({ method: "GET" }).handler(
 );
 
 export const vpsDefinirAdmin = createServerFn({ method: "POST" })
-  .inputValidator((data) =>
-    z.object({ userId: z.string().uuid(), admin: z.boolean() }).parse(data),
-  )
+  .inputValidator((data) => z.object({ userId: z.string().uuid(), admin: z.boolean() }).parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
     const atual = await ctx.admin();

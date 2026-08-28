@@ -178,6 +178,25 @@ export function RotaDetalheSkeleton() {
   );
 }
 
+/** Minhas viagens: cabeçalho + cards de reserva empilhados. */
+export function MinhasViagensSkeleton({ itens = 3 }: { itens?: number }) {
+  return (
+    <div className="mt-8 space-y-4">
+      {Array.from({ length: itens }).map((_, i) => (
+        <div key={i} className="rounded-lg border border-border bg-card p-5">
+          <div className="flex items-start justify-between gap-3">
+            <Skeleton className="h-6 w-48 max-w-[60%]" />
+            <Skeleton className="h-6 w-24" />
+          </div>
+          <Skeleton className="mt-3 h-4 w-64" />
+          <Skeleton className="mt-2 h-4 w-40" />
+          <Skeleton className="mt-4 h-9 w-36" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Carrinho: itens empilhados + campos de contato + resumo. */
 export function CarrinhoSkeleton({ itens = 2 }: { itens?: number }) {
   return (
