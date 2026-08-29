@@ -102,6 +102,17 @@ function Carrinho() {
       void navigate({ to: "/auth" });
       return;
     }
+    // O item pode ter ficado dias parado no carrinho — reconfirma que a
+    // data ainda não passou antes de mandar pro banco (o trigger de preço
+    // não valida isso, só a rota/carro/período).
+    const hojeISO = new Date().toISOString().slice(0, 10);
+    const vencido = itens.find((i) => i.data && i.data < hojeISO);
+    if (vencido) {
+      toast.error(
+        `A data de "${vencido.trecho}" já passou — remova e adicione de novo com uma data válida.`,
+      );
+      return;
+    }
     setEnviando(true);
     try {
       // O valor NÃO é enviado: o banco calcula o preço oficial da rota.

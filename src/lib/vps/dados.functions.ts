@@ -176,22 +176,30 @@ export const vpsCriarReservas = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<AgendamentoRow[]> => {
     const ctx = await contexto();
     const usuario = await ctx.usuario();
-    const criados: AgendamentoRow[] = [];
-    for (const item of data.itens) {
-      // O valor NÃO vem do cliente: o trigger agendamentos_valor_oficial calcula.
-      const linhas = await ctx.sql<AgendamentoRow[]>`
-        INSERT INTO public.agendamentos
-          (user_id, rota_id, trecho, data_viagem, hora, periodo, carro, passageiros,
-           embarque_local, observacoes, contato_nome, contato_telefone)
-        VALUES (${usuario.id}, ${item.rota_id}, ${item.trecho}, ${item.data_viagem},
-                ${item.hora}, ${item.periodo}, ${item.carro}, ${item.passageiros},
-                ${item.embarque_local}, ${item.observacoes}, ${item.contato_nome},
-                ${item.contato_telefone})
-        RETURNING *
-      `;
-      if (linhas[0]) criados.push(linhas[0]);
-    }
-    return criados;
+    // Transação: ou todos os itens do carrinho viram agendamento, ou nenhum.
+    // Sem isso, uma falha no meio do laço (ex.: uma rota foi desativada entre
+    // um item e outro) deixava reservas parciais gravadas — e como o cliente
+    // via a operação inteira como erro, tentar de novo duplicava as que já
+    // tinham entrado. Espelha o que o insert em lote do Supabase já faz de
+    // graça (uma única instrução SQL é atômica por padrão).
+    return ctx.sql.begin(async (sql) => {
+      const criados: AgendamentoRow[] = [];
+      for (const item of data.itens) {
+        // O valor NÃO vem do cliente: o trigger agendamentos_valor_oficial calcula.
+        const linhas = await sql<AgendamentoRow[]>`
+          INSERT INTO public.agendamentos
+            (user_id, rota_id, trecho, data_viagem, hora, periodo, carro, passageiros,
+             embarque_local, observacoes, contato_nome, contato_telefone)
+          VALUES (${usuario.id}, ${item.rota_id}, ${item.trecho}, ${item.data_viagem},
+                  ${item.hora}, ${item.periodo}, ${item.carro}, ${item.passageiros},
+                  ${item.embarque_local}, ${item.observacoes}, ${item.contato_nome},
+                  ${item.contato_telefone})
+          RETURNING *
+        `;
+        if (linhas[0]) criados.push(linhas[0]);
+      }
+      return criados;
+    });
   });
 
 export const vpsAtualizarStatus = createServerFn({ method: "POST" })

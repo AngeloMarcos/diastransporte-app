@@ -10,7 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
-import { consumirRedirectPosLogin, lerRascunho, type RascunhoReserva } from "@/lib/reserva";
+import { consumirRedirectPosLogin } from "@/lib/reserva";
+import { useCarrinho } from "@/lib/carrinho";
+import { formatBRL } from "@/data/rotas";
 import { MODO_VPS } from "@/lib/vps/config";
 import { criarConta, entrar, sessaoAtual } from "@/lib/vps/sessao.functions";
 
@@ -50,7 +52,7 @@ function AuthPage() {
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
   const [enviando, setEnviando] = useState(false);
-  const [rascunho, setRascunho] = useState<RascunhoReserva | null>(null);
+  const { itens: itensCarrinho, pronto: carrinhoPronto, total: totalCarrinho } = useCarrinho();
 
   useEffect(() => {
     if (MODO_VPS) {
@@ -62,8 +64,6 @@ function AuthPage() {
         if (data.session) seguirAposEntrar(navigate);
       });
     }
-    // Lido só no cliente (depois da hidratação) pra não divergir do HTML do SSR.
-    setRascunho(lerRascunho());
   }, [navigate]);
 
   async function onSubmit(e: React.FormEvent) {
@@ -133,19 +133,20 @@ function AuthPage() {
           {modo === "entrar" ? "Entrar na sua conta" : "Criar conta"}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          {rascunho
+          {carrinhoPronto && itensCarrinho.length > 0
             ? "Falta pouco para confirmar sua reserva."
             : "Agende suas corridas e acompanhe o status de cada transfer."}
         </p>
 
-        {rascunho && (
+        {carrinhoPronto && itensCarrinho.length > 0 && (
           <div className="mt-4 rounded-lg border border-primary/40 bg-primary/10 p-4 text-sm">
             <p className="font-medium">
-              {rascunho.origem} → {rascunho.destino}
+              {itensCarrinho.length} trecho{itensCarrinho.length > 1 ? "s" : ""} no carrinho
+              {totalCarrinho ? ` · ${formatBRL(totalCarrinho)}` : ""}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {modo === "entrar" ? "Entre" : "Crie sua conta"} para voltar direto para essa reserva
-              com os dados que você já preencheu.
+              {modo === "entrar" ? "Entre" : "Crie sua conta"} para voltar direto ao carrinho e
+              finalizar a reserva.
             </p>
           </div>
         )}

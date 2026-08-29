@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CalendarCheck,
   Check,
@@ -38,7 +38,6 @@ import { toast } from "sonner";
 import { formatBRL, precoFinal, type Rota } from "@/data/rotas";
 import { listRotas } from "@/lib/rotas.functions";
 import { mensagemReserva, whatsappLink } from "@/lib/whatsapp";
-import { lerRascunho, limparRascunho } from "@/lib/reserva";
 import { adicionarAoCarrinho } from "@/lib/carrinho";
 import { RotaDetalheSkeleton } from "@/components/site/Skeletons";
 import { ErroCarregamento } from "@/components/site/ErroCarregamento";
@@ -133,28 +132,7 @@ function RotaDetalhe() {
   const preco = precoFinal(rota, carro, periodo);
   const temNoite = rota.precoPequenoNoite !== undefined || rota.precoGrandeNoite !== undefined;
   const embarqueLocal = embarqueEscolha === OUTRO_EMBARQUE ? embarqueOutro.trim() : embarqueEscolha;
-
-  // Se o usuário saiu para criar conta/entrar no meio da reserva, restaura o
-  // que ele já tinha preenchido para não obrigá-lo a começar de novo.
-  useEffect(() => {
-    const rascunho = lerRascunho(rota.slug);
-    if (!rascunho) return;
-    setData(rascunho.data);
-    setHora(rascunho.hora);
-    setPeriodo(rascunho.periodo);
-    setCarro(rascunho.carro);
-    setPassageiros(rascunho.passageiros);
-    setObservacoes(rascunho.observacoes);
-    if (rascunho.embarqueLocal && rota.embarque.includes(rascunho.embarqueLocal)) {
-      setEmbarqueEscolha(rascunho.embarqueLocal);
-    } else if (rascunho.embarqueLocal) {
-      setEmbarqueEscolha(OUTRO_EMBARQUE);
-      setEmbarqueOutro(rascunho.embarqueLocal);
-    }
-    limparRascunho();
-    toast.message("Continuando sua reserva — revise os dados e confirme.");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rota.slug]);
+  const hojeISO = new Date().toISOString().slice(0, 10);
 
   const relacionadas = useMemo(
     () => rotas.filter((r: Rota) => r.slug !== rota.slug).slice(0, 3),
@@ -167,6 +145,10 @@ function RotaDetalhe() {
   function adicionarItem(): boolean {
     if (!data) {
       toast.error("Escolha a data do embarque.");
+      return false;
+    }
+    if (data < hojeISO) {
+      toast.error("Escolha uma data a partir de hoje.");
       return false;
     }
     if (!embarqueLocal) {
@@ -427,6 +409,7 @@ function RotaDetalhe() {
                     id="data"
                     type="date"
                     required
+                    min={hojeISO}
                     value={data}
                     onChange={(e) => setData(e.target.value)}
                     className="mt-2"
