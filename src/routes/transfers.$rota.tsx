@@ -1,7 +1,9 @@
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
+  Baby,
   CalendarCheck,
+  CalendarOff,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -13,6 +15,7 @@ import {
   ShieldCheck,
   ShoppingBag,
   Snowflake,
+  Briefcase,
   UserRound,
 } from "lucide-react";
 import { Header } from "@/components/site/Header";
@@ -114,6 +117,27 @@ const inclui = [
   "Paradas para banheiro e refeição no caminho",
 ];
 
+const politicas = [
+  {
+    icon: Briefcase,
+    titulo: "Bagagem",
+    texto:
+      "Uma mala grande por passageiro no porta-malas, mais item de mão. Pranchas, bicicletas ou excesso de bagagem: avise ao reservar para confirmarmos o espaço no veículo.",
+  },
+  {
+    icon: Baby,
+    titulo: "Crianças",
+    texto:
+      "Crianças de colo (até 2 anos) não pagam. Cadeirinha ou bebê-conforto sob solicitação — informe a idade nas observações da reserva.",
+  },
+  {
+    icon: CalendarOff,
+    titulo: "Cancelamento",
+    texto:
+      "Grátis até 24h antes do embarque. Depois disso, fale com a gente pelo WhatsApp para reagendar conforme disponibilidade.",
+  },
+];
+
 function RotaDetalhe() {
   const loaderData = Route.useLoaderData() as { rota: Rota; rotas: Rota[] };
   const { rota, rotas } = loaderData;
@@ -131,7 +155,15 @@ function RotaDetalhe() {
   const maxPassageiros = carro === "pequeno" ? 4 : 5;
   const preco = precoFinal(rota, carro, periodo);
   const temNoite = rota.precoPequenoNoite !== undefined || rota.precoGrandeNoite !== undefined;
-  const embarqueLocal = embarqueEscolha === OUTRO_EMBARQUE ? embarqueOutro.trim() : embarqueEscolha;
+  // A zona ajuda a triagem, mas quem promete buscar na porta precisa do
+  // endereço exato — combina os dois em vez de só um ou outro, pra não
+  // obrigar o motorista a voltar a perguntar pelo WhatsApp depois.
+  const embarqueLocal = [
+    embarqueEscolha && embarqueEscolha !== OUTRO_EMBARQUE ? embarqueEscolha : null,
+    embarqueOutro.trim() || null,
+  ]
+    .filter((v): v is string => Boolean(v))
+    .join(" — ");
   const hojeISO = new Date().toISOString().slice(0, 10);
 
   const relacionadas = useMemo(
@@ -356,6 +388,17 @@ function RotaDetalhe() {
             ))}
           </ul>
 
+          <h2 className="mt-10 font-display text-fluid-lg">Políticas de viagem</h2>
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            {politicas.map((p) => (
+              <div key={p.titulo} className="rounded-lg border border-border bg-card p-4">
+                <p.icon className="size-5 text-primary" />
+                <p className="mt-2 text-sm font-medium">{p.titulo}</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{p.texto}</p>
+              </div>
+            ))}
+          </div>
+
           <h2 className="mt-10 font-display text-fluid-lg">Perguntas frequentes</h2>
           <Accordion type="single" collapsible className="mt-4">
             <AccordionItem value="1">
@@ -501,10 +544,10 @@ function RotaDetalhe() {
             </div>
 
             <div className="mt-6">
-              <Label htmlFor="embarque">Local de embarque</Label>
+              <Label htmlFor="embarque">Zona de embarque</Label>
               <Select value={embarqueEscolha} onValueChange={setEmbarqueEscolha}>
                 <SelectTrigger id="embarque" className="mt-2">
-                  <SelectValue placeholder="Onde podemos te buscar?" />
+                  <SelectValue placeholder="De onde você sai?" />
                 </SelectTrigger>
                 <SelectContent>
                   {rota.embarque.map((local) => (
@@ -512,18 +555,23 @@ function RotaDetalhe() {
                       {local}
                     </SelectItem>
                   ))}
-                  <SelectItem value={OUTRO_EMBARQUE}>Outro endereço</SelectItem>
+                  <SelectItem value={OUTRO_EMBARQUE}>Não está na lista</SelectItem>
                 </SelectContent>
               </Select>
-              {embarqueEscolha === OUTRO_EMBARQUE && (
-                <Input
-                  value={embarqueOutro}
-                  onChange={(e) => setEmbarqueOutro(e.target.value)}
-                  placeholder="Endereço completo para embarque"
-                  maxLength={200}
-                  className="mt-2"
-                />
-              )}
+              <Label htmlFor="endereco" className="mt-4 block">
+                Endereço completo ou ponto de referência
+              </Label>
+              <Input
+                id="endereco"
+                value={embarqueOutro}
+                onChange={(e) => setEmbarqueOutro(e.target.value)}
+                placeholder="Ex: Hotel Pousada Mar Azul, Rua das Flores nº 123"
+                maxLength={200}
+                className="mt-2"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Ajuda o motorista a te encontrar sem precisar perguntar de novo pelo WhatsApp.
+              </p>
             </div>
 
             <div className="mt-4">

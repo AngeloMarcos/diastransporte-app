@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { formatBRL } from "@/data/rotas";
 import { useAuth } from "@/hooks/useAuth";
 import { useCarrinho } from "@/lib/carrinho";
-import { criarReservas, perfilContato } from "@/lib/dados";
+import { contarConflitosPotenciais, criarReservas, perfilContato } from "@/lib/dados";
 import { salvarRedirectPosLogin } from "@/lib/reserva";
 import { mensagemCarrinho, whatsappLink } from "@/lib/whatsapp";
 import { CarrinhoSkeleton } from "@/components/site/Skeletons";
@@ -124,6 +124,27 @@ function Carrinho() {
       );
       return;
     }
+    // Aviso não bloqueante de possível conflito de agenda (mesmo carro,
+    // mesmo dia, já reservado por outra pessoa) — a confirmação de verdade
+    // continua manual pelo WhatsApp, isto só antecipa o alerta.
+    const combinacoes = new Map<string, { carro: "pequeno" | "grande"; data: string }>();
+    for (const i of itens) {
+      if (i.data) combinacoes.set(`${i.carro}:${i.data}`, { carro: i.carro, data: i.data });
+    }
+    const conflito = (
+      await Promise.all(
+        [...combinacoes.values()].map(async (c) => ({
+          ...c,
+          total: await contarConflitosPotenciais(c.carro, c.data).catch(() => 0),
+        })),
+      )
+    ).find((c) => c.total > 0);
+    if (conflito) {
+      toast.message("Pode haver conflito de agenda", {
+        description: `Já existe outra reserva de carro ${conflito.carro} para ${conflito.data} — vamos confirmar disponibilidade pelo WhatsApp.`,
+      });
+    }
+
     enviandoRef.current = true;
     setEnviando(true);
     try {

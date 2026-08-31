@@ -4,6 +4,7 @@
 // Quando o site estiver 100% na VPS, basta apagar os ramos "cloud" daqui.
 import { supabase } from "@/integrations/supabase/client";
 import type { AgendamentoRow, ConteudoBloco, NovaReserva, UsuarioAdmin } from "@/lib/dados-tipos";
+import { contarReservasMesmoCarroData } from "@/lib/disponibilidade.functions";
 import { ROTA_COLUMNS, type RotaRow } from "@/lib/rotasMap";
 import { definirPapelAdmin, listUsuarios, redefinirSenhaUsuario } from "@/lib/usuarios.functions";
 import { MODO_VPS } from "@/lib/vps/config";
@@ -11,6 +12,7 @@ import { sessaoAtual } from "@/lib/vps/sessao.functions";
 import {
   vpsAtualizarStatus,
   vpsCancelarMinhaViagem,
+  vpsContarMesmoCarroData,
   vpsCriarBloco,
   vpsCriarReservas,
   vpsCriarRota,
@@ -178,6 +180,20 @@ export async function criarReservas(
     .select("*");
   erro(error);
   return (data ?? []) as AgendamentoRow[];
+}
+
+/**
+ * Quantas reservas ativas já existem pro mesmo carro nessa data — um aviso,
+ * não uma trava: sem saber a duração exata de cada trecho, prefere alertar
+ * a recusar uma reserva válida por engano.
+ */
+export async function contarConflitosPotenciais(
+  carro: "pequeno" | "grande",
+  data: string,
+): Promise<number> {
+  if (!data) return 0;
+  if (MODO_VPS) return vpsContarMesmoCarroData({ data: { carro, data } });
+  return contarReservasMesmoCarroData({ data: { carro, data } });
 }
 
 export async function atualizarStatusAgendamento(id: string, status: string): Promise<void> {

@@ -208,6 +208,27 @@ export const vpsCriarReservas = createServerFn({ method: "POST" })
     });
   });
 
+// Aviso não-bloqueante de possível conflito de agenda (mesmo carro, mesma
+// data, já reservado por outra pessoa) — ver disponibilidade.functions.ts
+// pro equivalente do lado Supabase e a explicação de por que é um aviso e
+// não uma trava rígida.
+export const vpsContarMesmoCarroData = createServerFn({ method: "GET" })
+  .inputValidator((data) =>
+    z.object({ carro: z.enum(["pequeno", "grande"]), data: z.string().min(1) }).parse(data),
+  )
+  .handler(async ({ data }): Promise<number> => {
+    const ctx = await contexto();
+    await ctx.usuario(); // exige sessão, não precisa ser admin
+    const linhas = await ctx.sql<{ total: string }[]>`
+      SELECT count(*)::text AS total
+        FROM public.agendamentos
+       WHERE carro = ${data.carro}
+         AND data_viagem = ${data.data}
+         AND status IN ('pendente', 'confirmado')
+    `;
+    return Number(linhas[0]?.total ?? 0);
+  });
+
 export const vpsAtualizarStatus = createServerFn({ method: "POST" })
   .inputValidator((data) =>
     z

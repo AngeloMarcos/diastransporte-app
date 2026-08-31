@@ -992,9 +992,9 @@ function CampoNumero({
 function AdminAgendamentos() {
   const queryClient = useQueryClient();
   const [busca, setBusca] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState<"todos" | (typeof statusOpcoes)[number]>(
-    "todos",
-  );
+  const [filtroStatus, setFiltroStatus] = useState<
+    "todos" | "atrasadas" | (typeof statusOpcoes)[number]
+  >("todos");
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-agendamentos"],
@@ -1025,11 +1025,15 @@ function AdminAgendamentos() {
 
   const lista = useMemo(() => data ?? [], [data]);
   const contagem = contarStatus(lista);
+  const totalAtrasadas = useMemo(() => lista.filter(estaAtrasada).length, [lista]);
 
   const filtrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return lista.filter((a) => {
-      if (filtroStatus !== "todos" && a.status !== filtroStatus) return false;
+      if (filtroStatus === "atrasadas" && !estaAtrasada(a)) return false;
+      if (filtroStatus !== "todos" && filtroStatus !== "atrasadas" && a.status !== filtroStatus) {
+        return false;
+      }
       if (!termo) return true;
       return `${a.trecho} ${a.contato_nome ?? ""} ${a.contato_telefone ?? ""}`
         .toLowerCase()
@@ -1059,6 +1063,18 @@ function AdminAgendamentos() {
             {STATUS_META[s].label} ({contagem[s] ?? 0})
           </Button>
         ))}
+        {totalAtrasadas > 0 && (
+          <Button
+            variant={filtroStatus === "atrasadas" ? "default" : "secondary"}
+            className={cn(
+              "h-11 shrink-0 whitespace-nowrap",
+              filtroStatus !== "atrasadas" && "border border-amber-500/40 text-amber-300",
+            )}
+            onClick={() => setFiltroStatus("atrasadas")}
+          >
+            Atrasadas ({totalAtrasadas})
+          </Button>
+        )}
       </div>
 
       <div className="relative sm:max-w-sm">
