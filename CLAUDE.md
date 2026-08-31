@@ -15,10 +15,12 @@ npm run build          # production build (vite build; nitro/cloudflare target)
 npm run preview          # preview a production build
 npm run lint          # eslint (flat config, eslint.config.js)
 npm run format          # prettier --write .
+npm run test          # vitest run — unit tests for pure logic only, see below
+npm run test:watch      # vitest in watch mode
 npx tsc --noEmit -p tsconfig.json   # typecheck (no npm script defined for this)
 ```
 
-There is no test suite in this repo (no test runner configured, no `*.test.*` files) — do not assume one exists.
+**Tests**: Vitest, config in `vitest.config.ts` (deliberately separate from `vite.config.ts` — the latter loads `@lovable.dev/vite-tanstack-config`'s TanStack Start/nitro/Cloudflare plugin stack, which has no business running inside a test runner and might not even work there). Only covers pure logic with no live backend — validation helpers (`senha.ts`, `auth-erros.ts`), pricing (`data/rotas.ts`), the WhatsApp message builders, the `status.ts` counters, and the localStorage-backed cart functions in `carrinho.ts` (not the `useCarrinho()` hook itself). There is intentionally no e2e suite: this project has a single Supabase project (no separate staging/test instance), so a Playwright-style test that actually completes a booking would write real rows into the production `agendamentos` table. Don't add e2e/integration tests against the live Supabase project without addressing that first (a second project, or pointing at the VPS Postgres once it's live). Gotcha if you touch `formatBRL`'s tests: `Number.prototype.toLocaleString("pt-BR", { style: "currency" })` separates "R$" from the amount with U+00A0 (non-breaking space), not a plain space — comparing against a hand-typed `"R$ 650"` literal will silently fail on that character alone.
 
 Before pushing, always run typecheck + lint + build; `tsconfig.json` is strict (`noUncheckedIndexedAccess`, `noPropertyAccessFromIndexSignature`, `exactOptionalPropertyTypes`, `strict`), so code that looks fine at a glance (e.g. `record.someKey`, or trusting an indexed array access) routinely fails typecheck. Index into `Record<string, T>` with bracket notation, and treat indexed/array access as possibly `undefined`.
 

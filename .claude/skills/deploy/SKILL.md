@@ -15,6 +15,7 @@ So "deploy" here means: validate, commit, push to `main`.
    ```sh
    npx tsc --noEmit -p tsconfig.json
    npx eslint <changed files>
+   npm run test
    npm run build
    ```
    - `tsconfig.json` is strict (`noUncheckedIndexedAccess`, `noPropertyAccessFromIndexSignature`,
@@ -22,6 +23,9 @@ So "deploy" here means: validate, commit, push to `main`.
    - If `eslint` reports a wall of `Delete '␍'` prettier errors across a whole file you barely
      touched, that's pre-existing CRLF line endings on this Windows checkout, not your edit.
      Run `npx eslint --fix <file>` and re-check — expected, not a regression.
+   - `npm run test` (Vitest) only covers pure logic — see the "Tests" note in `CLAUDE.md`. Add a
+     test alongside any new validation/pricing/message-formatting helper you write; don't add
+     e2e tests that hit the live Supabase project (single project, no staging — see the same note).
    - `npm run build` runs the real production build (nitro/Cloudflare target) — a clean
      typecheck is not a substitute for this; TanStack Start's SSR bundling can fail in ways
      `tsc` alone won't catch.
@@ -41,8 +45,13 @@ So "deploy" here means: validate, commit, push to `main`.
    are already pushed — Lovable treats history rewrites on the synced branch as lossy for the
    user's project history (see `AGENTS.md`).
 
-4. **Push to `main`**: `git push origin main`. This *is* the deploy — there's nothing to do
-   after it. Report the pushed commit hash back to the user.
+4. **Push to `main`**: `git fetch origin` and check `git log HEAD..origin/main --oneline` first —
+   Lovable's own editor (or the user working there in parallel) pushes commits to this same
+   branch outside of your sessions, often mid-conversation. If origin moved, `git pull --rebase
+   origin main` (safe: your local commit is unpublished, so replaying it on top rewrites nothing
+   that's already shared) before pushing — never `--force`. Then `git push origin main`. This
+   *is* the deploy — there's nothing to do after it. Report the pushed commit hash back to the
+   user.
 
 Confirm with the user before pushing only if you have reason to think they don't already want
 that (e.g. you're mid-investigation, or the build is failing and you're unsure how to fix it).
