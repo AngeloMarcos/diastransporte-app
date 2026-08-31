@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
 
 export type UsuarioAdmin = {
@@ -90,6 +91,12 @@ export const definirPapelAdmin = createServerFn({ method: "POST" })
         .eq("role", "admin");
       if (error) throw new Error(error.message);
     }
+    registrarAuditoria({
+      acao: data.admin ? "promover_admin" : "remover_admin",
+      atorId: context.userId,
+      atorEmail: context.claims["email"] as string | undefined,
+      alvoId: data.userId,
+    });
     return { ok: true };
   });
 
@@ -111,5 +118,11 @@ export const redefinirSenhaUsuario = createServerFn({ method: "POST" })
       email_confirm: true,
     });
     if (error) throw new Error(error.message);
+    registrarAuditoria({
+      acao: "redefinir_senha",
+      atorId: context.userId,
+      atorEmail: context.claims["email"] as string | undefined,
+      alvoId: data.userId,
+    });
     return { ok: true };
   });

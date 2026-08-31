@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import type { AgendamentoRow, ConteudoBloco, NovaReserva, UsuarioAdmin } from "@/lib/dados-tipos";
 import type { RotaRow } from "@/lib/rotasMap";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
 
 async function contexto() {
@@ -357,6 +358,12 @@ export const vpsDefinirAdmin = createServerFn({ method: "POST" })
       throw new Error("Você não pode remover seu próprio acesso de administrador.");
     }
     await ctx.sql`UPDATE public.usuarios SET admin = ${data.admin} WHERE id = ${data.userId}`;
+    registrarAuditoria({
+      acao: data.admin ? "promover_admin" : "remover_admin",
+      atorId: atual.id,
+      atorEmail: atual.email,
+      alvoId: data.userId,
+    });
     return { ok: true };
   });
 
@@ -371,11 +378,17 @@ export const vpsRedefinirSenha = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
+    const admin = await ctx.admin();
     const { hashSenha } = await import("./auth.server");
     const hash = await hashSenha(data.senha);
     await ctx.sql`UPDATE public.usuarios SET senha_hash = ${hash} WHERE id = ${data.userId}`;
     // Sessões antigas caem: quem teve a senha trocada precisa entrar de novo.
     await ctx.sql`DELETE FROM public.sessoes WHERE user_id = ${data.userId}`;
+    registrarAuditoria({
+      acao: "redefinir_senha",
+      atorId: admin.id,
+      atorEmail: admin.email,
+      alvoId: data.userId,
+    });
     return { ok: true };
   });
