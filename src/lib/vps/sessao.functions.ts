@@ -5,6 +5,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeader, setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 
+import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
+
 export type SessaoAtual = {
   id: string;
   email: string;
@@ -13,21 +15,28 @@ export type SessaoAtual = {
   admin: boolean;
 } | null;
 
+// Login aceita qualquer senha não-vazia — a regra forte só vale pra CRIAR
+// senha nova, nunca pra travar fora quem já tinha uma senha de antes desta
+// regra existir.
 const credenciais = z.object({
   email: z.string().email("Informe um e-mail válido."),
-  senha: z.string().min(6, "A senha precisa de ao menos 6 caracteres.").max(72),
+  senha: z.string().min(1, "Informe sua senha.").max(72),
 });
 
-const cadastro = credenciais.extend({
+const cadastro = z.object({
+  email: z.string().email("Informe um e-mail válido."),
+  senha: z.string().max(72).refine(senhaForte, SENHA_REGRA_TEXTO),
   nome: z.string().max(120).optional(),
   telefone: z.string().max(40).optional(),
 });
 
-export const sessaoAtual = createServerFn({ method: "GET" }).handler(async (): Promise<SessaoAtual> => {
-  const { lerCookieSessao, usuarioDaSessao } = await import("./auth.server");
-  const usuario = await usuarioDaSessao(lerCookieSessao(getRequestHeader("cookie") ?? null));
-  return usuario ?? null;
-});
+export const sessaoAtual = createServerFn({ method: "GET" }).handler(
+  async (): Promise<SessaoAtual> => {
+    const { lerCookieSessao, usuarioDaSessao } = await import("./auth.server");
+    const usuario = await usuarioDaSessao(lerCookieSessao(getRequestHeader("cookie") ?? null));
+    return usuario ?? null;
+  },
+);
 
 export const entrar = createServerFn({ method: "POST" })
   .inputValidator((data) => credenciais.parse(data))

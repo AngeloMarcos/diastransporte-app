@@ -90,6 +90,7 @@ import {
   tocarAlerta,
 } from "@/lib/notificacoes";
 import { contarStatus, statusOpcoes, STATUS_META } from "@/lib/status";
+import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
 import { ROTA_COLUMNS, type RotaRow } from "@/lib/rotasMap";
 import {
   definirPapelAdmin,
@@ -1606,7 +1607,7 @@ function UsuarioLinha({
             type="text"
             value={novaSenha}
             onChange={(e) => setNovaSenha(e.target.value)}
-            placeholder="mínimo 6 caracteres"
+            placeholder={SENHA_REGRA_TEXTO}
             className="mt-1 h-11 w-full sm:w-56"
           />
         </div>
@@ -1614,7 +1615,7 @@ function UsuarioLinha({
           <Button
             variant="secondary"
             className="h-11"
-            disabled={novaSenha.length < 6 || salvandoSenha}
+            disabled={!senhaForte(novaSenha) || salvandoSenha}
             onClick={() => setConfirmando(true)}
           >
             {salvandoSenha ? (

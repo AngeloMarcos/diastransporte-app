@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
 
 export type UsuarioAdmin = {
   id: string;
@@ -95,7 +96,12 @@ export const definirPapelAdmin = createServerFn({ method: "POST" })
 export const redefinirSenhaUsuario = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) =>
-    z.object({ userId: z.string().uuid(), senha: z.string().min(6).max(72) }).parse(data),
+    z
+      .object({
+        userId: z.string().uuid(),
+        senha: z.string().max(72).refine(senhaForte, SENHA_REGRA_TEXTO),
+      })
+      .parse(data),
   )
   .handler(async ({ context, data }) => {
     await garantirAdmin(context.supabase as never, context.userId);

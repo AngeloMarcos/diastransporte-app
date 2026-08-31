@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import type { AgendamentoRow, ConteudoBloco, NovaReserva, UsuarioAdmin } from "@/lib/dados-tipos";
 import type { RotaRow } from "@/lib/rotasMap";
+import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
 
 async function contexto() {
   const [{ lerCookieSessao, exigirUsuario, exigirAdmin }, { sql }] = await Promise.all([
@@ -361,7 +362,12 @@ export const vpsDefinirAdmin = createServerFn({ method: "POST" })
 
 export const vpsRedefinirSenha = createServerFn({ method: "POST" })
   .inputValidator((data) =>
-    z.object({ userId: z.string().uuid(), senha: z.string().min(6).max(72) }).parse(data),
+    z
+      .object({
+        userId: z.string().uuid(),
+        senha: z.string().max(72).refine(senhaForte, SENHA_REGRA_TEXTO),
+      })
+      .parse(data),
   )
   .handler(async ({ data }) => {
     const ctx = await contexto();

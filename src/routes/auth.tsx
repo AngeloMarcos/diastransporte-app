@@ -14,6 +14,7 @@ import { consumirRedirectPosLogin } from "@/lib/reserva";
 import { useCarrinho } from "@/lib/carrinho";
 import { formatBRL } from "@/data/rotas";
 import { traduzirErroAuth } from "@/lib/auth-erros";
+import { senhaForte, SENHA_MIN, SENHA_REGRA_TEXTO } from "@/lib/senha";
 import { MODO_VPS } from "@/lib/vps/config";
 import { criarConta, entrar, sessaoAtual } from "@/lib/vps/sessao.functions";
 
@@ -138,8 +139,14 @@ function AuthPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (senha.length < 6) {
-      toast.error("A senha precisa ter ao menos 6 caracteres.");
+    // A regra forte só vale pra CRIAR senha — login aceita a senha que a
+    // pessoa já tem, mesmo que tenha sido cadastrada antes desta regra.
+    if (modo === "criar" && !senhaForte(senha)) {
+      toast.error(SENHA_REGRA_TEXTO);
+      return;
+    }
+    if (modo === "entrar" && !senha) {
+      toast.error("Informe sua senha.");
       return;
     }
     if (modo === "criar" && !telefoneValido(telefone)) {
@@ -210,8 +217,8 @@ function AuthPage() {
 
   async function definirNovaSenha(e: React.FormEvent) {
     e.preventDefault();
-    if (novaSenhaRecuperacao.length < 6) {
-      toast.error("A senha precisa ter ao menos 6 caracteres.");
+    if (!senhaForte(novaSenhaRecuperacao)) {
+      toast.error(SENHA_REGRA_TEXTO);
       return;
     }
     setEnviando(true);
@@ -259,11 +266,12 @@ function AuthPage() {
                 id="nova-senha"
                 type="password"
                 required
-                minLength={6}
+                minLength={SENHA_MIN}
                 value={novaSenhaRecuperacao}
                 onChange={(e) => setNovaSenhaRecuperacao(e.target.value)}
                 className="mt-2"
               />
+              <p className="mt-1 text-xs text-muted-foreground">{SENHA_REGRA_TEXTO}</p>
             </div>
             <Button type="submit" className="w-full" disabled={enviando}>
               {enviando ? (
@@ -456,8 +464,11 @@ function AuthPage() {
                 onChange={(e) => setSenha(e.target.value)}
                 required
                 className="mt-2"
-                minLength={6}
+                minLength={modo === "criar" ? SENHA_MIN : undefined}
               />
+              {modo === "criar" && (
+                <p className="mt-1 text-xs text-muted-foreground">{SENHA_REGRA_TEXTO}</p>
+              )}
             </div>
 
             <Button type="submit" className="w-full" disabled={enviando}>
