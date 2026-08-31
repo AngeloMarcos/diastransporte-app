@@ -20,13 +20,27 @@ describe("traduzirErroAuth", () => {
     );
   });
 
-  it("não reconhece um padrão desconhecido — mantém a mensagem original", () => {
-    expect(traduzirErroAuth(new Error("Algo muito específico aconteceu"))).toBe(
-      "Algo muito específico aconteceu",
+  it("traduz senha fraca/comum detectada pelo Supabase", () => {
+    expect(
+      traduzirErroAuth(
+        new Error("Password is known to be weak and easy to guess, please choose a different one"),
+      ),
+    ).toBe("Essa senha é muito comum e fácil de adivinhar — escolha outra.");
+  });
+
+  it("traduz link de recuperação expirado/inválido", () => {
+    expect(traduzirErroAuth(new Error("Token has expired or is invalid"))).toBe(
+      "Este link expirou ou já foi usado — peça um novo.",
     );
   });
 
-  it("usa uma mensagem padrão quando o erro não tem texto", () => {
+  it("não vaza um erro em inglês não mapeado — cai numa mensagem genérica em português", () => {
+    expect(traduzirErroAuth(new Error("Some brand new Supabase error message"))).toBe(
+      "Não foi possível concluir. Tente novamente.",
+    );
+  });
+
+  it("usa a mesma mensagem padrão quando o erro não tem texto", () => {
     expect(traduzirErroAuth(new Error(""))).toBe("Não foi possível concluir. Tente novamente.");
   });
 
