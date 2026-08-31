@@ -168,7 +168,13 @@ const reserva = z.object({
   embarque_local: z.string().max(300).nullable(),
   observacoes: z.string().max(2000).nullable(),
   contato_nome: z.string().max(120).nullable(),
-  contato_telefone: z.string().max(40).nullable(),
+  // Sem nullable: esta é a fronteira de rede de verdade (chamável direto,
+  // sem passar pelo checkout) — exigir WhatsApp aqui também, não só em
+  // dados.ts, que só protege o caminho que passa pela UI.
+  contato_telefone: z
+    .string()
+    .max(40)
+    .refine((v) => v.replace(/\D/g, "").length >= 10, "Informe um WhatsApp válido (com DDD)."),
 });
 
 export const vpsCriarReservas = createServerFn({ method: "POST" })

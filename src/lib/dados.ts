@@ -142,6 +142,35 @@ export async function criarReservas(
   itens: NovaReserva[],
   userId: string,
 ): Promise<AgendamentoRow[]> {
+  // Reforço no lado do servidor (não confiar só na validação do formulário):
+  // sem WhatsApp válido a reserva não pode ser operacionalizada — ninguém
+  // consegue avisar o cliente sobre o carro.
+  for (const item of itens) {
+    const digitos = (item.contato_telefone ?? "").replace(/\D/g, "");
+    if (digitos.length < 10) {
+      throw new Error("Informe um WhatsApp válido (com DDD) para finalizar a reserva.");
+    }
+  }
+  // Trava contra reserva duplicada: mesma rota, data, horário e carro, ainda
+  // ativa. Cobre tanto duplo-clique quanto reenviar o checkout depois de uma
+  // resposta que falhou sem o cliente perceber que já tinha sido criada.
+  const existentes = await listarMinhasViagens(userId);
+  for (const item of itens) {
+    const duplicada = existentes.find(
+      (a) =>
+        a.status !== "cancelado" &&
+        a.rota_id === item.rota_id &&
+        a.data_viagem === item.data_viagem &&
+        a.hora === item.hora &&
+        a.carro === item.carro,
+    );
+    if (duplicada) {
+      throw new Error(
+        `Você já tem uma reserva para "${item.trecho}" nessa data e horário — confira em Minhas viagens antes de reservar de novo.`,
+      );
+    }
+  }
+
   if (MODO_VPS) return vpsCriarReservas({ data: { itens } });
   const { data, error } = await supabase
     .from("agendamentos")
