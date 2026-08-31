@@ -5,9 +5,18 @@ description: Validate and ship changes to the live Lovable-connected site — us
 
 ## How shipping this repo works
 
-There is **no separate deploy step**. This repo is connected to Lovable (see `AGENTS.md`):
-pushing a commit to `origin/main` syncs it straight into the Lovable editor and the live app.
-So "deploy" here means: validate, commit, push to `main`.
+This repo is connected to Lovable (see `AGENTS.md`): pushing a commit to `origin/main` reliably
+syncs it into the Lovable *editor*. It was long assumed (and documented here) that this also
+updates the *live* app with no separate step — **that's no longer confirmed.** A direct check
+found `/sitemap.xml` (live for several commits) 404ing on `wander-book-craft.lovable.app`, and
+`/auth` missing UI text that's been on `main` for multiple commits — pushes were not reaching
+production for an unknown stretch of this project's history. Nothing available here (no browser,
+no Lovable API/dashboard access) can detect or trigger a Lovable publish.
+
+So: **validate, commit, push — then say plainly that this updates the repo/editor, and that the
+user needs to confirm (and, if there's a "Publish" action, trigger) it going live in the Lovable
+UI.** Don't report a fix as "shipped" or "live" from a push alone. If the user later confirms
+pushes are reaching production again, remove this warning and the one in `CLAUDE.md`'s intro.
 
 ## Steps
 
@@ -49,9 +58,9 @@ So "deploy" here means: validate, commit, push to `main`.
    Lovable's own editor (or the user working there in parallel) pushes commits to this same
    branch outside of your sessions, often mid-conversation. If origin moved, `git pull --rebase
    origin main` (safe: your local commit is unpublished, so replaying it on top rewrites nothing
-   that's already shared) before pushing — never `--force`. Then `git push origin main`. This
-   *is* the deploy — there's nothing to do after it. Report the pushed commit hash back to the
-   user.
+   that's already shared) before pushing — never `--force`. Then `git push origin main`. Report
+   the pushed commit hash, and — given the unresolved publish gap above — say that explicitly:
+   it's on `main`/in the editor, not confirmed live, and ask the user to check/publish in Lovable.
 
 Confirm with the user before pushing only if you have reason to think they don't already want
 that (e.g. you're mid-investigation, or the build is failing and you're unsure how to fix it).
