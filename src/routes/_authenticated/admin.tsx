@@ -53,6 +53,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -1408,6 +1409,7 @@ function AdminUsuarios() {
   const alterarPapel = useServerFn(definirPapelAdmin);
   const redefinirSenha = useServerFn(redefinirSenhaUsuario);
   const [busca, setBusca] = useState("");
+  const [soAdmins, setSoAdmins] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin-usuarios"],
@@ -1431,16 +1433,29 @@ function AdminUsuarios() {
 
   const lista = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    const todos = data ?? [];
-    if (!termo) return todos;
-    return todos.filter((u) =>
+    let base = data ?? [];
+    if (soAdmins) base = base.filter((u) => u.isAdmin);
+    if (!termo) return base;
+    return base.filter((u) =>
       [u.email, u.nome, u.telefone].some((c) => c.toLowerCase().includes(termo)),
     );
-  }, [data, busca]);
+  }, [data, busca, soAdmins]);
 
   const totalAdmins = (data ?? []).filter((u) => u.isAdmin).length;
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando usuários…</p>;
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="rounded-lg border border-border bg-card p-5">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="mt-2 h-4 w-64" />
+            <Skeleton className="mt-1 h-3 w-56" />
+          </div>
+        ))}
+      </div>
+    );
+  }
   if (error) {
     return (
       <p className="text-sm text-red-400">
@@ -1456,14 +1471,23 @@ function AdminUsuarios() {
           {data?.length ?? 0} contas · {totalAdmins} administrador(es). Promova, remova acessos ou
           redefina senhas.
         </p>
-        <div className="relative w-full sm:w-auto">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar por e-mail, nome ou WhatsApp"
-            className="h-11 w-full pl-9 sm:w-72"
-          />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant={soAdmins ? "default" : "secondary"}
+            className="h-11 shrink-0"
+            onClick={() => setSoAdmins((v) => !v)}
+          >
+            Só admins ({totalAdmins})
+          </Button>
+          <div className="relative w-full sm:w-auto">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar por e-mail, nome ou WhatsApp"
+              className="h-11 w-full pl-9 sm:w-72"
+            />
+          </div>
         </div>
       </div>
 
@@ -1508,13 +1532,6 @@ function UsuarioLinha({
 
   const whats = linkWhatsappCliente(usuario.telefone || null);
 
-  // Promover é a direção perigosa (acesso completo a dados de todo mundo) —
-  // pede confirmação. Remover é sempre a saída rápida em caso de dúvida.
-  function acionarAdmin() {
-    if (usuario.isAdmin) onAlternarAdmin();
-    else setConfirmandoAdmin(true);
-  }
-
   return (
     <article className="rounded-lg border border-border bg-card p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -1550,7 +1567,7 @@ function UsuarioLinha({
               variant={usuario.isAdmin ? "outline" : "secondary"}
               className="h-11"
               disabled={salvandoPapel || (euMesmo && usuario.isAdmin)}
-              onClick={acionarAdmin}
+              onClick={() => setConfirmandoAdmin(true)}
             >
               {usuario.isAdmin ? "Remover admin" : "Tornar admin"}
             </Button>
@@ -1558,17 +1575,20 @@ function UsuarioLinha({
               <AlertDialogHeader>
                 <AlertDialogTitle className="flex items-center gap-2">
                   <ShieldAlert className="size-5 text-primary" />
-                  Tornar {usuario.nome || usuario.email} administrador?
+                  {usuario.isAdmin
+                    ? `Remover o acesso de administrador de ${usuario.nome || usuario.email}?`
+                    : `Tornar ${usuario.nome || usuario.email} administrador?`}
                 </AlertDialogTitle>
                 <AlertDialogDescription>
-                  Um administrador tem acesso completo a preços, rotas, agendamentos e dados de
-                  todos os clientes. Só conceda isso a alguém em quem você confia totalmente.
+                  {usuario.isAdmin
+                    ? "A conta perde imediatamente o acesso a preços, rotas, agendamentos e dados de todos os clientes. Você pode conceder de novo depois, se precisar."
+                    : "Um administrador tem acesso completo a preços, rotas, agendamentos e dados de todos os clientes. Só conceda isso a alguém em quem você confia totalmente."}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel className="h-11">Cancelar</AlertDialogCancel>
                 <AlertDialogAction className="h-11" onClick={onAlternarAdmin}>
-                  Sim, tornar administrador
+                  {usuario.isAdmin ? "Sim, remover admin" : "Sim, tornar administrador"}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
