@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MessageCircle, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 
@@ -65,6 +65,10 @@ function Carrinho() {
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
   const [enviando, setEnviando] = useState(false);
+  // Trava síncrona contra duplo-envio: um clique duplo rápido (comum no
+  // celular) dispara o handler duas vezes antes do estado "enviando" chegar
+  // a desabilitar o botão de fato (isso só acontece no próximo render).
+  const enviandoRef = useRef(false);
 
   useEffect(() => {
     if (!user) return;
@@ -102,6 +106,13 @@ function Carrinho() {
       void navigate({ to: "/auth" });
       return;
     }
+    if (enviandoRef.current) return;
+    // O WhatsApp é o único canal de confirmação, cobrança e contato com o
+    // motorista — sem ele a reserva não dá pra ser operacionalizada.
+    if (telefone.replace(/\D/g, "").length < 10) {
+      toast.error("Informe um WhatsApp válido (com DDD) para finalizar a reserva.");
+      return;
+    }
     // O item pode ter ficado dias parado no carrinho — reconfirma que a
     // data ainda não passou antes de mandar pro banco (o trigger de preço
     // não valida isso, só a rota/carro/período).
@@ -113,6 +124,7 @@ function Carrinho() {
       );
       return;
     }
+    enviandoRef.current = true;
     setEnviando(true);
     try {
       // O valor NÃO é enviado: o banco calcula o preço oficial da rota.
@@ -148,6 +160,7 @@ function Carrinho() {
     } catch (erro) {
       toast.error(erro instanceof Error ? erro.message : "Não foi possível finalizar.");
     } finally {
+      enviandoRef.current = false;
       setEnviando(false);
     }
   }
@@ -197,12 +210,15 @@ function Carrinho() {
                 />
               </div>
               <div>
-                <Label htmlFor="telefone">WhatsApp</Label>
+                <Label htmlFor="telefone">
+                  WhatsApp <span className="text-primary">*</span>
+                </Label>
                 <Input
                   id="telefone"
                   type="tel"
                   inputMode="tel"
                   autoComplete="tel"
+                  required
                   value={telefone}
                   onChange={(e) => setTelefone(e.target.value)}
                   placeholder="(98) 90000-0000"

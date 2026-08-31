@@ -6,6 +6,7 @@ import logo from "@/assets/logo.jpeg.asset.json";
 import { EMPRESA } from "@/data/rotas";
 import { whatsappLink } from "@/lib/whatsapp";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { encerrarSessaoAtual, useAuth } from "@/hooks/useAuth";
 
 const links = [
@@ -15,7 +16,7 @@ const links = [
 ] as const;
 
 export function Header() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, carregando } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -61,7 +62,11 @@ export function Header() {
             </Link>
           ))}
 
-          {user ? (
+          {carregando ? (
+            // Evita a "piscada de deslogado": até a sessão resolver, não
+            // afirma nem Entrar nem o menu de conta — só um placeholder neutro.
+            <Skeleton className="h-9 w-24 rounded-md" />
+          ) : user ? (
             <>
               <Link
                 to="/minhas-viagens"

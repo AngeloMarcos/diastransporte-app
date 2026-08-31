@@ -121,6 +121,15 @@ function rotuloData(dataViagem: string): string {
   return data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
 
+/** Viagem com data passada que ninguém marcou como concluída/cancelada. */
+function estaAtrasada(a: { status: string; data_viagem: string | null }): boolean {
+  if (a.status !== "pendente" && a.status !== "confirmado") return false;
+  if (!a.data_viagem) return false;
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  return new Date(`${a.data_viagem}T00:00:00`) < hoje;
+}
+
 function slugify(texto: string) {
   return texto
     .normalize("NFD")
@@ -342,8 +351,28 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
     .sort((a, b) => (a.data_viagem ?? "").localeCompare(b.data_viagem ?? ""))
     .slice(0, 6);
 
+  // Viagem já deveria ter acontecido e ninguém marcou como concluída ou
+  // cancelada — sem isso, uma reserva velha fica pendente pra sempre e some
+  // do radar de quem opera.
+  const atrasadas = lista.filter(estaAtrasada);
+
   return (
     <div className="space-y-8">
+      {atrasadas.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
+          <p className="text-sm text-amber-200">
+            <strong>
+              {atrasadas.length} reserva{atrasadas.length > 1 ? "s" : ""}
+            </strong>{" "}
+            com data de viagem já passada ainda {atrasadas.length > 1 ? "estão" : "está"} como
+            pendente/confirmada. Atualize o status para concluída ou cancelada.
+          </p>
+          <Button className="h-11 shrink-0" onClick={() => onIrPara("agendamentos")}>
+            Revisar agora
+          </Button>
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Agendamentos"
@@ -1057,6 +1086,14 @@ function AdminAgendamentos() {
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="font-display text-lg break-words">{a.trecho}</h2>
                       <StatusBadge status={a.status} />
+                      {estaAtrasada(a) && (
+                        <Badge
+                          variant="outline"
+                          className="border-amber-500/40 bg-amber-500/10 text-amber-300"
+                        >
+                          Atrasada
+                        </Badge>
+                      )}
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {a.data_viagem ?? "data a combinar"}
@@ -1451,8 +1488,16 @@ function UsuarioLinha({
 }) {
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmando, setConfirmando] = useState(false);
+  const [confirmandoAdmin, setConfirmandoAdmin] = useState(false);
 
   const whats = linkWhatsappCliente(usuario.telefone || null);
+
+  // Promover é a direção perigosa (acesso completo a dados de todo mundo) —
+  // pede confirmação. Remover é sempre a saída rápida em caso de dúvida.
+  function acionarAdmin() {
+    if (usuario.isAdmin) onAlternarAdmin();
+    else setConfirmandoAdmin(true);
+  }
 
   return (
     <article className="rounded-lg border border-border bg-card p-5">
@@ -1484,14 +1529,34 @@ function UsuarioLinha({
               </a>
             </Button>
           )}
-          <Button
-            variant={usuario.isAdmin ? "outline" : "secondary"}
-            className="h-11"
-            disabled={salvandoPapel || (euMesmo && usuario.isAdmin)}
-            onClick={onAlternarAdmin}
-          >
-            {usuario.isAdmin ? "Remover admin" : "Tornar admin"}
-          </Button>
+          <AlertDialog open={confirmandoAdmin} onOpenChange={setConfirmandoAdmin}>
+            <Button
+              variant={usuario.isAdmin ? "outline" : "secondary"}
+              className="h-11"
+              disabled={salvandoPapel || (euMesmo && usuario.isAdmin)}
+              onClick={acionarAdmin}
+            >
+              {usuario.isAdmin ? "Remover admin" : "Tornar admin"}
+            </Button>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <ShieldAlert className="size-5 text-primary" />
+                  Tornar {usuario.nome || usuario.email} administrador?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Um administrador tem acesso completo a preços, rotas, agendamentos e dados de
+                  todos os clientes. Só conceda isso a alguém em quem você confia totalmente.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="h-11">Cancelar</AlertDialogCancel>
+                <AlertDialogAction className="h-11" onClick={onAlternarAdmin}>
+                  Sim, tornar administrador
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
 
