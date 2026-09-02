@@ -56,6 +56,7 @@ function usuarioDoModoVps(sessao: NonNullable<SessaoAtual>): User {
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isMotorista, setIsMotorista] = useState(false);
   const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
@@ -68,11 +69,13 @@ export function useAuth() {
           if (!ativo) return;
           setUser(sessao ? usuarioDoModoVps(sessao) : null);
           setIsAdmin(Boolean(sessao?.admin));
+          setIsMotorista(Boolean(sessao?.motorista));
         })
         .catch(() => {
           if (ativo) {
             setUser(null);
             setIsAdmin(false);
+            setIsMotorista(false);
           }
         })
         .finally(() => {
@@ -88,6 +91,7 @@ export function useAuth() {
       setUser(session?.user ?? null);
       if (!session?.user) {
         setIsAdmin(false);
+        setIsMotorista(false);
         setCarregando(false);
         return;
       }
@@ -96,10 +100,11 @@ export function useAuth() {
         .from("user_roles")
         .select("role")
         .eq("user_id", session.user.id)
-        .eq("role", "admin")
-        .maybeSingle();
+        .in("role", ["admin", "motorista"]);
       if (!ativo) return;
-      setIsAdmin(Boolean(data));
+      const papeis = new Set((data ?? []).map((p) => p.role));
+      setIsAdmin(papeis.has("admin"));
+      setIsMotorista(papeis.has("motorista"));
       setCarregando(false);
     }
 
@@ -114,7 +119,7 @@ export function useAuth() {
     };
   }, []);
 
-  return { user, isAdmin, carregando };
+  return { user, isAdmin, isMotorista, carregando };
 }
 
 /** Encerra a sessão na infraestrutura ativa. */

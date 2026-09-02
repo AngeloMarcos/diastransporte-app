@@ -6,21 +6,30 @@ import { supabase } from "@/integrations/supabase/client";
 import type { AgendamentoRow, ConteudoBloco, NovaReserva, UsuarioAdmin } from "@/lib/dados-tipos";
 import { contarReservasMesmoCarroData } from "@/lib/disponibilidade.functions";
 import { ROTA_COLUMNS, type RotaRow } from "@/lib/rotasMap";
-import { definirPapelAdmin, listUsuarios, redefinirSenhaUsuario } from "@/lib/usuarios.functions";
+import {
+  definirPapelAdmin,
+  definirPapelMotorista,
+  listUsuarios,
+  redefinirSenhaUsuario,
+} from "@/lib/usuarios.functions";
 import { MODO_VPS } from "@/lib/vps/config";
 import { sessaoAtual } from "@/lib/vps/sessao.functions";
 import {
+  vpsAtribuirMotorista,
   vpsAtualizarStatus,
   vpsCancelarMinhaViagem,
+  vpsConcluirCorrida,
   vpsContarMesmoCarroData,
   vpsCriarBloco,
   vpsCriarReservas,
   vpsCriarRota,
   vpsDefinirAdmin,
+  vpsDefinirMotorista,
   vpsListAgendamentos,
   vpsListConteudoAdmin,
   vpsListRotasAdmin,
   vpsListUsuarios,
+  vpsMinhasCorridas,
   vpsMinhasViagens,
   vpsRedefinirSenha,
   vpsRemoverAgendamento,
@@ -216,6 +225,52 @@ export async function removerAgendamento(id: string): Promise<void> {
   erro(error);
 }
 
+/** Admin atribui (ou remove, com `motoristaId: null`) um motorista a um agendamento. */
+export async function atribuirMotorista(
+  agendamentoId: string,
+  motoristaId: string | null,
+): Promise<void> {
+  if (MODO_VPS) {
+    await vpsAtribuirMotorista({ data: { id: agendamentoId, motoristaId } });
+    return;
+  }
+  const { error } = await supabase
+    .from("agendamentos")
+    .update({ motorista_id: motoristaId })
+    .eq("id", agendamentoId);
+  erro(error);
+}
+
+export async function listarCorridasMotorista(motoristaId: string): Promise<AgendamentoRow[]> {
+  if (MODO_VPS) return vpsMinhasCorridas();
+  const { data, error } = await supabase
+    .from("agendamentos")
+    .select("*")
+    .eq("motorista_id", motoristaId)
+    .order("created_at", { ascending: false });
+  erro(error);
+  return (data ?? []) as AgendamentoRow[];
+}
+
+/** Autoatendimento: o motorista marca como concluída uma corrida confirmada e atribuída a ele. */
+export async function concluirCorridaComoMotorista(id: string, motoristaId: string): Promise<void> {
+  if (MODO_VPS) {
+    await vpsConcluirCorrida({ data: { id } });
+    return;
+  }
+  const { data, error } = await supabase
+    .from("agendamentos")
+    .update({ status: "concluido" })
+    .eq("id", id)
+    .eq("motorista_id", motoristaId)
+    .eq("status", "confirmado")
+    .select("id");
+  erro(error);
+  if (!data?.length) {
+    throw new Error("Não foi possível concluir (corrida não encontrada ou não confirmada).");
+  }
+}
+
 // -------------------------------------------------------------- conteúdo
 export async function listarConteudoAdmin(): Promise<ConteudoBloco[]> {
   if (MODO_VPS) return vpsListConteudoAdmin();
@@ -271,6 +326,14 @@ export async function definirAdmin(userId: string, admin: boolean): Promise<void
     return;
   }
   await definirPapelAdmin({ data: { userId, admin } });
+}
+
+export async function definirMotorista(userId: string, motorista: boolean): Promise<void> {
+  if (MODO_VPS) {
+    await vpsDefinirMotorista({ data: { userId, motorista } });
+    return;
+  }
+  await definirPapelMotorista({ data: { userId, motorista } });
 }
 
 export async function redefinirSenha(userId: string, senha: string): Promise<void> {

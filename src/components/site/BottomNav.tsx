@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Home, MapPinned, ShoppingBag, UserRound, LogIn } from "lucide-react";
+import { Car, Home, MapPinned, ShoppingBag, UserRound, LogIn } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -45,7 +45,7 @@ function ItemLink({ item }: { item: Item }) {
 }
 
 export function BottomNav() {
-  const { user, carregando } = useAuth();
+  const { user, isAdmin, isMotorista, carregando } = useAuth();
   const { itens: itensCarrinho } = useCarrinho();
 
   const itensFixos: Item[] = [
@@ -60,9 +60,11 @@ export function BottomNav() {
     },
   ];
 
-  const itemConta: Item = user
-    ? { key: "conta", label: "Minhas viagens", icon: UserRound, to: "/minhas-viagens" }
-    : { key: "conta", label: "Entrar", icon: LogIn, to: "/auth" };
+  const itemConta: Item = !user
+    ? { key: "conta", label: "Entrar", icon: LogIn, to: "/auth" }
+    : isMotorista && !isAdmin
+      ? { key: "conta", label: "Corridas", icon: Car, to: "/motorista" }
+      : { key: "conta", label: "Minhas viagens", icon: UserRound, to: "/minhas-viagens" };
 
   return (
     <>

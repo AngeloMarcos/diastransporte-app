@@ -16,6 +16,7 @@ export type AgendamentoRow = {
   contato_nome: string | null;
   contato_telefone: string | null;
   status: string;
+  motorista_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -54,5 +55,6 @@ export type UsuarioAdmin = {
   ultimoAcesso: string | null;
   confirmado: boolean;
   isAdmin: boolean;
+  isMotorista: boolean;
   agendamentos: number;
 };

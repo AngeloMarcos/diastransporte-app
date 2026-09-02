@@ -14,6 +14,7 @@ export type UsuarioServidor = {
   nome: string;
   telefone: string;
   admin: boolean;
+  motorista: boolean;
 };
 
 export function hashToken(token: string): string {
@@ -77,7 +78,7 @@ export async function encerrarSessao(token: string) {
 export async function usuarioDaSessao(token: string | null): Promise<UsuarioServidor | null> {
   if (!token) return null;
   const linhas = await sql()<UsuarioServidor[]>`
-    SELECT u.id, u.email, u.nome, u.telefone, u.admin
+    SELECT u.id, u.email, u.nome, u.telefone, u.admin, u.motorista
       FROM public.sessoes s
       JOIN public.usuarios u ON u.id = s.user_id
      WHERE s.token_hash = ${hashToken(token)}
@@ -101,6 +102,13 @@ export async function exigirAdmin(token: string | null): Promise<UsuarioServidor
   return usuario;
 }
 
+/** Motorista autenticado ou erro — mesmo papel de exigirAdmin, para o papel de motorista. */
+export async function exigirMotorista(token: string | null): Promise<UsuarioServidor> {
+  const usuario = await exigirUsuario(token);
+  if (!usuario.motorista) throw new Error("Acesso restrito a motoristas.");
+  return usuario;
+}
+
 export async function criarUsuario(dados: {
   email: string;
   senha: string;
@@ -112,7 +120,7 @@ export async function criarUsuario(dados: {
   const linhas = await sql()<UsuarioServidor[]>`
     INSERT INTO public.usuarios (email, senha_hash, nome, telefone, admin)
     VALUES (${dados.email.trim()}, ${senhaHash}, ${dados.nome ?? ""}, ${dados.telefone ?? ""}, ${dados.admin ?? false})
-    RETURNING id, email, nome, telefone, admin
+    RETURNING id, email, nome, telefone, admin, motorista
   `;
   const usuario = linhas[0];
   if (!usuario) throw new Error("Não foi possível criar a conta.");
@@ -121,7 +129,7 @@ export async function criarUsuario(dados: {
 
 export async function autenticar(email: string, senha: string): Promise<UsuarioServidor> {
   const linhas = await sql()<(UsuarioServidor & { senha_hash: string })[]>`
-    SELECT id, email, nome, telefone, admin, senha_hash
+    SELECT id, email, nome, telefone, admin, motorista, senha_hash
       FROM public.usuarios
      WHERE lower(email) = lower(${email.trim()})
      LIMIT 1

@@ -13,6 +13,7 @@ export type SessaoAtual = {
   nome: string;
   telefone: string;
   admin: boolean;
+  motorista: boolean;
 } | null;
 
 // Login aceita qualquer senha não-vazia — a regra forte só vale pra CRIAR

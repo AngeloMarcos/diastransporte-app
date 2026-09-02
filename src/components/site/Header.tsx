@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, LogIn, LogOut, Phone, UserRound } from "lucide-react";
+import { Car, LayoutDashboard, LogIn, LogOut, Phone, UserRound } from "lucide-react";
 
 import logo from "@/assets/logo.jpeg.asset.json";
 import { EMPRESA } from "@/data/rotas";
@@ -16,7 +16,7 @@ const links = [
 ] as const;
 
 export function Header() {
-  const { user, isAdmin, carregando } = useAuth();
+  const { user, isAdmin, isMotorista, carregando } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -75,6 +75,15 @@ export function Header() {
               >
                 <UserRound className="size-4" /> Minhas viagens
               </Link>
+              {isMotorista && (
+                <Link
+                  to="/motorista"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+                  activeProps={{ className: "text-foreground" }}
+                >
+                  <Car className="size-4" /> Minhas corridas
+                </Link>
+              )}
               {isAdmin && (
                 <Link
                   to="/admin"
@@ -114,6 +123,14 @@ export function Header() {
             className="inline-grid size-11 shrink-0 place-items-center rounded-sm border border-border text-primary md:hidden"
           >
             <LayoutDashboard className="size-5" />
+          </Link>
+        ) : isMotorista ? (
+          <Link
+            to="/motorista"
+            aria-label="Minhas corridas"
+            className="inline-grid size-11 shrink-0 place-items-center rounded-sm border border-border text-primary md:hidden"
+          >
+            <Car className="size-5" />
           </Link>
         ) : (
           <a

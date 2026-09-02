@@ -36,3 +36,14 @@ export function contarStatus(lista: { status: string }[]) {
     return acc;
   }, {});
 }
+
+// Status que ainda podem virar uma corrida de verdade — o resto é histórico.
+// Compartilhado entre "Minhas viagens" (cliente) e o painel do motorista.
+export const STATUS_ATIVOS = new Set(["pendente", "confirmado"]);
+
+// Uma corrida só pode ser marcada como concluída pelo próprio motorista
+// depois que o escritório já confirmou — evita que ele "confirme a si mesmo"
+// antes da equipe validar a reserva.
+export function podeConcluir(status: string): boolean {
+  return status === "confirmado";
+}

@@ -1,6 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Car, MapPin, MessageCircle, RefreshCw, Users, XCircle } from "lucide-react";
+import { CalendarDays, Car, CheckCircle2, MapPin, MessageCircle, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { Header } from "@/components/site/Header";
@@ -10,42 +11,61 @@ import { MinhasViagensSkeleton } from "@/components/site/Skeletons";
 import { Button } from "@/components/ui/button";
 import { formatBRL } from "@/data/rotas";
 import { useAuth } from "@/hooks/useAuth";
-import { cancelarMinhaViagem, listarMinhasViagens } from "@/lib/dados";
-import { STATUS_ATIVOS } from "@/lib/status";
+import { concluirCorridaComoMotorista, listarCorridasMotorista } from "@/lib/dados";
+import { podeConcluir, STATUS_ATIVOS } from "@/lib/status";
 import { whatsappLink } from "@/lib/whatsapp";
 import type { AgendamentoRow } from "@/lib/dados-tipos";
 
-export const Route = createFileRoute("/_authenticated/minhas-viagens")({
+export const Route = createFileRoute("/_authenticated/motorista")({
   head: () => ({
     meta: [
-      { title: "Minhas viagens — Dias Transporte" },
-      { name: "description", content: "Acompanhe seus transfers agendados com a Dias Transporte." },
+      { title: "Minhas corridas — Dias Transporte" },
+      { name: "description", content: "Corridas atribuídas a você na Dias Transporte." },
       { name: "robots", content: "noindex" },
-      { property: "og:title", content: "Minhas viagens — Dias Transporte" },
-      { property: "og:description", content: "Área do cliente Dias Transporte." },
     ],
   }),
-  component: MinhasViagens,
+  component: MotoristaPage,
 });
 
-function MinhasViagens() {
-  const { user } = useAuth();
-  const usuarioId = user?.id ?? "";
+function MotoristaPage() {
+  const { user, isMotorista, carregando } = useAuth();
+  const navigate = useNavigate();
+  const motoristaId = user?.id ?? "";
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!carregando && !isMotorista) {
+      toast.error("Área restrita a motoristas.");
+      void navigate({ to: "/minhas-viagens", replace: true });
+    }
+  }, [carregando, isMotorista, navigate]);
+
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["meus-agendamentos", usuarioId],
-    queryFn: () => listarMinhasViagens(usuarioId),
-    enabled: Boolean(usuarioId),
+    queryKey: ["minhas-corridas", motoristaId],
+    queryFn: () => listarCorridasMotorista(motoristaId),
+    enabled: Boolean(motoristaId) && isMotorista,
   });
 
-  const cancelar = useMutation({
-    mutationFn: (id: string) => cancelarMinhaViagem(id, usuarioId),
+  const concluir = useMutation({
+    mutationFn: (id: string) => concluirCorridaComoMotorista(id, motoristaId),
     onSuccess: () => {
-      toast.success("Reserva cancelada.");
-      void queryClient.invalidateQueries({ queryKey: ["meus-agendamentos", usuarioId] });
+      toast.success("Corrida marcada como concluída.");
+      void queryClient.invalidateQueries({ queryKey: ["minhas-corridas", motoristaId] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Não foi possível cancelar."),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Não foi possível concluir."),
   });
+
+  if (carregando || !isMotorista) {
+    return (
+      <div className="min-h-screen">
+        <Header />
+        <main className="mx-auto max-w-5xl px-4 py-20 text-sm text-muted-foreground">
+          Verificando permissões…
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   const proximas = (data ?? []).filter((a) => STATUS_ATIVOS.has(a.status));
   const historico = (data ?? []).filter((a) => !STATUS_ATIVOS.has(a.status));
@@ -54,16 +74,11 @@ function MinhasViagens() {
     <div className="min-h-screen">
       <Header />
       <main className="mx-auto max-w-4xl px-gutter py-section">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="font-display text-fluid-2xl">Minhas viagens</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Seus agendamentos e o status de cada um.
-            </p>
-          </div>
-          <Button asChild>
-            <Link to="/transfers">Agendar nova corrida</Link>
-          </Button>
+        <div>
+          <h1 className="font-display text-fluid-2xl">Minhas corridas</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Corridas que o escritório atribuiu a você.
+          </p>
         </div>
 
         {isLoading && <MinhasViagensSkeleton />}
@@ -71,20 +86,17 @@ function MinhasViagens() {
         {isError && (
           <div className="mt-10 rounded-lg border border-border bg-card p-8 text-center">
             <p className="text-sm text-muted-foreground">
-              {error instanceof Error ? error.message : "Não foi possível carregar suas viagens."}
+              {error instanceof Error ? error.message : "Não foi possível carregar suas corridas."}
             </p>
             <Button className="mt-4" onClick={() => void refetch()}>
-              <RefreshCw className="size-4" /> Tentar de novo
+              Tentar de novo
             </Button>
           </div>
         )}
 
         {!isLoading && !isError && !data?.length && (
           <div className="mt-10 rounded-lg border border-border bg-card p-8 text-center">
-            <p className="text-sm text-muted-foreground">Você ainda não agendou nenhuma corrida.</p>
-            <Button asChild className="mt-4">
-              <Link to="/transfers">Ver trechos disponíveis</Link>
-            </Button>
+            <p className="text-sm text-muted-foreground">Nenhuma corrida atribuída a você ainda.</p>
           </div>
         )}
 
@@ -97,20 +109,20 @@ function MinhasViagens() {
               {proximas.length ? (
                 <div className="space-y-4">
                   {proximas.map((a) => (
-                    <ViagemCard
+                    <CorridaCard
                       key={a.id}
                       agendamento={a}
-                      onCancelar={() => {
-                        if (window.confirm(`Cancelar a reserva de ${a.trecho}?`)) {
-                          cancelar.mutate(a.id);
+                      onConcluir={() => {
+                        if (window.confirm(`Marcar "${a.trecho}" como concluída?`)) {
+                          concluir.mutate(a.id);
                         }
                       }}
-                      cancelando={cancelar.isPending}
+                      concluindo={concluir.isPending}
                     />
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">Nenhuma viagem futura agendada.</p>
+                <p className="text-sm text-muted-foreground">Nenhuma corrida futura atribuída.</p>
               )}
             </section>
 
@@ -121,7 +133,7 @@ function MinhasViagens() {
                 </h2>
                 <div className="space-y-4">
                   {historico.map((a) => (
-                    <ViagemCard key={a.id} agendamento={a} />
+                    <CorridaCard key={a.id} agendamento={a} />
                   ))}
                 </div>
               </section>
@@ -134,14 +146,14 @@ function MinhasViagens() {
   );
 }
 
-function ViagemCard({
+function CorridaCard({
   agendamento: a,
-  onCancelar,
-  cancelando,
+  onConcluir,
+  concluindo,
 }: {
   agendamento: AgendamentoRow;
-  onCancelar?: () => void;
-  cancelando?: boolean;
+  onConcluir?: () => void;
+  concluindo?: boolean;
 }) {
   return (
     <article className="rounded-lg border border-border bg-card p-5">
@@ -168,27 +180,25 @@ function ViagemCard({
         </p>
       ) : null}
       {a.observacoes ? <p className="mt-3 text-sm text-muted-foreground">{a.observacoes}</p> : null}
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button asChild size="sm" variant="secondary">
-          <a
-            href={whatsappLink(`Olá! Quero falar sobre meu agendamento: ${a.trecho}.`)}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <MessageCircle className="size-4" /> Falar no WhatsApp
-          </a>
-        </Button>
-        {onCancelar && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-destructive hover:text-destructive"
-            disabled={cancelando}
-            onClick={onCancelar}
-          >
-            <XCircle className="size-4" /> Cancelar reserva
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {a.contato_telefone ? (
+          <Button asChild size="sm" variant="secondary">
+            <a
+              href={whatsappLink(`Olá ${a.contato_nome ?? ""}! Sou o motorista da sua corrida.`)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <MessageCircle className="size-4" /> Falar com o passageiro
+            </a>
           </Button>
-        )}
+        ) : null}
+        {onConcluir && podeConcluir(a.status) ? (
+          <Button size="sm" disabled={concluindo} onClick={onConcluir}>
+            <CheckCircle2 className="size-4" /> Concluir corrida
+          </Button>
+        ) : a.status === "pendente" ? (
+          <p className="text-xs text-muted-foreground">Aguardando confirmação do escritório.</p>
+        ) : null}
       </div>
     </article>
   );

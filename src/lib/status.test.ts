@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contarStatus, statusOpcoes } from "./status";
+import { contarStatus, podeConcluir, STATUS_ATIVOS, statusOpcoes } from "./status";
 
 describe("contarStatus", () => {
   it("conta cada status separadamente", () => {
@@ -20,5 +20,29 @@ describe("contarStatus", () => {
     for (const s of statusOpcoes) {
       expect(contagem[s]).toBe(0);
     }
+  });
+});
+
+describe("podeConcluir", () => {
+  it("só permite concluir uma corrida já confirmada pelo escritório", () => {
+    expect(podeConcluir("confirmado")).toBe(true);
+  });
+
+  it("não permite concluir uma corrida ainda pendente, cancelada ou já concluída", () => {
+    expect(podeConcluir("pendente")).toBe(false);
+    expect(podeConcluir("cancelado")).toBe(false);
+    expect(podeConcluir("concluido")).toBe(false);
+  });
+});
+
+describe("STATUS_ATIVOS", () => {
+  it("considera pendente e confirmado como corridas ainda em aberto", () => {
+    expect(STATUS_ATIVOS.has("pendente")).toBe(true);
+    expect(STATUS_ATIVOS.has("confirmado")).toBe(true);
+  });
+
+  it("trata concluído e cancelado como histórico", () => {
+    expect(STATUS_ATIVOS.has("concluido")).toBe(false);
+    expect(STATUS_ATIVOS.has("cancelado")).toBe(false);
   });
 });

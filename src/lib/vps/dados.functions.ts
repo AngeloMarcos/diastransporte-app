@@ -12,15 +12,14 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
 
 async function contexto() {
-  const [{ lerCookieSessao, exigirUsuario, exigirAdmin }, { sql }] = await Promise.all([
-    import("./auth.server"),
-    import("./db.server"),
-  ]);
+  const [{ lerCookieSessao, exigirUsuario, exigirAdmin, exigirMotorista }, { sql }] =
+    await Promise.all([import("./auth.server"), import("./db.server")]);
   const token = lerCookieSessao(getRequestHeader("cookie") ?? null);
   return {
     sql: sql(),
     usuario: () => exigirUsuario(token),
     admin: () => exigirAdmin(token),
+    motorista: () => exigirMotorista(token),
   };
 }
 
@@ -136,6 +135,40 @@ export const vpsMinhasViagens = createServerFn({ method: "GET" }).handler(
   },
 );
 
+// Corridas atribuídas ao motorista logado — mesmo molde de vpsMinhasViagens,
+// filtrando por motorista_id em vez de user_id.
+export const vpsMinhasCorridas = createServerFn({ method: "GET" }).handler(
+  async (): Promise<AgendamentoRow[]> => {
+    const ctx = await contexto();
+    const usuario = await ctx.usuario();
+    return ctx.sql<AgendamentoRow[]>`
+      SELECT * FROM public.agendamentos WHERE motorista_id = ${usuario.id} ORDER BY created_at DESC
+    `.then((linhas) => [...linhas]);
+  },
+);
+
+// Autoatendimento do motorista: só sai de "confirmado" para "concluido", e
+// só a própria corrida atribuída — mesmo padrão defensivo de
+// vpsCancelarMinhaViagem (filtra por dono na própria query, não só na sessão).
+export const vpsConcluirCorrida = createServerFn({ method: "POST" })
+  .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    const usuario = await ctx.usuario();
+    const linhas = await ctx.sql<{ id: string }[]>`
+      UPDATE public.agendamentos
+         SET status = 'concluido'
+       WHERE id = ${data.id}
+         AND motorista_id = ${usuario.id}
+         AND status = 'confirmado'
+       RETURNING id
+    `;
+    if (!linhas[0]) {
+      throw new Error("Não foi possível concluir (corrida não encontrada ou não confirmada).");
+    }
+    return { ok: true };
+  });
+
 // Autoatendimento: o próprio cliente cancela uma viagem dele (não exige
 // admin, diferente de vpsAtualizarStatus). Só sai de pendente/confirmado —
 // nunca reabre uma cancelada nem mexe em concluída — e só a própria linha,
@@ -247,6 +280,19 @@ export const vpsAtualizarStatus = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const vpsAtribuirMotorista = createServerFn({ method: "POST" })
+  .inputValidator((data) =>
+    z.object({ id: z.string().uuid(), motoristaId: z.string().uuid().nullable() }).parse(data),
+  )
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+    await ctx.sql`
+      UPDATE public.agendamentos SET motorista_id = ${data.motoristaId} WHERE id = ${data.id}
+    `;
+    return { ok: true };
+  });
+
 export const vpsRemoverAgendamento = createServerFn({ method: "POST" })
   .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ data }) => {
@@ -324,11 +370,12 @@ export const vpsListUsuarios = createServerFn({ method: "GET" }).handler(
         criadoEm: string;
         ultimoAcesso: string | null;
         admin: boolean;
+        motorista: boolean;
         agendamentos: string;
       }[]
     >`
       SELECT u.id, u.email, u.nome, u.telefone,
-             u.created_at AS "criadoEm", u.ultimo_acesso AS "ultimoAcesso", u.admin,
+             u.created_at AS "criadoEm", u.ultimo_acesso AS "ultimoAcesso", u.admin, u.motorista,
              count(a.id) AS agendamentos
         FROM public.usuarios u
         LEFT JOIN public.agendamentos a ON a.user_id = u.id
@@ -344,6 +391,7 @@ export const vpsListUsuarios = createServerFn({ method: "GET" }).handler(
       ultimoAcesso: l.ultimoAcesso,
       confirmado: true, // não há confirmação por e-mail no deploy próprio
       isAdmin: l.admin,
+      isMotorista: l.motorista,
       agendamentos: Number(l.agendamentos),
     }));
   },
@@ -360,6 +408,23 @@ export const vpsDefinirAdmin = createServerFn({ method: "POST" })
     await ctx.sql`UPDATE public.usuarios SET admin = ${data.admin} WHERE id = ${data.userId}`;
     registrarAuditoria({
       acao: data.admin ? "promover_admin" : "remover_admin",
+      atorId: atual.id,
+      atorEmail: atual.email,
+      alvoId: data.userId,
+    });
+    return { ok: true };
+  });
+
+export const vpsDefinirMotorista = createServerFn({ method: "POST" })
+  .inputValidator((data) =>
+    z.object({ userId: z.string().uuid(), motorista: z.boolean() }).parse(data),
+  )
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    const atual = await ctx.admin();
+    await ctx.sql`UPDATE public.usuarios SET motorista = ${data.motorista} WHERE id = ${data.userId}`;
+    registrarAuditoria({
+      acao: data.motorista ? "promover_motorista" : "remover_motorista",
       atorId: atual.id,
       atorEmail: atual.email,
       alvoId: data.userId,

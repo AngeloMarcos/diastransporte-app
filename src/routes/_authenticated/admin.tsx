@@ -64,10 +64,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  atribuirMotorista,
   atualizarStatusAgendamento,
   criarBlocoConteudo,
   criarRota,
   definirAdmin,
+  definirMotorista,
   enviarImagem as uploadImagem,
   listarAgendamentos,
   listarConteudoAdmin,
@@ -1003,6 +1005,18 @@ function AdminAgendamentos() {
     queryFn: () => listarAgendamentos(),
   });
 
+  // Reaproveita a listagem de usuários (já dual-backend) só pra montar o
+  // seletor de motoristas — nenhum endpoint novo de listagem precisou existir.
+  const { data: usuarios } = useQuery({
+    queryKey: ["usuarios-motoristas"],
+    queryFn: () => listarUsuarios(),
+  });
+  const motoristas = useMemo(() => (usuarios ?? []).filter((u) => u.isMotorista), [usuarios]);
+  const nomePorMotorista = useMemo(
+    () => new Map((usuarios ?? []).map((u) => [u.id, u.nome || u.email])),
+    [usuarios],
+  );
+
   const atualizar = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       await atualizarStatusAgendamento(id, status);
@@ -1012,6 +1026,17 @@ function AdminAgendamentos() {
       void queryClient.invalidateQueries({ queryKey: ["admin-agendamentos"] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atualizar."),
+  });
+
+  const atribuir = useMutation({
+    mutationFn: async ({ id, motoristaId }: { id: string; motoristaId: string | null }) => {
+      await atribuirMotorista(id, motoristaId);
+    },
+    onSuccess: () => {
+      toast.success("Motorista atualizado.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-agendamentos"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atribuir motorista."),
   });
 
   const remover = useMutation({
@@ -1127,10 +1152,16 @@ function AdminAgendamentos() {
                         Embarque: {a.embarque_local}
                       </p>
                     ) : null}
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Motorista:{" "}
+                      {a.motorista_id
+                        ? (nomePorMotorista.get(a.motorista_id) ?? "—")
+                        : "não atribuído"}
+                    </p>
                     {a.observacoes ? <p className="mt-2 text-sm">{a.observacoes}</p> : null}
                   </div>
 
-                  <div className="flex items-center gap-2 border-t border-border pt-4 lg:border-0 lg:pt-0">
+                  <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4 lg:border-0 lg:pt-0">
                     {a.status === "pendente" && (
                       <Button
                         className="h-11 shrink-0"
@@ -1151,6 +1182,27 @@ function AdminAgendamentos() {
                         {statusOpcoes.map((s) => (
                           <SelectItem key={s} value={s}>
                             {STATUS_META[s].label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={a.motorista_id ?? "nenhum"}
+                      onValueChange={(motoristaId) =>
+                        atribuir.mutate({
+                          id: a.id,
+                          motoristaId: motoristaId === "nenhum" ? null : motoristaId,
+                        })
+                      }
+                    >
+                      <SelectTrigger className="h-11 flex-1 text-sm lg:w-[190px] lg:flex-none">
+                        <SelectValue placeholder="Sem motorista" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="nenhum">Sem motorista</SelectItem>
+                        {motoristas.map((m) => (
+                          <SelectItem key={m.id} value={m.id}>
+                            {m.nome || m.email}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1426,6 +1478,19 @@ function AdminUsuarios() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atualizar permissões."),
   });
 
+  // Ao contrário do toggle de admin acima (que chama o server fn do Supabase
+  // direto), este vai pelo dispatcher dual-backend em @/lib/dados — não
+  // repete o gap de não funcionar em modo VPS.
+  const papelMotorista = useMutation({
+    mutationFn: (vars: { userId: string; motorista: boolean }) =>
+      definirMotorista(vars.userId, vars.motorista),
+    onSuccess: () => {
+      toast.success("Permissões atualizadas.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-usuarios"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atualizar permissões."),
+  });
+
   const senha = useMutation({
     mutationFn: (vars: { userId: string; senha: string }) => redefinirSenha({ data: vars }),
     onSuccess: () => toast.success("Senha redefinida."),
@@ -1499,8 +1564,12 @@ function AdminUsuarios() {
             usuario={u}
             euMesmo={u.id === user?.id}
             salvandoPapel={papel.isPending}
+            salvandoPapelMotorista={papelMotorista.isPending}
             salvandoSenha={senha.isPending}
             onAlternarAdmin={() => papel.mutate({ userId: u.id, admin: !u.isAdmin })}
+            onAlternarMotorista={() =>
+              papelMotorista.mutate({ userId: u.id, motorista: !u.isMotorista })
+            }
             onRedefinirSenha={(nova) => senha.mutate({ userId: u.id, senha: nova })}
           />
         ))}
@@ -1516,20 +1585,25 @@ function UsuarioLinha({
   usuario,
   euMesmo,
   salvandoPapel,
+  salvandoPapelMotorista,
   salvandoSenha,
   onAlternarAdmin,
+  onAlternarMotorista,
   onRedefinirSenha,
 }: {
   usuario: UsuarioAdmin;
   euMesmo: boolean;
   salvandoPapel: boolean;
+  salvandoPapelMotorista: boolean;
   salvandoSenha: boolean;
   onAlternarAdmin: () => void;
+  onAlternarMotorista: () => void;
   onRedefinirSenha: (senha: string) => void;
 }) {
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmando, setConfirmando] = useState(false);
   const [confirmandoAdmin, setConfirmandoAdmin] = useState(false);
+  const [confirmandoMotorista, setConfirmandoMotorista] = useState(false);
 
   const whats = linkWhatsappCliente(usuario.telefone || null);
 
@@ -1542,6 +1616,11 @@ function UsuarioLinha({
             {usuario.isAdmin && (
               <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary">
                 Administrador
+              </Badge>
+            )}
+            {usuario.isMotorista && (
+              <Badge variant="outline" className="border-blue-500/40 bg-blue-500/10 text-blue-400">
+                Motorista
               </Badge>
             )}
             {euMesmo && <span className="text-xs text-muted-foreground">(você)</span>}
@@ -1590,6 +1669,36 @@ function UsuarioLinha({
                 <AlertDialogCancel className="h-11">Cancelar</AlertDialogCancel>
                 <AlertDialogAction className="h-11" onClick={onAlternarAdmin}>
                   {usuario.isAdmin ? "Sim, remover admin" : "Sim, tornar administrador"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <AlertDialog open={confirmandoMotorista} onOpenChange={setConfirmandoMotorista}>
+            <Button
+              variant={usuario.isMotorista ? "outline" : "secondary"}
+              className="h-11"
+              disabled={salvandoPapelMotorista}
+              onClick={() => setConfirmandoMotorista(true)}
+            >
+              {usuario.isMotorista ? "Remover motorista" : "Tornar motorista"}
+            </Button>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {usuario.isMotorista
+                    ? `Remover o acesso de motorista de ${usuario.nome || usuario.email}?`
+                    : `Tornar ${usuario.nome || usuario.email} motorista?`}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {usuario.isMotorista
+                    ? "A conta deixa de ver o painel de corridas atribuídas. Corridas já atribuídas continuam registradas, só ficam sem um motorista com acesso a elas até você reatribuir."
+                    : "Um motorista pode ver e concluir as corridas que você atribuir a ele, no painel próprio dele — sem acesso a preços, rotas ou dados de outros clientes."}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="h-11">Cancelar</AlertDialogCancel>
+                <AlertDialogAction className="h-11" onClick={onAlternarMotorista}>
+                  {usuario.isMotorista ? "Sim, remover motorista" : "Sim, tornar motorista"}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

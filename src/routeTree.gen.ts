@@ -18,6 +18,7 @@ import { Route as FrotaRouteImport } from './routes/frota'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedMinhasViagensRouteImport } from './routes/_authenticated/minhas-viagens'
+import { Route as AuthenticatedMotoristaRouteImport } from './routes/_authenticated/motorista'
 import { Route as ApiUploadsRouteImport } from './routes/api/uploads'
 import { Route as TransfersIndexRouteImport } from './routes/transfers.index'
 import { Route as TransfersRotaRouteImport } from './routes/transfers.$rota'
@@ -68,6 +69,11 @@ const AuthenticatedMinhasViagensRoute =
     path: '/minhas-viagens',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedMotoristaRoute = AuthenticatedMotoristaRouteImport.update({
+  id: '/motorista',
+  path: '/motorista',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const ApiUploadsRoute = ApiUploadsRouteImport.update({
   id: '/api/uploads',
   path: '/api/uploads',
@@ -98,6 +104,7 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
+  '/motorista': typeof AuthenticatedMotoristaRoute
   '/api/uploads': typeof ApiUploadsRouteWithChildren
   '/transfers/$rota': typeof TransfersRotaRoute
   '/transfers/': typeof TransfersIndexRoute
@@ -112,6 +119,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
+  '/motorista': typeof AuthenticatedMotoristaRoute
   '/api/uploads': typeof ApiUploadsRouteWithChildren
   '/transfers/$rota': typeof TransfersRotaRoute
   '/transfers': typeof TransfersIndexRoute
@@ -128,6 +136,7 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
+  '/_authenticated/motorista': typeof AuthenticatedMotoristaRoute
   '/api/uploads': typeof ApiUploadsRouteWithChildren
   '/transfers/$rota': typeof TransfersRotaRoute
   '/transfers/': typeof TransfersIndexRoute
@@ -144,6 +153,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/admin'
     | '/minhas-viagens'
+    | '/motorista'
     | '/api/uploads'
     | '/transfers/$rota'
     | '/transfers/'
@@ -158,6 +168,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/admin'
     | '/minhas-viagens'
+    | '/motorista'
     | '/api/uploads'
     | '/transfers/$rota'
     | '/transfers'
@@ -173,6 +184,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/_authenticated/admin'
     | '/_authenticated/minhas-viagens'
+    | '/_authenticated/motorista'
     | '/api/uploads'
     | '/transfers/$rota'
     | '/transfers/'
@@ -257,6 +269,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMinhasViagensRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/motorista': {
+      id: '/_authenticated/motorista'
+      path: '/motorista'
+      fullPath: '/motorista'
+      preLoaderRoute: typeof AuthenticatedMotoristaRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/uploads': {
       id: '/api/uploads'
       path: '/api/uploads'
@@ -291,11 +310,13 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedMinhasViagensRoute: typeof AuthenticatedMinhasViagensRoute
+  AuthenticatedMotoristaRoute: typeof AuthenticatedMotoristaRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedMinhasViagensRoute: AuthenticatedMinhasViagensRoute,
+  AuthenticatedMotoristaRoute: AuthenticatedMotoristaRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

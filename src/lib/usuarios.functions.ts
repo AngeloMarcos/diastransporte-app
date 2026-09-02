@@ -14,12 +14,16 @@ export type UsuarioAdmin = {
   ultimoAcesso: string | null;
   confirmado: boolean;
   isAdmin: boolean;
+  isMotorista: boolean;
   agendamentos: number;
 };
 
 async function garantirAdmin(
   supabase: {
-    rpc: (fn: "has_role", args: { _user_id: string; _role: "admin" }) => Promise<{ data: unknown }>;
+    rpc: (
+      fn: "has_role",
+      args: { _user_id: string; _role: "admin" | "motorista" },
+    ) => Promise<{ data: unknown }>;
   },
   userId: string,
 ) {
@@ -45,6 +49,9 @@ export const listUsuarios = createServerFn({ method: "GET" })
     const adminIds = new Set(
       (papeis ?? []).filter((p) => p.role === "admin").map((p) => p.user_id),
     );
+    const motoristaIds = new Set(
+      (papeis ?? []).filter((p) => p.role === "motorista").map((p) => p.user_id),
+    );
     const contagem = new Map<string, number>();
     for (const a of agendamentos ?? []) {
       if (!a.user_id) continue;
@@ -63,6 +70,7 @@ export const listUsuarios = createServerFn({ method: "GET" })
         ultimoAcesso: u.last_sign_in_at ?? null,
         confirmado: Boolean(u.email_confirmed_at),
         isAdmin: adminIds.has(u.id),
+        isMotorista: motoristaIds.has(u.id),
         agendamentos: contagem.get(u.id) ?? 0,
       };
     });
@@ -93,6 +101,37 @@ export const definirPapelAdmin = createServerFn({ method: "POST" })
     }
     registrarAuditoria({
       acao: data.admin ? "promover_admin" : "remover_admin",
+      atorId: context.userId,
+      atorEmail: context.claims["email"] as string | undefined,
+      alvoId: data.userId,
+    });
+    return { ok: true };
+  });
+
+export const definirPapelMotorista = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) =>
+    z.object({ userId: z.string().uuid(), motorista: z.boolean() }).parse(data),
+  )
+  .handler(async ({ context, data }) => {
+    await garantirAdmin(context.supabase as never, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    if (data.motorista) {
+      const { error } = await supabaseAdmin
+        .from("user_roles")
+        .upsert({ user_id: data.userId, role: "motorista" }, { onConflict: "user_id,role" });
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await supabaseAdmin
+        .from("user_roles")
+        .delete()
+        .eq("user_id", data.userId)
+        .eq("role", "motorista");
+      if (error) throw new Error(error.message);
+    }
+    registrarAuditoria({
+      acao: data.motorista ? "promover_motorista" : "remover_motorista",
       atorId: context.userId,
       atorEmail: context.claims["email"] as string | undefined,
       alvoId: data.userId,
