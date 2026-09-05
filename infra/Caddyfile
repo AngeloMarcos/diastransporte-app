@@ -1,0 +1,12 @@
+# Proxy reverso pro app da VPS. Duas variantes: enquanto o domínio não está
+# liberado/apontado, use o bloco ":80" (HTTP puro, sem TLS automático).
+# Quando diastransporte.site estiver certo, comente o bloco ":80" e
+# descomente o bloco do domínio abaixo — o Caddy cuida do Let's Encrypt sozinho.
+
+:80 {
+	reverse_proxy app:3000
+}
+
+# diastransporte.site, www.diastransporte.site {
+# 	reverse_proxy app:3000
+# }

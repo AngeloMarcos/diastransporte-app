@@ -1,6 +1,19 @@
-# Stack do Dias Transporte na VPS: app + Postgres + volume de uploads.
+# Stack do Dias Transporte na VPS: proxy + app + Postgres + volume de uploads.
 # Copie .env.example para .env e ajuste antes de subir.
 services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+
   db:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -39,3 +52,5 @@ services:
 volumes:
   db:
   uploads:
+  caddy_data:
+  caddy_config:
