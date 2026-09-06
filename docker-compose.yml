@@ -52,6 +52,33 @@ services:
       - uploads:/var/lib/dias-transporte/uploads
     ports:
       - "127.0.0.1:3000:3000" # o Caddy/Nginx do host faz o proxy e o HTTPS
+    healthcheck:
+      # Sem isso "restart: unless-stopped" só reagia a um crash de verdade
+      # (processo morto) — um processo travado mas ainda de pé (ex.: preso
+      # numa query que nunca retorna) ficava no ar indefinidamente sem
+      # servir nada. wget por ser o único cliente HTTP disponível na imagem
+      # node:alpine (sem curl).
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    labels:
+      - autoheal=true
+
+  # "restart: unless-stopped" sozinho só reage a um container que morreu de
+  # verdade — um container "unhealthy" (healthcheck falhando, processo
+  # travado mas de pé) fica parado no compose puro (sem Swarm) até alguém
+  # perceber e reiniciar à mão. Este sidecar observa containers com o label
+  # autoheal=true e reinicia os que ficarem "unhealthy" — só precisa do
+  # socket do Docker, não expõe porta nenhuma.
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   db:
