@@ -18,6 +18,7 @@ import {
   Search,
   ShieldAlert,
   Trash2,
+  Truck,
   Upload,
   Users,
   Wallet,
@@ -39,6 +40,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -83,6 +85,7 @@ import {
   salvarRota,
 } from "@/lib/dados";
 import { useAuth } from "@/hooks/useAuth";
+import { MODO_VPS } from "@/lib/vps/config";
 import { cn } from "@/lib/utils";
 import { formatBRL } from "@/data/rotas";
 import {
@@ -1072,6 +1075,25 @@ function AdminAgendamentos() {
 
   return (
     <div className="space-y-4">
+      {MODO_VPS && (
+        // Sprint 4 do roteiro "Despacho Unificado": desde o Sprint 3, toda
+        // reserva nova também vira um pedido no car-fleet-co — é lá que o
+        // despacho de verdade deve acontecer daqui pra frente. A atribuição
+        // de motorista abaixo continua funcionando (não removida: serve de
+        // reserva manual caso o car-fleet-co saia do ar), só deixou de ser
+        // o caminho principal.
+        <Alert>
+          <Truck className="size-4" />
+          <AlertTitle>O despacho agora acontece no car-fleet-co</AlertTitle>
+          <AlertDescription>
+            Toda reserva nova é enviada automaticamente pro backoffice de despacho — é lá que
+            motorista, status e acompanhamento da corrida devem ser feitos. A atribuição de
+            motorista aqui embaixo continua disponível como reserva manual, não é mais o caminho
+            principal.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <Button
           variant={filtroStatus === "todos" ? "default" : "secondary"}
