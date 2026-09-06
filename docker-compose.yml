@@ -44,6 +44,10 @@ services:
       UPLOADS_DIR: /var/lib/dias-transporte/uploads
       VITE_AUTH_MODE: vps
       PORT: 3000
+      # Integração com o car-fleet-co (Sprint 3 do roteiro "Despacho
+      # Unificado"). Vazio = notificação de nova reserva pulada em silêncio.
+      CARFLEET_API_URL: ${CARFLEET_API_URL:-}
+      CARFLEET_INTEGRACAO_TOKEN: ${CARFLEET_INTEGRACAO_TOKEN:-}
     volumes:
       - uploads:/var/lib/dias-transporte/uploads
     ports:

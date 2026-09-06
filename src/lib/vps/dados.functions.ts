@@ -223,8 +223,8 @@ export const vpsCriarReservas = createServerFn({ method: "POST" })
     // via a operação inteira como erro, tentar de novo duplicava as que já
     // tinham entrado. Espelha o que o insert em lote do Supabase já faz de
     // graça (uma única instrução SQL é atômica por padrão).
-    return ctx.sql.begin(async (sql) => {
-      const criados: AgendamentoRow[] = [];
+    const criados = await ctx.sql.begin(async (sql) => {
+      const linhasCriadas: AgendamentoRow[] = [];
       for (const item of data.itens) {
         // O valor NÃO vem do cliente: o trigger agendamentos_valor_oficial calcula.
         const linhas = await sql<AgendamentoRow[]>`
@@ -237,10 +237,25 @@ export const vpsCriarReservas = createServerFn({ method: "POST" })
                   ${item.contato_telefone})
           RETURNING *
         `;
-        if (linhas[0]) criados.push(linhas[0]);
+        if (linhas[0]) linhasCriadas.push(linhas[0]);
       }
-      return criados;
+      return linhasCriadas;
     });
+
+    // Fora da transação e sem await: o despacho (car-fleet-co) é um sistema
+    // à parte, na mesma VPS — uma falha ou lentidão dele nunca pode travar
+    // nem reverter o checkout do cliente aqui. Ver integracao-carfleet.server.ts.
+    // Import dinâmico (não top-level) pelo mesmo motivo de auth.server/db.server
+    // acima: é um módulo *.server.ts, só deve existir no bundle do servidor.
+    void import("./integracao-carfleet.server").then(({ notificarDespacho }) => {
+      for (const agendamento of criados) {
+        void notificarDespacho(ctx.sql, agendamento, usuario).catch((erro: unknown) => {
+          console.error("[integracao car-fleet-co] falha ao notificar despacho:", erro);
+        });
+      }
+    });
+
+    return criados;
   });
 
 // Aviso não-bloqueante de possível conflito de agenda (mesmo carro, mesma
