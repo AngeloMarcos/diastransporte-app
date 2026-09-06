@@ -3,10 +3,20 @@ name: Deploy VPS
 # Publica na VPS a cada push na main. Segredos necessários no repositório
 # (Settings → Secrets and variables → Actions):
 #   SSH_HOST  → IP ou host da VPS
-#   SSH_USER  → usuário com sudo/docker
-#   SSH_KEY   → chave privada SSH (a pública fica em ~/.ssh/authorized_keys na VPS)
+#   SSH_USER  → usuário com acesso a /opt/dias-transporte e ao grupo docker
+#   SSH_KEY   → chave privada SSH (a pública já precisa estar em
+#               ~/.ssh/authorized_keys do SSH_USER na VPS)
 #   SSH_PORT  → opcional (padrão 22)
-# O diretório do projeto na VPS é definido em APP_DIR abaixo.
+# Variável opcional (Settings → Secrets and variables → Actions → Variables):
+#   APP_URL   → usada só pra conferir se o site respondeu depois do deploy
+#
+# Por que empacotar e mandar por scp em vez de "git pull" na VPS: este
+# repositório é privado e a VPS não guarda nenhuma credencial do GitHub (nem
+# deploy key, nem token) — o runner do Actions já tem o checkout autenticado
+# de graça, então ele empacota a árvore de trabalho aqui mesmo e manda por
+# scp; a VPS só entra por SSH pra extrair e rodar o build/up. Mesmo
+# mecanismo (tar + scp) já validado manualmente nesta VPS, evitando duplicar
+# autenticação (VPS → GitHub) só pra isso.
 
 on:
   push:
@@ -24,6 +34,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Empacotar o commit
+        run: git archive HEAD --format=tar.gz -o /tmp/dias-transporte-deploy.tar.gz
+
       - name: Configurar chave SSH
         run: |
           mkdir -p ~/.ssh
@@ -31,18 +46,28 @@ jobs:
           chmod 600 ~/.ssh/id_deploy
           ssh-keyscan -p "${{ secrets.SSH_PORT || 22 }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Atualizar, migrar e reiniciar
+      - name: Enviar pacote pra VPS
+        run: |
+          scp -i ~/.ssh/id_deploy -P "${{ secrets.SSH_PORT || 22 }}" \
+            /tmp/dias-transporte-deploy.tar.gz \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/dias-transporte-deploy.tar.gz"
+
+      - name: Extrair, migrar e reiniciar
         run: |
           ssh -i ~/.ssh/id_deploy -p "${{ secrets.SSH_PORT || 22 }}" \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" bash -euo pipefail <<'REMOTO'
           cd ${{ env.APP_DIR }}
-          git fetch --all
-          git reset --hard origin/main
+          tar xzf /tmp/dias-transporte-deploy.tar.gz
+          rm /tmp/dias-transporte-deploy.tar.gz
+          echo "${{ github.sha }}" > .deployed_commit
+          # O .env versionado no repo é o de dev/Lovable e sobrescreve o
+          # nosso a cada extração — restaura sempre da cópia de produção
+          # (fora do controle do git, gerada uma vez na VPS).
+          cp "$HOME/.env.secrets.bak" .env
+          chmod 600 .env
           docker compose build app
           docker compose up -d db
-          # Migrations rodam dentro do container recém-construído, com a role de DDL.
-          docker compose run --rm --entrypoint sh app -c \
-            'DATABASE_URL_MIGRATION="$DATABASE_URL_MIGRATION" node db/migrate.mjs'
+          docker compose run --rm --entrypoint sh app -c 'node db/migrate.mjs'
           docker compose up -d app
           docker image prune -f
           REMOTO
@@ -50,7 +75,7 @@ jobs:
       - name: Conferir se o site responde
         run: |
           for i in $(seq 1 20); do
-            if curl -fsS -o /dev/null "${{ vars.APP_URL || 'https://wander-book-craft.lovable.app' }}"; then
+            if curl -fsS -o /dev/null "${{ vars.APP_URL || 'http://179.197.74.90' }}"; then
               echo "site respondendo"; exit 0
             fi
             sleep 5

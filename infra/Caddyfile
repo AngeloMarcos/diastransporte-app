@@ -10,3 +10,14 @@
 # diastransporte.site, www.diastransporte.site {
 # 	reverse_proxy app:3000
 # }
+
+# car-fleet-co (backoffice de despacho) roda num container à parte, do outro
+# projeto docker-compose nesta mesma VPS — este Caddy não está na rede dele,
+# então em vez de reverse_proxy por nome de serviço, aponta pro IP público +
+# porta publicada (179.197.74.90:3001), via hairpin NAT do próprio Docker
+# (já confirmado que funciona nesta VPS). Evita rodar um segundo Caddy só
+# pra isso e ganha HTTPS automático pro subdomínio de graça. Ajuste o nome
+# do subdomínio se decidir por outro.
+# painel.diastransporte.site {
+# 	reverse_proxy 179.197.74.90:3001
+# }
