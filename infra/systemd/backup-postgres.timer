@@ -1,0 +1,10 @@
+[Unit]
+Description=Roda backup-postgres.service todo dia às 4h da manhã
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=600
+Persistent=true
+
+[Install]
+WantedBy=timers.target
