@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.fornecedores_motorista_guard() FROM PUBLIC, anon, authenticated;
