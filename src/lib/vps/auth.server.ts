@@ -115,11 +115,13 @@ export async function criarUsuario(dados: {
   nome?: string;
   telefone?: string;
   admin?: boolean;
+  motorista?: boolean;
 }): Promise<UsuarioServidor> {
   const senhaHash = await hashSenha(dados.senha);
   const linhas = await sql()<UsuarioServidor[]>`
-    INSERT INTO public.usuarios (email, senha_hash, nome, telefone, admin)
-    VALUES (${dados.email.trim()}, ${senhaHash}, ${dados.nome ?? ""}, ${dados.telefone ?? ""}, ${dados.admin ?? false})
+    INSERT INTO public.usuarios (email, senha_hash, nome, telefone, admin, motorista)
+    VALUES (${dados.email.trim()}, ${senhaHash}, ${dados.nome ?? ""}, ${dados.telefone ?? ""},
+            ${dados.admin ?? false}, ${dados.motorista ?? false})
     RETURNING id, email, nome, telefone, admin, motorista
   `;
   const usuario = linhas[0];
