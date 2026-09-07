@@ -6,7 +6,14 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 
-import type { AgendamentoRow, ConteudoBloco, NovaReserva, UsuarioAdmin } from "@/lib/dados-tipos";
+import type {
+  AgendamentoRow,
+  ConteudoBloco,
+  FotoGaleriaRow,
+  NovaReserva,
+  UsuarioAdmin,
+  VeiculoFrotaRow,
+} from "@/lib/dados-tipos";
 import type { RotaRow } from "@/lib/rotasMap";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
@@ -400,6 +407,141 @@ export const vpsRemoverBloco = createServerFn({ method: "POST" })
     const ctx = await contexto();
     await ctx.admin();
     await ctx.sql`DELETE FROM public.conteudo_site WHERE id = ${data.id}`;
+    return { ok: true };
+  });
+
+// ---------------------------------------------------------------- frota
+const COLUNAS_VEICULO = "id, nome, modelo, passageiros, bagagem, foto, itens, ordem, ativo";
+
+export const vpsListFrotaVeiculosAdmin = createServerFn({ method: "GET" }).handler(
+  async (): Promise<VeiculoFrotaRow[]> => {
+    const ctx = await contexto();
+    await ctx.admin();
+    return ctx.sql<VeiculoFrotaRow[]>`
+      SELECT ${ctx.sql.unsafe(COLUNAS_VEICULO)} FROM public.frota_veiculos ORDER BY ordem
+    `.then((linhas) => [...linhas]);
+  },
+);
+
+// Sem sessão — mesmo nível de acesso público que a policy "Veículos ativos
+// públicos" já dá no Supabase. Chamada por frota.functions.ts::listFrotaVeiculos.
+export const vpsListFrotaVeiculosPublicos = createServerFn({ method: "GET" }).handler(
+  async (): Promise<VeiculoFrotaRow[]> => {
+    const { sql } = await import("./db.server");
+    const db = sql();
+    return db<VeiculoFrotaRow[]>`
+      SELECT ${db.unsafe(COLUNAS_VEICULO)} FROM public.frota_veiculos WHERE ativo ORDER BY ordem
+    `.then((linhas) => [...linhas]);
+  },
+);
+
+const veiculoInput = z.object({
+  nome: z.string().min(1).max(120),
+  modelo: z.string().max(200).default(""),
+  passageiros: z.string().max(60).default(""),
+  bagagem: z.string().max(120).default(""),
+  foto: z.string().max(2000).default(""),
+  itens: z.array(z.string().max(200)).max(20).default([]),
+  ordem: z.number().int().min(0).max(9999).default(0),
+});
+
+export const vpsCriarVeiculoFrota = createServerFn({ method: "POST" })
+  .inputValidator((data) => veiculoInput.parse(data))
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+    await ctx.sql`
+      INSERT INTO public.frota_veiculos (nome, modelo, passageiros, bagagem, foto, itens, ordem)
+      VALUES (${data.nome}, ${data.modelo}, ${data.passageiros}, ${data.bagagem}, ${data.foto},
+              ${data.itens}, ${data.ordem})
+    `;
+    return { ok: true };
+  });
+
+export const vpsSalvarVeiculoFrota = createServerFn({ method: "POST" })
+  .inputValidator((data) =>
+    veiculoInput.extend({ id: z.string().uuid(), ativo: z.boolean() }).parse(data),
+  )
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+    await ctx.sql`
+      UPDATE public.frota_veiculos
+         SET nome = ${data.nome}, modelo = ${data.modelo}, passageiros = ${data.passageiros},
+             bagagem = ${data.bagagem}, foto = ${data.foto}, itens = ${data.itens},
+             ordem = ${data.ordem}, ativo = ${data.ativo}
+       WHERE id = ${data.id}
+    `;
+    return { ok: true };
+  });
+
+export const vpsRemoverVeiculoFrota = createServerFn({ method: "POST" })
+  .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+    await ctx.sql`DELETE FROM public.frota_veiculos WHERE id = ${data.id}`;
+    return { ok: true };
+  });
+
+export const vpsListFrotaGaleriaAdmin = createServerFn({ method: "GET" }).handler(
+  async (): Promise<FotoGaleriaRow[]> => {
+    const ctx = await contexto();
+    await ctx.admin();
+    return ctx.sql<FotoGaleriaRow[]>`
+      SELECT id, foto, alt, ordem, ativo FROM public.frota_galeria ORDER BY ordem
+    `.then((linhas) => [...linhas]);
+  },
+);
+
+// Sem sessão — equivalente público. Chamada por frota.functions.ts::listFrotaGaleria.
+export const vpsListFrotaGaleriaPublica = createServerFn({ method: "GET" }).handler(
+  async (): Promise<FotoGaleriaRow[]> => {
+    const { sql } = await import("./db.server");
+    return sql()<FotoGaleriaRow[]>`
+      SELECT id, foto, alt, ordem, ativo FROM public.frota_galeria WHERE ativo ORDER BY ordem
+    `.then((linhas) => [...linhas]);
+  },
+);
+
+const fotoGaleriaInput = z.object({
+  foto: z.string().min(1).max(2000),
+  alt: z.string().max(300).default(""),
+  ordem: z.number().int().min(0).max(9999).default(0),
+});
+
+export const vpsCriarFotoGaleria = createServerFn({ method: "POST" })
+  .inputValidator((data) => fotoGaleriaInput.parse(data))
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+    await ctx.sql`
+      INSERT INTO public.frota_galeria (foto, alt, ordem) VALUES (${data.foto}, ${data.alt}, ${data.ordem})
+    `;
+    return { ok: true };
+  });
+
+export const vpsSalvarFotoGaleria = createServerFn({ method: "POST" })
+  .inputValidator((data) =>
+    fotoGaleriaInput.extend({ id: z.string().uuid(), ativo: z.boolean() }).parse(data),
+  )
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+    await ctx.sql`
+      UPDATE public.frota_galeria
+         SET foto = ${data.foto}, alt = ${data.alt}, ordem = ${data.ordem}, ativo = ${data.ativo}
+       WHERE id = ${data.id}
+    `;
+    return { ok: true };
+  });
+
+export const vpsRemoverFotoGaleria = createServerFn({ method: "POST" })
+  .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+    await ctx.sql`DELETE FROM public.frota_galeria WHERE id = ${data.id}`;
     return { ok: true };
   });
 

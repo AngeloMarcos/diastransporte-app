@@ -69,20 +69,28 @@ import {
   atribuirMotorista,
   atualizarStatusAgendamento,
   criarBlocoConteudo,
+  criarFotoGaleria,
   criarRota,
+  criarVeiculoFrota,
   definirAdmin,
   definirMotorista,
   enviarImagem as uploadImagem,
   listarAgendamentos,
   listarConteudoAdmin,
+  listarFrotaGaleriaAdmin,
+  listarFrotaVeiculosAdmin,
   listarRotasAdmin,
   listarUsuarios,
   redefinirSenha,
   removerAgendamento,
   removerBlocoConteudo,
+  removerFotoGaleria,
   removerRota,
+  removerVeiculoFrota,
   salvarBlocoConteudo,
+  salvarFotoGaleria,
   salvarRota,
+  salvarVeiculoFrota,
 } from "@/lib/dados";
 import { useAuth } from "@/hooks/useAuth";
 import { MODO_VPS } from "@/lib/vps/config";
@@ -97,6 +105,7 @@ import {
 import { contarStatus, statusOpcoes, STATUS_META } from "@/lib/status";
 import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
 import { ROTA_COLUMNS, type RotaRow } from "@/lib/rotasMap";
+import type { FotoGaleriaRow, VeiculoFrotaRow } from "@/lib/dados-tipos";
 import {
   definirPapelAdmin,
   listUsuarios,
@@ -158,6 +167,11 @@ function linkWhatsappCliente(telefone: string | null) {
 const abas = [
   { id: "geral", label: "Visão geral", icon: LayoutDashboard },
   { id: "rotas", label: "Rotas e preços", icon: RouteIcon },
+  // Edição de frota só existe no ramo VPS por enquanto — ver o comentário
+  // em dados.ts::listarFrotaVeiculosAdmin sobre por que o ramo Supabase
+  // ainda não existe. Escondida (não removida) fora de MODO_VPS: a aba
+  // nem aparece, em vez de aparecer e dar erro ao tentar carregar.
+  { id: "frota", label: "Frota", icon: Truck, soVps: true },
   { id: "agendamentos", label: "Agendamentos", icon: CalendarCheck },
   { id: "conteudo", label: "Conteúdo do site", icon: FileText },
   { id: "usuarios", label: "Usuários e acessos", icon: Users },
@@ -169,6 +183,7 @@ function AdminPage() {
   const [aba, setAba] = useState<(typeof abas)[number]["id"]>("geral");
   const [permissaoNotif, setPermissaoNotif] = useState<NotificationPermission | null>(null);
   const idsPendentesVistos = useRef<Set<string> | null>(null);
+  const abasVisiveis = abas.filter((a) => !("soVps" in a && a.soVps) || MODO_VPS);
 
   useEffect(() => {
     if (!carregando && !isAdmin) {
@@ -259,7 +274,7 @@ function AdminPage() {
           {/* Abas roláveis na horizontal em telas estreitas (celular/tablet retrato) */}
           <div className="-mx-4 overflow-x-auto px-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <TabsList className="inline-flex h-auto w-max justify-start gap-1 bg-secondary/60 p-1">
-              {abas.map(({ id, label, icon: Icon }) => (
+              {abasVisiveis.map(({ id, label, icon: Icon }) => (
                 <TabsTrigger
                   key={id}
                   value={id}
@@ -282,6 +297,11 @@ function AdminPage() {
           <TabsContent value="rotas" className="mt-6">
             <AdminRotas />
           </TabsContent>
+          {MODO_VPS && (
+            <TabsContent value="frota" className="mt-6">
+              <AdminFrota />
+            </TabsContent>
+          )}
           <TabsContent value="agendamentos" className="mt-6">
             <AdminAgendamentos />
           </TabsContent>
@@ -992,6 +1012,517 @@ function CampoNumero({
         placeholder="sob consulta"
         onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
       />
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------- frota
+function AdminFrota() {
+  return (
+    <div className="space-y-10">
+      <section>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-display text-fluid-lg">Veículos</h2>
+          <NovoVeiculoDialog />
+        </div>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Mostrados na home e em "Nossa frota". Enquanto não houver nenhum aqui, o site mostra os
+          dois carros padrão.
+        </p>
+        <AdminVeiculosLista />
+      </section>
+
+      <section>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-display text-fluid-lg">Galeria "Na estrada"</h2>
+          <NovaFotoGaleriaDialog />
+        </div>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Fotos da seção "Na estrada" em "Nossa frota". Enquanto não houver nenhuma aqui, o site
+          mostra as fotos padrão.
+        </p>
+        <AdminGaleriaLista />
+      </section>
+    </div>
+  );
+}
+
+const VEICULO_VAZIO = {
+  nome: "",
+  modelo: "",
+  passageiros: "",
+  bagagem: "",
+  foto: "",
+  itens: [] as string[],
+  ordem: 0,
+};
+
+function NovoVeiculoDialog() {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(VEICULO_VAZIO);
+
+  const criar = useMutation({
+    mutationFn: async () => {
+      if (!form.nome.trim()) throw new Error("Preencha o nome do veículo.");
+      await criarVeiculoFrota(form);
+    },
+    onSuccess: () => {
+      toast.success("Veículo criado. Edite os detalhes e adicione uma foto.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-frota-veiculos"] });
+      setOpen(false);
+      setForm(VEICULO_VAZIO);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao criar veículo."),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" className="h-11">
+          <Plus className="size-4" /> Novo veículo
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Novo veículo</DialogTitle>
+          <DialogDescription>Crie o registro básico — edite foto e itens depois.</DialogDescription>
+        </DialogHeader>
+        <Campo
+          label="Nome"
+          value={form.nome}
+          onChange={(v) => setForm((f) => ({ ...f, nome: v }))}
+        />
+        <Campo
+          label="Modelo"
+          value={form.modelo}
+          onChange={(v) => setForm((f) => ({ ...f, modelo: v }))}
+        />
+        <DialogFooter>
+          <Button className="h-11 w-full" onClick={() => criar.mutate()} disabled={criar.isPending}>
+            {criar.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Plus className="size-4" />
+            )}
+            Criar veículo
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AdminVeiculosLista() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-frota-veiculos"],
+    queryFn: () => listarFrotaVeiculosAdmin(),
+  });
+
+  if (isLoading) return <p className="mt-4 text-sm text-muted-foreground">Carregando…</p>;
+  if (!data?.length) {
+    return <p className="mt-4 text-sm text-muted-foreground">Nenhum veículo cadastrado ainda.</p>;
+  }
+  return (
+    <div className="mt-4 space-y-4">
+      {data.map((v) => (
+        <VeiculoEditor key={v.id} veiculo={v} />
+      ))}
+    </div>
+  );
+}
+
+function VeiculoEditor({ veiculo }: { veiculo: VeiculoFrotaRow }) {
+  const queryClient = useQueryClient();
+  const [aberto, setAberto] = useState(false);
+  const [form, setForm] = useState(veiculo);
+  const [novoItem, setNovoItem] = useState("");
+  const [enviandoFoto, setEnviandoFoto] = useState(false);
+
+  const salvar = useMutation({
+    mutationFn: async () => salvarVeiculoFrota(form),
+    onSuccess: () => {
+      toast.success("Veículo atualizado.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-frota-veiculos"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao salvar."),
+  });
+
+  const remover = useMutation({
+    mutationFn: async () => removerVeiculoFrota(veiculo.id),
+    onSuccess: () => {
+      toast.success("Veículo removido.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-frota-veiculos"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao remover."),
+  });
+
+  async function enviarFoto(arquivo: File) {
+    setEnviandoFoto(true);
+    try {
+      const url = await uploadImagem(arquivo, `frota-${slugify(form.nome)}`);
+      setForm((f) => ({ ...f, foto: url }));
+      toast.success("Foto enviada. Clique em salvar para publicar.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao enviar foto.");
+    } finally {
+      setEnviandoFoto(false);
+    }
+  }
+
+  return (
+    <article className="rounded-lg border border-border bg-card p-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          {form.foto ? (
+            <img
+              src={form.foto}
+              alt=""
+              width={48}
+              height={48}
+              loading="lazy"
+              decoding="async"
+              className="size-12 shrink-0 rounded-sm object-cover"
+            />
+          ) : (
+            <div className="grid size-12 shrink-0 place-items-center rounded-sm bg-muted">
+              <Truck className="size-5 text-muted-foreground" />
+            </div>
+          )}
+          <div>
+            <h3 className="font-display text-lg">{veiculo.nome}</h3>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              {veiculo.modelo || "sem modelo"}
+              <Badge
+                variant="outline"
+                className={
+                  veiculo.ativo
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                    : "border-border bg-muted text-muted-foreground"
+                }
+              >
+                {veiculo.ativo ? "visível" : "oculto"}
+              </Badge>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            className="h-11 flex-1 md:flex-none"
+            onClick={() => setAberto((v) => !v)}
+          >
+            {aberto ? "Fechar" : "Editar"}
+          </Button>
+          <Button
+            size="icon"
+            variant="secondary"
+            className="size-11 shrink-0 text-destructive"
+            title="Remover veículo"
+            disabled={remover.isPending}
+            onClick={() => {
+              if (window.confirm(`Remover "${veiculo.nome}"? Essa ação não pode ser desfeita.`)) {
+                remover.mutate();
+              }
+            }}
+          >
+            {remover.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Trash2 className="size-4" />
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {aberto && (
+        <div className="mt-6 space-y-4 border-t border-border pt-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Campo label="Nome" value={form.nome} onChange={(v) => setForm({ ...form, nome: v })} />
+            <Campo
+              label="Modelo"
+              value={form.modelo}
+              onChange={(v) => setForm({ ...form, modelo: v })}
+            />
+            <Campo
+              label="Passageiros (texto livre)"
+              value={form.passageiros}
+              onChange={(v) => setForm({ ...form, passageiros: v })}
+            />
+            <Campo
+              label="Bagagem (texto livre)"
+              value={form.bagagem}
+              onChange={(v) => setForm({ ...form, bagagem: v })}
+            />
+            <CampoNumero
+              label="Ordem de exibição"
+              value={form.ordem}
+              onChange={(v) => setForm({ ...form, ordem: v ?? 0 })}
+            />
+          </div>
+
+          <div>
+            <Label>Foto</Label>
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <Input
+                type="file"
+                accept="image/*"
+                className="h-11 sm:max-w-xs"
+                onChange={(e) => {
+                  const arquivo = e.target.files?.[0];
+                  if (arquivo) void enviarFoto(arquivo);
+                }}
+              />
+              <Input
+                className="h-11"
+                value={form.foto}
+                onChange={(e) => setForm({ ...form, foto: e.target.value })}
+                placeholder="ou cole a URL da imagem"
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label>Itens ({form.itens.length})</Label>
+            <ul className="mt-2 space-y-1.5">
+              {form.itens.map((item, i) => (
+                <li key={`${item}-${i}`} className="flex items-center gap-2 text-sm">
+                  <span className="flex-1">— {item}</span>
+                  <button
+                    type="button"
+                    aria-label="Remover item"
+                    onClick={() =>
+                      setForm((f) => ({ ...f, itens: f.itens.filter((_, idx) => idx !== i) }))
+                    }
+                    className="grid size-7 shrink-0 place-items-center rounded-full bg-destructive text-sm leading-none text-destructive-foreground"
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 flex gap-2">
+              <Input
+                className="h-11"
+                value={novoItem}
+                onChange={(e) => setNovoItem(e.target.value)}
+                placeholder="Ex.: Ar-condicionado"
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" || !novoItem.trim()) return;
+                  e.preventDefault();
+                  setForm((f) => ({ ...f, itens: [...f.itens, novoItem.trim()] }));
+                  setNovoItem("");
+                }}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-11 shrink-0"
+                disabled={!novoItem.trim()}
+                onClick={() => {
+                  setForm((f) => ({ ...f, itens: [...f.itens, novoItem.trim()] }));
+                  setNovoItem("");
+                }}
+              >
+                <Plus className="size-4" />
+              </Button>
+            </div>
+          </div>
+
+          <label className="flex min-h-11 items-center gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="size-5"
+              checked={form.ativo}
+              onChange={(e) => setForm({ ...form, ativo: e.target.checked })}
+            />
+            Visível no site
+          </label>
+
+          <Button
+            className="h-11 w-full sm:w-auto"
+            onClick={() => salvar.mutate()}
+            disabled={salvar.isPending || enviandoFoto}
+          >
+            {salvar.isPending || enviandoFoto ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Save className="size-4" />
+            )}
+            Salvar alterações
+          </Button>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function NovaFotoGaleriaDialog() {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [foto, setFoto] = useState("");
+  const [alt, setAlt] = useState("");
+  const [enviando, setEnviando] = useState(false);
+
+  const criar = useMutation({
+    mutationFn: async () => {
+      if (!foto.trim()) throw new Error("Envie ou cole a URL de uma foto.");
+      await criarFotoGaleria({ foto, alt, ordem: 0 });
+    },
+    onSuccess: () => {
+      toast.success("Foto adicionada à galeria.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-frota-galeria"] });
+      setOpen(false);
+      setFoto("");
+      setAlt("");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao adicionar foto."),
+  });
+
+  async function enviarFoto(arquivo: File) {
+    setEnviando(true);
+    try {
+      const url = await uploadImagem(arquivo, "frota-galeria");
+      setFoto(url);
+      toast.success("Foto enviada.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao enviar foto.");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" className="h-11">
+          <Plus className="size-4" /> Nova foto
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Nova foto da galeria</DialogTitle>
+          <DialogDescription>
+            Aparece na seção "Na estrada" de "Nossa frota". Descreva a foto pra quem usa leitor de
+            tela.
+          </DialogDescription>
+        </DialogHeader>
+        <div>
+          <Label>Foto</Label>
+          <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Input
+              type="file"
+              accept="image/*"
+              className="h-11 sm:max-w-xs"
+              onChange={(e) => {
+                const arquivo = e.target.files?.[0];
+                if (arquivo) void enviarFoto(arquivo);
+              }}
+            />
+            <Input
+              className="h-11"
+              value={foto}
+              onChange={(e) => setFoto(e.target.value)}
+              placeholder="ou cole a URL da imagem"
+            />
+          </div>
+        </div>
+        <Campo label="Descrição da foto (alt)" value={alt} onChange={setAlt} />
+        <DialogFooter>
+          <Button
+            className="h-11 w-full"
+            onClick={() => criar.mutate()}
+            disabled={criar.isPending || enviando}
+          >
+            {criar.isPending || enviando ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Plus className="size-4" />
+            )}
+            Adicionar foto
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AdminGaleriaLista() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-frota-galeria"],
+    queryFn: () => listarFrotaGaleriaAdmin(),
+  });
+
+  if (isLoading) return <p className="mt-4 text-sm text-muted-foreground">Carregando…</p>;
+  if (!data?.length) {
+    return <p className="mt-4 text-sm text-muted-foreground">Nenhuma foto na galeria ainda.</p>;
+  }
+  return (
+    <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+      {data.map((f) => (
+        <FotoGaleriaCard key={f.id} foto={f} />
+      ))}
+    </div>
+  );
+}
+
+function FotoGaleriaCard({ foto }: { foto: FotoGaleriaRow }) {
+  const queryClient = useQueryClient();
+
+  const alternarAtivo = useMutation({
+    mutationFn: async () => salvarFotoGaleria({ ...foto, ativo: !foto.ativo }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-frota-galeria"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atualizar."),
+  });
+
+  const remover = useMutation({
+    mutationFn: async () => removerFotoGaleria(foto.id),
+    onSuccess: () => {
+      toast.success("Foto removida.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-frota-galeria"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao remover."),
+  });
+
+  return (
+    <div className="group relative overflow-hidden rounded-lg border border-border bg-muted">
+      <img
+        src={foto.foto}
+        alt={foto.alt}
+        width={200}
+        height={200}
+        loading="lazy"
+        decoding="async"
+        className="aspect-square w-full object-cover"
+      />
+      {!foto.ativo && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/70">
+          <Badge variant="outline">oculta</Badge>
+        </div>
+      )}
+      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-background/90 p-1.5">
+        <button
+          type="button"
+          className="min-h-8 flex-1 rounded-sm px-2 text-xs hover:bg-secondary"
+          disabled={alternarAtivo.isPending}
+          onClick={() => alternarAtivo.mutate()}
+        >
+          {foto.ativo ? "Ocultar" : "Mostrar"}
+        </button>
+        <button
+          type="button"
+          aria-label="Remover foto"
+          disabled={remover.isPending}
+          onClick={() => {
+            if (window.confirm("Remover esta foto da galeria?")) remover.mutate();
+          }}
+          className="grid size-8 shrink-0 place-items-center rounded-sm text-destructive hover:bg-secondary"
+        >
+          <Trash2 className="size-4" />
+        </button>
+      </div>
     </div>
   );
 }

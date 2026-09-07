@@ -3,7 +3,14 @@
 // Lovable Cloud seguem pelo cliente Supabase + RLS (comportamento atual).
 // Quando o site estiver 100% na VPS, basta apagar os ramos "cloud" daqui.
 import { supabase } from "@/integrations/supabase/client";
-import type { AgendamentoRow, ConteudoBloco, NovaReserva, UsuarioAdmin } from "@/lib/dados-tipos";
+import type {
+  AgendamentoRow,
+  ConteudoBloco,
+  FotoGaleriaRow,
+  NovaReserva,
+  UsuarioAdmin,
+  VeiculoFrotaRow,
+} from "@/lib/dados-tipos";
 import { contarReservasMesmoCarroData } from "@/lib/disponibilidade.functions";
 import { ROTA_COLUMNS, type RotaRow } from "@/lib/rotasMap";
 import {
@@ -21,12 +28,16 @@ import {
   vpsConcluirCorrida,
   vpsContarMesmoCarroData,
   vpsCriarBloco,
+  vpsCriarFotoGaleria,
   vpsCriarReservas,
   vpsCriarRota,
+  vpsCriarVeiculoFrota,
   vpsDefinirAdmin,
   vpsDefinirMotorista,
   vpsListAgendamentos,
   vpsListConteudoAdmin,
+  vpsListFrotaGaleriaAdmin,
+  vpsListFrotaVeiculosAdmin,
   vpsListRotasAdmin,
   vpsListUsuarios,
   vpsMinhasCorridas,
@@ -34,9 +45,13 @@ import {
   vpsRedefinirSenha,
   vpsRemoverAgendamento,
   vpsRemoverBloco,
+  vpsRemoverFotoGaleria,
   vpsRemoverRota,
+  vpsRemoverVeiculoFrota,
   vpsSalvarBloco,
+  vpsSalvarFotoGaleria,
   vpsSalvarRota,
+  vpsSalvarVeiculoFrota,
 } from "@/lib/vps/dados.functions";
 
 function erro(e: { message: string } | null): void {
@@ -313,6 +328,86 @@ export async function removerBlocoConteudo(id: string): Promise<void> {
   }
   const { error } = await supabase.from("conteudo_site").delete().eq("id", id);
   erro(error);
+}
+
+// ---------------------------------------------------------------- frota
+// Só existe o ramo VPS por enquanto: o cliente Supabase tipado usado aqui
+// (createClient<Database>) só aceita nomes de tabela que já estão em
+// src/integrations/supabase/types.ts, e esse arquivo só é regenerado pelo
+// pipeline do Lovable depois que supabase/migrations/20260907010000_frota.sql
+// for de fato aplicada — não dá pra escrever supabase.from("frota_veiculos")
+// sem quebrar o typecheck antes disso. A aba "Frota" do admin fica escondida
+// fora de MODO_VPS (ver admin.tsx) até esse ramo existir. A LEITURA pública
+// (frota.functions.ts) já funciona nos dois backends desde já — usa um
+// cliente Supabase avulso, sem essa trava de tipos.
+export type NovoVeiculoInput = {
+  nome: string;
+  modelo: string;
+  passageiros: string;
+  bagagem: string;
+  foto: string;
+  itens: string[];
+  ordem: number;
+};
+
+export async function listarFrotaVeiculosAdmin(): Promise<VeiculoFrotaRow[]> {
+  if (MODO_VPS) return vpsListFrotaVeiculosAdmin();
+  throw new Error("Edição de frota ainda não disponível neste ambiente.");
+}
+
+export async function criarVeiculoFrota(input: NovoVeiculoInput): Promise<void> {
+  if (MODO_VPS) {
+    await vpsCriarVeiculoFrota({ data: input });
+    return;
+  }
+  throw new Error("Edição de frota ainda não disponível neste ambiente.");
+}
+
+export async function salvarVeiculoFrota(veiculo: VeiculoFrotaRow): Promise<void> {
+  if (MODO_VPS) {
+    await vpsSalvarVeiculoFrota({ data: veiculo });
+    return;
+  }
+  throw new Error("Edição de frota ainda não disponível neste ambiente.");
+}
+
+export async function removerVeiculoFrota(id: string): Promise<void> {
+  if (MODO_VPS) {
+    await vpsRemoverVeiculoFrota({ data: { id } });
+    return;
+  }
+  throw new Error("Edição de frota ainda não disponível neste ambiente.");
+}
+
+export type NovaFotoGaleriaInput = { foto: string; alt: string; ordem: number };
+
+export async function listarFrotaGaleriaAdmin(): Promise<FotoGaleriaRow[]> {
+  if (MODO_VPS) return vpsListFrotaGaleriaAdmin();
+  throw new Error("Edição de frota ainda não disponível neste ambiente.");
+}
+
+export async function criarFotoGaleria(input: NovaFotoGaleriaInput): Promise<void> {
+  if (MODO_VPS) {
+    await vpsCriarFotoGaleria({ data: input });
+    return;
+  }
+  throw new Error("Edição de frota ainda não disponível neste ambiente.");
+}
+
+export async function salvarFotoGaleria(foto: FotoGaleriaRow): Promise<void> {
+  if (MODO_VPS) {
+    await vpsSalvarFotoGaleria({ data: foto });
+    return;
+  }
+  throw new Error("Edição de frota ainda não disponível neste ambiente.");
+}
+
+export async function removerFotoGaleria(id: string): Promise<void> {
+  if (MODO_VPS) {
+    await vpsRemoverFotoGaleria({ data: { id } });
+    return;
+  }
+  throw new Error("Edição de frota ainda não disponível neste ambiente.");
 }
 
 // ------------------------------------------------------ usuários e acessos

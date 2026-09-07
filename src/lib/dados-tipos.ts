@@ -58,3 +58,26 @@ export type UsuarioAdmin = {
   isMotorista: boolean;
   agendamentos: number;
 };
+
+// Frota: carros mostrados em "Nossa frota" e na home, e a galeria de fotos
+// "na estrada" — hoje hardcoded (src/data/rotas.ts, src/routes/frota.tsx),
+// virando dado editável pelo admin.
+export type VeiculoFrotaRow = {
+  id: string;
+  nome: string;
+  modelo: string;
+  passageiros: string;
+  bagagem: string;
+  foto: string;
+  itens: string[];
+  ordem: number;
+  ativo: boolean;
+};
+
+export type FotoGaleriaRow = {
+  id: string;
+  foto: string;
+  alt: string;
+  ordem: number;
+  ativo: boolean;
+};

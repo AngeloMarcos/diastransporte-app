@@ -7,16 +7,21 @@ import { TrustBadges } from "@/components/site/TrustBadges";
 import { RotaCard } from "@/components/site/RotaCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { EMPRESA, fotos, veiculos, type Rota } from "@/data/rotas";
+import { EMPRESA, fotos, type Rota, type Veiculo } from "@/data/rotas";
 import { listRotas } from "@/lib/rotas.functions";
 import { listConteudo, type ConteudoRow } from "@/lib/conteudo.functions";
+import { listFrotaVeiculos } from "@/lib/frota.functions";
 import { mapearConteudo, texto } from "@/lib/conteudo";
 import { whatsappLink } from "@/lib/whatsapp";
 import { HomeSkeleton } from "@/components/site/Skeletons";
 import { ErroCarregamento } from "@/components/site/ErroCarregamento";
 
 export const Route = createFileRoute("/")({
-  loader: async () => ({ rotas: await listRotas(), conteudo: await listConteudo() }),
+  loader: async () => ({
+    rotas: await listRotas(),
+    conteudo: await listConteudo(),
+    veiculos: await listFrotaVeiculos(),
+  }),
 
   head: () => ({
     meta: [
@@ -77,9 +82,14 @@ const depoimentos = [
 ];
 
 function Home() {
-  const { rotas, conteudo: conteudoLista } = Route.useLoaderData() as {
+  const {
+    rotas,
+    conteudo: conteudoLista,
+    veiculos,
+  } = Route.useLoaderData() as {
     rotas: Rota[];
     conteudo: ConteudoRow[];
+    veiculos: Veiculo[];
   };
   const conteudo = mapearConteudo(conteudoLista);
   const navigate = useNavigate();

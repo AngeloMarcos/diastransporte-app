@@ -2,13 +2,17 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { Button } from "@/components/ui/button";
-import { veiculos, fotos } from "@/data/rotas";
 import { listConteudo } from "@/lib/conteudo.functions";
+import { listFrotaGaleria, listFrotaVeiculos } from "@/lib/frota.functions";
 import { mapearConteudo, texto } from "@/lib/conteudo";
 import { FrotaSkeleton, ListagemHeroSkeleton } from "@/components/site/Skeletons";
 
 export const Route = createFileRoute("/frota")({
-  loader: () => listConteudo(),
+  loader: async () => ({
+    conteudo: await listConteudo(),
+    veiculos: await listFrotaVeiculos(),
+    galeria: await listFrotaGaleria(),
+  }),
 
   head: () => ({
     meta: [
@@ -48,19 +52,11 @@ export const Route = createFileRoute("/frota")({
   ),
 });
 
-const galeria = [
-  { src: fotos.cronosPredio, alt: "Fiat Cronos grafite em frente a um hotel em São Luís" },
-  { src: fotos.cronosMar, alt: "Fiat Cronos estacionado na orla de São Luís" },
-  { src: fotos.tcrossCronos, alt: "VW T-Cross branco e Fiat Cronos preto lado a lado" },
-  { src: fotos.cronosTCross, alt: "Fiat Cronos e T-Cross em estacionamento" },
-  { src: fotos.fileira, alt: "Frota alinhada na estrada para os Lençóis Maranhenses" },
-  { src: fotos.frotaPorDoSol, alt: "Frota da Dias Transporte ao pôr do sol" },
-  { src: fotos.cronosChuva, alt: "Fiat Cronos em frente a pousada em Barreirinhas" },
-  { src: fotos.cronosNoite, alt: "Fiat Cronos em embarque noturno" },
-];
-
 function Frota() {
-  const conteudo = mapearConteudo(Route.useLoaderData());
+  const dados = Route.useLoaderData();
+  const conteudo = mapearConteudo(dados.conteudo);
+  const veiculos = dados.veiculos;
+  const galeria = dados.galeria;
 
   return (
     <div className="min-h-screen">
@@ -117,11 +113,11 @@ function Frota() {
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
           {galeria.map((g) => (
             <div
-              key={g.src}
+              key={g.foto}
               className="relative aspect-square w-full overflow-hidden rounded-lg border border-border bg-muted"
             >
               <img
-                src={g.src}
+                src={g.foto}
                 alt={g.alt}
                 loading="lazy"
                 decoding="async"

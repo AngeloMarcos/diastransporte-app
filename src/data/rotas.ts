@@ -242,7 +242,16 @@ export function precoFinal(
   return periodo === "noite" ? (rota.precoGrandeNoite ?? rota.precoGrande) : rota.precoGrande;
 }
 
-export const veiculos = [
+export type Veiculo = {
+  nome: string;
+  modelo: string;
+  passageiros: string;
+  bagagem: string;
+  foto: string;
+  itens: string[];
+};
+
+export const veiculos: Veiculo[] = [
   {
     nome: "Carro pequeno",
     modelo: "Fiat Cronos (ou similar)",
@@ -259,4 +268,19 @@ export const veiculos = [
     foto: fotos.tcrossCronos,
     itens: ["Ar-condicionado", "Porta-malas amplo", "Ideal para famílias e grupos"],
   },
+];
+
+export type FotoGaleria = { foto: string; alt: string };
+
+// Fallback de src/lib/frota.functions.ts::listFrotaGaleria enquanto
+// public.frota_galeria estiver vazia (nenhuma foto subida pelo admin ainda).
+export const galeriaFrota: FotoGaleria[] = [
+  { foto: fotos.cronosPredio, alt: "Fiat Cronos grafite em frente a um hotel em São Luís" },
+  { foto: fotos.cronosMar, alt: "Fiat Cronos estacionado na orla de São Luís" },
+  { foto: fotos.tcrossCronos, alt: "VW T-Cross branco e Fiat Cronos preto lado a lado" },
+  { foto: fotos.cronosTCross, alt: "Fiat Cronos e T-Cross em estacionamento" },
+  { foto: fotos.fileira, alt: "Frota alinhada na estrada para os Lençóis Maranhenses" },
+  { foto: fotos.frotaPorDoSol, alt: "Frota da Dias Transporte ao pôr do sol" },
+  { foto: fotos.cronosChuva, alt: "Fiat Cronos em frente a pousada em Barreirinhas" },
+  { foto: fotos.cronosNoite, alt: "Fiat Cronos em embarque noturno" },
 ];
