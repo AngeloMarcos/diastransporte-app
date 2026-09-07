@@ -129,9 +129,22 @@ export async function criarUsuario(dados: {
   return usuario;
 }
 
+// Sem isto, nada limitava tentativas de login — bcrypt (custo 12) atrasa
+// cada tentativa alguns milissegundos, mas isso não é controle de
+// segurança nenhum contra um atacante paciente ou distribuído.
+const MAX_TENTATIVAS_LOGIN = 5;
+const BLOQUEIO_MINUTOS = 15;
+
 export async function autenticar(email: string, senha: string): Promise<UsuarioServidor> {
-  const linhas = await sql()<(UsuarioServidor & { senha_hash: string })[]>`
-    SELECT id, email, nome, telefone, admin, motorista, senha_hash
+  const db = sql();
+  const linhas = await db<
+    (UsuarioServidor & {
+      senha_hash: string;
+      tentativas_falhas: number;
+      bloqueado_ate: Date | null;
+    })[]
+  >`
+    SELECT id, email, nome, telefone, admin, motorista, senha_hash, tentativas_falhas, bloqueado_ate
       FROM public.usuarios
      WHERE lower(email) = lower(${email.trim()})
      LIMIT 1
@@ -140,7 +153,29 @@ export async function autenticar(email: string, senha: string): Promise<UsuarioS
   // Mensagem única para e-mail inexistente e senha errada (não revela cadastro).
   const generico = "E-mail ou senha incorretos.";
   if (!linha) throw new Error(generico);
-  if (!(await conferirSenha(senha, linha.senha_hash))) throw new Error(generico);
-  const { senha_hash: _ignorado, ...usuario } = linha;
+
+  if (linha.bloqueado_ate && linha.bloqueado_ate.getTime() > Date.now()) {
+    throw new Error(
+      `Muitas tentativas erradas — tente de novo em ${String(BLOQUEIO_MINUTOS)} minutos.`,
+    );
+  }
+
+  if (!(await conferirSenha(senha, linha.senha_hash))) {
+    const tentativas = linha.tentativas_falhas + 1;
+    const bloquear = tentativas >= MAX_TENTATIVAS_LOGIN;
+    await db`
+      UPDATE public.usuarios
+         SET tentativas_falhas = ${bloquear ? 0 : tentativas},
+             bloqueado_ate = ${bloquear ? new Date(Date.now() + BLOQUEIO_MINUTOS * 60_000) : null}
+       WHERE id = ${linha.id}
+    `;
+    throw new Error(generico);
+  }
+
+  if (linha.tentativas_falhas > 0) {
+    await db`UPDATE public.usuarios SET tentativas_falhas = 0, bloqueado_ate = NULL WHERE id = ${linha.id}`;
+  }
+
+  const { senha_hash: _senhaHash, tentativas_falhas: _tf, bloqueado_ate: _ba, ...usuario } = linha;
   return usuario;
 }

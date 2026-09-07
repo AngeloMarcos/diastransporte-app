@@ -188,7 +188,14 @@ function AuthPage() {
         }
       }
     } catch (erro) {
-      toast.error(traduzirErroAuth(erro));
+      // Bug real, achado testando um cadastro duplicado: em MODO_VPS o erro
+      // já sai em português, escrito à mão (sessao.functions.ts/auth.server.ts
+      // — ex.: "Este e-mail já tem conta."). traduzirErroAuth só reconhece
+      // mensagens em inglês do Supabase Auth — passando um erro VPS por ela,
+      // nenhum padrão bate e ela sempre cai no fallback genérico "Não foi
+      // possível concluir.", escondendo a mensagem real (que já estava
+      // certa) de quem tentou criar a conta.
+      toast.error(MODO_VPS && erro instanceof Error ? erro.message : traduzirErroAuth(erro));
     } finally {
       setEnviando(false);
     }
