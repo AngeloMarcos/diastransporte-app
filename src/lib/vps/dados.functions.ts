@@ -38,6 +38,23 @@ export const vpsListRotasAdmin = createServerFn({ method: "GET" }).handler(
   },
 );
 
+// Sem sessão nenhuma — equivalente à policy "Rotas ativas públicas" do
+// Supabase (USING (ativo OR admin)), aqui só a metade pública mesmo, já que
+// quem quer ver as inativas usa vpsListRotasAdmin. Chamada por
+// rotas.functions.ts::listRotas quando MODO_VPS — sem isto, a home e o
+// /transfers nunca liam o Postgres da VPS de jeito nenhum (só caíam no
+// fallback estático), então editar uma rota no admin não tinha efeito
+// nenhum no site público. Bug real, achado revisando o front-end.
+export const vpsListRotasPublicas = createServerFn({ method: "GET" }).handler(
+  async (): Promise<RotaRow[]> => {
+    const { sql } = await import("./db.server");
+    const db = sql();
+    return db<RotaRow[]>`
+      SELECT ${db.unsafe(COLUNAS_ROTA)} FROM public.rotas WHERE ativo ORDER BY popularidade DESC
+    `.then((linhas) => [...linhas]);
+  },
+);
+
 const novaRota = z.object({
   slug: z.string().min(1).max(120),
   origem: z.string().min(1).max(120),
@@ -318,6 +335,21 @@ export const vpsRemoverAgendamento = createServerFn({ method: "POST" })
   });
 
 // -------------------------------------------------------------- conteúdo
+// Sem sessão — conteudo_site é 100% público no Supabase também (GRANT
+// SELECT ON conteudo_site TO anon, sem policy restritiva). Chamada por
+// conteudo.functions.ts::listConteudo quando MODO_VPS — mesmo bug de
+// vpsListRotasPublicas: sem isto, todo texto/imagem editado no admin não
+// aparecia em lugar nenhum do site público, só o texto padrão hardcoded.
+export const vpsListConteudoPublico = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ConteudoBloco[]> => {
+    const { sql } = await import("./db.server");
+    return sql()<ConteudoBloco[]>`
+      SELECT id, chave, secao, titulo, texto, imagem, ordem
+        FROM public.conteudo_site ORDER BY ordem ASC
+    `.then((linhas) => [...linhas]);
+  },
+);
+
 export const vpsListConteudoAdmin = createServerFn({ method: "GET" }).handler(
   async (): Promise<ConteudoBloco[]> => {
     const ctx = await contexto();
