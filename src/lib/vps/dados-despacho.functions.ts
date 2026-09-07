@@ -10,6 +10,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 
+import { transicaoValida, type PedidoStatus } from "@/lib/pedidos-transicoes";
+
 async function contexto() {
   const [{ lerCookieSessao, exigirUsuario, exigirAdmin, exigirMotorista }, { sql }] =
     await Promise.all([import("./auth.server"), import("./db.server")]);
@@ -202,6 +204,83 @@ export const vpsCriarPedido = createServerFn({ method: "POST" })
         await sql`
           INSERT INTO public.pedidos_notas_internas (pedido_id, observacoes_internas)
           VALUES (${pedido.id}, ${data.observacoes_internas.trim()})
+        `;
+      }
+      return pedido;
+    });
+  });
+
+// Só o lado admin por enquanto — o painel próprio do motorista (que também
+// usa transicaoValida, com role="motorista") é o car-fleet-co
+// "/motorista/*", ainda não portado (ver Etapa 9 do roteiro da fusão: fica
+// pra depois de resolver a colisão com o /motorista atual, baseado em
+// agendamentos.motorista_id).
+export const vpsTransicionarStatusPedido = createServerFn({ method: "POST" })
+  .inputValidator((data) =>
+    z.object({ pedidoId: z.number().int(), novoStatus: z.string() }).parse(data),
+  )
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    const usuario = await ctx.admin();
+
+    return ctx.sql.begin(async (sql) => {
+      const [pedido] = await sql<{ id: number; status: PedidoStatus }[]>`
+        SELECT id, status FROM public.pedidos WHERE id = ${data.pedidoId} FOR UPDATE
+      `;
+      if (!pedido) throw new Error(`Corrida ${String(data.pedidoId)} não encontrada.`);
+
+      if (!transicaoValida(pedido.status, data.novoStatus as PedidoStatus, "admin")) {
+        throw new Error(`Transição inválida: ${pedido.status} → ${data.novoStatus}`);
+      }
+
+      const [atualizado] = await sql`
+        UPDATE public.pedidos SET status = ${data.novoStatus} WHERE id = ${data.pedidoId} RETURNING *
+      `;
+      await sql`
+        INSERT INTO public.pedidos_historico (pedido_id, status_anterior, status_novo, alterado_por)
+        VALUES (${data.pedidoId}, ${pedido.status}, ${data.novoStatus}, ${usuario.id})
+      `;
+      return atualizado;
+    });
+  });
+
+export const vpsAtribuirMotoristaPedido = createServerFn({ method: "POST" })
+  .inputValidator((data) =>
+    z
+      .object({ pedidoId: z.number().int(), fornecedorId: z.string().uuid().nullable() })
+      .parse(data),
+  )
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    const admin = await ctx.admin();
+
+    return ctx.sql.begin(async (sql) => {
+      const [antes] = await sql<{ status: PedidoStatus }[]>`
+        SELECT status FROM public.pedidos WHERE id = ${data.pedidoId} FOR UPDATE
+      `;
+      if (!antes) throw new Error(`Corrida ${String(data.pedidoId)} não encontrada.`);
+
+      // Atribuir um motorista avança automaticamente o status pra
+      // "motorista_atribuido" quando ele ainda estava só liberado — mas não
+      // mexe no status se a corrida já foi além disso (ex.: trocar o
+      // motorista de uma corrida já aceita não deveria voltar o status).
+      const novoStatus: PedidoStatus =
+        data.fornecedorId &&
+        (
+          ["pendente_liberacao", "liberada_rede", "aguardando_aceite_rede"] as PedidoStatus[]
+        ).includes(antes.status)
+          ? "motorista_atribuido"
+          : antes.status;
+
+      const [pedido] = await sql`
+        UPDATE public.pedidos SET fornecedor_id = ${data.fornecedorId}, status = ${novoStatus}
+         WHERE id = ${data.pedidoId}
+         RETURNING *
+      `;
+      if (novoStatus !== antes.status) {
+        await sql`
+          INSERT INTO public.pedidos_historico (pedido_id, status_anterior, status_novo, alterado_por)
+          VALUES (${data.pedidoId}, ${antes.status}, ${novoStatus}, ${admin.id})
         `;
       }
       return pedido;

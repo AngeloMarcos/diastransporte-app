@@ -83,6 +83,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   atribuirMotorista,
+  atribuirMotoristaPedido,
   atualizarCanalVenda,
   atualizarCategoriaVeiculo,
   atualizarEmpresaCliente,
@@ -122,6 +123,7 @@ import {
   salvarFotoGaleria,
   salvarRota,
   salvarVeiculoFrota,
+  transicionarStatusPedido,
   verificarCodigosExistentes,
   type Fornecedor,
 } from "@/lib/dados";
@@ -140,7 +142,7 @@ import { contarStatus, statusOpcoes, STATUS_META } from "@/lib/status";
 import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
 import { ROTA_COLUMNS, type RotaRow } from "@/lib/rotasMap";
 import type { FotoGaleriaRow, VeiculoFrotaRow } from "@/lib/dados-tipos";
-import type { PedidoStatus } from "@/lib/pedidos-transicoes";
+import { transicoesPermitidas, type PedidoStatus } from "@/lib/pedidos-transicoes";
 import { PEDIDO_STATUS_META, PEDIDO_STATUS_OPTIONS, formatarDataHora } from "@/lib/pedidos-status";
 import {
   definirPapelAdmin,
@@ -1596,10 +1598,9 @@ function FotoGaleriaCard({ foto }: { foto: FotoGaleriaRow }) {
 }
 
 // ----------------------------------------------------------------- corridas
-// Despacho (portado do car-fleet-co, Etapa 6/7 do roteiro da fusão) — só
-// "ver quais corridas já existem" + "adicionar uma nova" por enquanto
-// (atribuir motorista, transição de status, importação em lote e voucher
-// ficam pra uma próxima leva, junto com o resto do painel de despacho).
+// Despacho (portado do car-fleet-co, Etapa 6/7 do roteiro da fusão) — falta
+// só o voucher em PDF (o resto: criar, importar em lote, transicionar
+// status e atribuir motorista já estão aqui).
 function AdminCorridas() {
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<PedidoStatus | "todos">("todos");
@@ -1608,6 +1609,14 @@ function AdminCorridas() {
     queryKey: ["admin-corridas"],
     queryFn: () => listarPedidosAdmin(),
   });
+  const { data: fornecedores } = useQuery({
+    queryKey: ["admin-fornecedores"],
+    queryFn: () => listarFornecedores(),
+  });
+  const fornecedoresAtivos = useMemo(
+    () => (fornecedores ?? []).filter((f) => f.ativo),
+    [fornecedores],
+  );
 
   const filtradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -1668,36 +1677,108 @@ function AdminCorridas() {
       ) : (
         <div className="space-y-3">
           {filtradas.map((p) => (
-            <article key={p.id} className="rounded-lg border border-border bg-card p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-display text-lg break-words">{p.passageiro_nome}</h2>
-                    <Badge
-                      variant="outline"
-                      className={PEDIDO_STATUS_META[p.status as PedidoStatus].badgeClass}
-                    >
-                      {PEDIDO_STATUS_META[p.status as PedidoStatus].label}
-                    </Badge>
-                    <Badge variant="outline">{p.direcao === "IN" ? "Chegada" : "Saída"}</Badge>
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {p.cidade_atendimento} · {formatarDataHora(p.data_hora_encontro as string)}
-                    {p.hotel ? ` · ${p.hotel as string}` : ""}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {(p.canal_nome as string | null) ?? "sem canal"}
-                    {p.empresa_nome ? ` · ${p.empresa_nome as string}` : ""}
-                    {" · "}
-                    {(p.fornecedor_nome as string | null) ?? "sem motorista atribuído"}
-                  </p>
-                </div>
-              </div>
-            </article>
+            <CorridaCard key={p.id} pedido={p} fornecedoresAtivos={fornecedoresAtivos} />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+type CorridaRow = Awaited<ReturnType<typeof listarPedidosAdmin>>[number];
+
+function CorridaCard({
+  pedido: p,
+  fornecedoresAtivos,
+}: {
+  pedido: CorridaRow;
+  fornecedoresAtivos: Fornecedor[];
+}) {
+  const queryClient = useQueryClient();
+  const statusAtual = p.status as PedidoStatus;
+  const opcoesStatus = useMemo(
+    () => [statusAtual, ...transicoesPermitidas(statusAtual, "admin")],
+    [statusAtual],
+  );
+
+  const mudarStatus = useMutation({
+    mutationFn: (novoStatus: PedidoStatus) => transicionarStatusPedido(p.id, novoStatus),
+    onSuccess: () => {
+      toast.success("Status atualizado.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-corridas"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao mudar status."),
+  });
+
+  const mudarMotorista = useMutation({
+    mutationFn: (fornecedorId: string | null) => atribuirMotoristaPedido(p.id, fornecedorId),
+    onSuccess: () => {
+      toast.success("Motorista atualizado.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-corridas"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atribuir motorista."),
+  });
+
+  return (
+    <article className="rounded-lg border border-border bg-card p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="font-display text-lg break-words">{p.passageiro_nome}</h2>
+            <Badge variant="outline">{p.direcao === "IN" ? "Chegada" : "Saída"}</Badge>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {p.cidade_atendimento} · {formatarDataHora(p.data_hora_encontro)}
+            {p.hotel ? ` · ${p.hotel}` : ""}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {p.canal_nome ?? "sem canal"}
+            {p.empresa_nome ? ` · ${p.empresa_nome}` : ""}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={statusAtual}
+            onValueChange={(v) => mudarStatus.mutate(v as PedidoStatus)}
+            disabled={mudarStatus.isPending}
+          >
+            <SelectTrigger
+              className={cn("h-9 w-[220px]", PEDIDO_STATUS_META[statusAtual].badgeClass)}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {opcoesStatus.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {PEDIDO_STATUS_META[s].label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
+        <UserCog className="size-4 shrink-0 text-muted-foreground" />
+        <Select
+          value={p.fornecedor_id ?? "none"}
+          onValueChange={(v) => mudarMotorista.mutate(v === "none" ? null : v)}
+          disabled={mudarMotorista.isPending}
+        >
+          <SelectTrigger className="h-9 w-full sm:w-[260px]">
+            <SelectValue placeholder="Sem motorista atribuído" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Sem motorista atribuído</SelectItem>
+            {fornecedoresAtivos.map((f) => (
+              <SelectItem key={f.id} value={f.id}>
+                {f.nome}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </article>
   );
 }
 

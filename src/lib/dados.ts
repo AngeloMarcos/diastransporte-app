@@ -54,6 +54,7 @@ import {
   vpsSalvarVeiculoFrota,
 } from "@/lib/vps/dados.functions";
 import {
+  vpsAtribuirMotoristaPedido,
   vpsAtualizarCanalVenda,
   vpsAtualizarCategoriaVeiculo,
   vpsAtualizarEmpresaCliente,
@@ -70,6 +71,7 @@ import {
   vpsListarPedidosAdmin,
   vpsPedidoDetalheAdmin,
   vpsRemoverMotorista,
+  vpsTransicionarStatusPedido,
   vpsVerificarCodigosExistentes,
   type PedidoImportRow,
 } from "@/lib/vps/dados-despacho.functions";
@@ -477,6 +479,18 @@ export type NovoPedidoInput = {
 
 export async function criarPedido(input: NovoPedidoInput) {
   if (MODO_VPS) return vpsCriarPedido({ data: input });
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+/** Transiciona o status de uma corrida (regra em pedidos-transicoes.ts, validada de novo no servidor). */
+export async function transicionarStatusPedido(pedidoId: number, novoStatus: string) {
+  if (MODO_VPS) return vpsTransicionarStatusPedido({ data: { pedidoId, novoStatus } });
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+/** Atribui (ou remove, com `fornecedorId: null`) o motorista de uma corrida. */
+export async function atribuirMotoristaPedido(pedidoId: number, fornecedorId: string | null) {
+  if (MODO_VPS) return vpsAtribuirMotoristaPedido({ data: { pedidoId, fornecedorId } });
   throw new Error("Despacho ainda não disponível neste ambiente.");
 }
 
