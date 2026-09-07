@@ -5,22 +5,28 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   BellRing,
+  Building2,
   CalendarCheck,
   Car,
   Check,
+  FileSpreadsheet,
   FileText,
   KeyRound,
   LayoutDashboard,
   Loader2,
   MessageCircle,
+  Pencil,
   Plus,
+  Radio,
   Route as RouteIcon,
   Save,
   Search,
   ShieldAlert,
+  Tag,
   Trash2,
   Truck,
   Upload,
+  UserCog,
   Users,
   Wallet,
 } from "lucide-react";
@@ -44,6 +50,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 
 import {
   Dialog,
@@ -65,26 +72,40 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import {
   atribuirMotorista,
+  atualizarCanalVenda,
+  atualizarCategoriaVeiculo,
+  atualizarEmpresaCliente,
   atualizarStatusAgendamento,
   criarBlocoConteudo,
   criarCanalVenda,
   criarCategoriaVeiculo,
   criarEmpresaCliente,
   criarFotoGaleria,
+  criarNovoMotorista,
   criarPedido,
   criarRota,
   criarVeiculoFrota,
   definirAdmin,
   definirMotorista,
   enviarImagem as uploadImagem,
+  importarPedidos,
   listarAgendamentos,
   listarCanaisVenda,
   listarCategoriasVeiculo,
   listarConteudoAdmin,
   listarEmpresasClientes,
+  listarFornecedores,
   listarFrotaGaleriaAdmin,
   listarFrotaVeiculosAdmin,
   listarPedidosAdmin,
@@ -93,6 +114,7 @@ import {
   redefinirSenha,
   removerAgendamento,
   removerBlocoConteudo,
+  removerCadastroMotorista,
   removerFotoGaleria,
   removerRota,
   removerVeiculoFrota,
@@ -100,7 +122,10 @@ import {
   salvarFotoGaleria,
   salvarRota,
   salvarVeiculoFrota,
+  verificarCodigosExistentes,
+  type Fornecedor,
 } from "@/lib/dados";
+import type { PedidoImportRow } from "@/lib/vps/dados-despacho.functions";
 import { useAuth } from "@/hooks/useAuth";
 import { MODO_VPS } from "@/lib/vps/config";
 import { cn } from "@/lib/utils";
@@ -187,6 +212,10 @@ const abas = [
   // Despacho (portado do car-fleet-co, Etapa 6/7 do roteiro da fusão) —
   // mesmo motivo de "frota" acima: VPS-only, aba escondida fora de MODO_VPS.
   { id: "corridas", label: "Corridas", icon: Car, soVps: true },
+  { id: "fornecedores", label: "Motoristas", icon: UserCog, soVps: true },
+  { id: "empresas", label: "Empresas", icon: Building2, soVps: true },
+  { id: "canais", label: "Canais", icon: Radio, soVps: true },
+  { id: "categorias", label: "Categorias", icon: Tag, soVps: true },
   { id: "conteudo", label: "Conteúdo do site", icon: FileText },
   { id: "usuarios", label: "Usuários e acessos", icon: Users },
 ] as const;
@@ -322,6 +351,26 @@ function AdminPage() {
           {MODO_VPS && (
             <TabsContent value="corridas" className="mt-6">
               <AdminCorridas />
+            </TabsContent>
+          )}
+          {MODO_VPS && (
+            <TabsContent value="fornecedores" className="mt-6">
+              <AdminFornecedores />
+            </TabsContent>
+          )}
+          {MODO_VPS && (
+            <TabsContent value="empresas" className="mt-6">
+              <AdminEmpresas />
+            </TabsContent>
+          )}
+          {MODO_VPS && (
+            <TabsContent value="canais" className="mt-6">
+              <AdminCanais />
+            </TabsContent>
+          )}
+          {MODO_VPS && (
+            <TabsContent value="categorias" className="mt-6">
+              <AdminCategorias />
             </TabsContent>
           )}
           <TabsContent value="conteudo" className="mt-6">
@@ -1605,7 +1654,10 @@ function AdminCorridas() {
           <p className="text-xs text-muted-foreground">
             {filtradas.length} de {data?.length ?? 0} corridas
           </p>
-          <NovaCorridaDialog />
+          <div className="flex gap-2">
+            <ImportarPedidosDialog />
+            <NovaCorridaDialog />
+          </div>
         </div>
       </div>
 
@@ -1968,6 +2020,1025 @@ function NovoCanalDialog() {
               <Plus className="size-4" />
             )}
             Criar canal
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// -------------------------------------------------------------- categorias
+type CategoriaVeiculo = {
+  id: string;
+  nome: string;
+  capacidade_passageiros: number | null;
+  ativo: boolean;
+};
+
+function AtivoBadge({ ativo }: { ativo: boolean }) {
+  return (
+    <Badge
+      variant="outline"
+      className={
+        ativo
+          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+          : "border-border text-muted-foreground"
+      }
+    >
+      {ativo ? "Ativo" : "Inativo"}
+    </Badge>
+  );
+}
+
+function AdminCategorias() {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-categorias-veiculo"],
+    queryFn: () => listarCategoriasVeiculo(),
+  });
+
+  const alternarAtivo = useMutation({
+    mutationFn: (c: CategoriaVeiculo) => atualizarCategoriaVeiculo(c.id, { ativo: !c.ativo }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin-categorias-veiculo"] }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atualizar categoria."),
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-fluid-lg">Categorias de veículo</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Sedan, SUV, van — usadas para casar cada corrida com o tipo de carro certo.
+          </p>
+        </div>
+        <CategoriaDialog />
+      </div>
+
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Carregando…</p>
+      ) : !data?.length ? (
+        <p className="text-sm text-muted-foreground">Nenhuma categoria cadastrada ainda.</p>
+      ) : (
+        <div className="space-y-3">
+          {data.map((c) => (
+            <div
+              key={c.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4"
+            >
+              <div>
+                <p className="font-medium">{c.nome}</p>
+                <p className="text-xs text-muted-foreground">
+                  {c.capacidade_passageiros
+                    ? `${String(c.capacidade_passageiros)} passageiros`
+                    : "Capacidade não informada"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <AtivoBadge ativo={c.ativo} />
+                <CategoriaDialog categoria={c} />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={alternarAtivo.isPending}
+                  onClick={() => alternarAtivo.mutate(c)}
+                >
+                  {c.ativo ? "Inativar" : "Ativar"}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CategoriaDialog({ categoria }: { categoria?: CategoriaVeiculo }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [nome, setNome] = useState(categoria?.nome ?? "");
+  const [capacidade, setCapacidade] = useState<number | null>(
+    categoria?.capacidade_passageiros ?? null,
+  );
+
+  const salvar = useMutation({
+    mutationFn: async () => {
+      if (!nome.trim()) throw new Error("Informe o nome da categoria.");
+      if (categoria) {
+        await atualizarCategoriaVeiculo(categoria.id, {
+          nome: nome.trim(),
+          capacidade_passageiros: capacidade,
+        });
+      } else {
+        await criarCategoriaVeiculo(nome.trim(), capacidade);
+      }
+    },
+    onSuccess: () => {
+      toast.success(categoria ? "Categoria atualizada." : "Categoria criada.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-categorias-veiculo"] });
+      setOpen(false);
+      if (!categoria) {
+        setNome("");
+        setCapacidade(null);
+      }
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao salvar categoria."),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        {categoria ? (
+          <Button type="button" size="icon" variant="ghost" className="size-9">
+            <Pencil className="size-4" />
+          </Button>
+        ) : (
+          <Button size="sm" className="h-11">
+            <Plus className="size-4" /> Nova categoria
+          </Button>
+        )}
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{categoria ? "Editar categoria" : "Nova categoria de veículo"}</DialogTitle>
+        </DialogHeader>
+        <Campo label="Nome" value={nome} onChange={setNome} />
+        <CampoNumero
+          label="Capacidade de passageiros"
+          value={capacidade}
+          onChange={setCapacidade}
+        />
+        <DialogFooter>
+          <Button
+            className="h-11 w-full"
+            onClick={() => salvar.mutate()}
+            disabled={salvar.isPending}
+          >
+            {salvar.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : categoria ? (
+              <Save className="size-4" />
+            ) : (
+              <Plus className="size-4" />
+            )}
+            {categoria ? "Salvar" : "Criar categoria"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// --------------------------------------------------------------- empresas
+type EmpresaCliente = {
+  id: string;
+  nome: string;
+  documento: string | null;
+  email_contato: string | null;
+  telefone_contato: string | null;
+  ativo: boolean;
+};
+
+function AdminEmpresas() {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-empresas-clientes"],
+    queryFn: () => listarEmpresasClientes(),
+  });
+
+  const alternarAtivo = useMutation({
+    mutationFn: (e: EmpresaCliente) => atualizarEmpresaCliente(e.id, { ativo: !e.ativo }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin-empresas-clientes"] }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atualizar empresa."),
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-fluid-lg">Empresas clientes</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Agências, OTAs e clientes B2B.</p>
+        </div>
+        <EmpresaDialog />
+      </div>
+
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Carregando…</p>
+      ) : !data?.length ? (
+        <p className="text-sm text-muted-foreground">Nenhuma empresa cadastrada ainda.</p>
+      ) : (
+        <div className="space-y-3">
+          {data.map((e) => (
+            <div
+              key={e.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4"
+            >
+              <div className="min-w-0">
+                <p className="font-medium">{e.nome}</p>
+                <p className="text-xs text-muted-foreground">
+                  {[e.documento, e.email_contato, e.telefone_contato].filter(Boolean).join(" · ") ||
+                    "Sem dados de contato"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <AtivoBadge ativo={e.ativo} />
+                <EmpresaDialog empresa={e} />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={alternarAtivo.isPending}
+                  onClick={() => alternarAtivo.mutate(e)}
+                >
+                  {e.ativo ? "Inativar" : "Ativar"}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const EMPRESA_VAZIA = { nome: "", documento: "", email_contato: "", telefone_contato: "" };
+
+function EmpresaDialog({ empresa }: { empresa?: EmpresaCliente }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(
+    empresa
+      ? {
+          nome: empresa.nome,
+          documento: empresa.documento ?? "",
+          email_contato: empresa.email_contato ?? "",
+          telefone_contato: empresa.telefone_contato ?? "",
+        }
+      : EMPRESA_VAZIA,
+  );
+
+  const salvar = useMutation({
+    mutationFn: async () => {
+      if (!form.nome.trim()) throw new Error("Informe o nome da empresa.");
+      const campos = {
+        nome: form.nome.trim(),
+        documento: form.documento.trim() || null,
+        email_contato: form.email_contato.trim() || null,
+        telefone_contato: form.telefone_contato.trim() || null,
+      };
+      if (empresa) await atualizarEmpresaCliente(empresa.id, campos);
+      else await criarEmpresaCliente(campos);
+    },
+    onSuccess: () => {
+      toast.success(empresa ? "Empresa atualizada." : "Empresa criada.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-empresas-clientes"] });
+      setOpen(false);
+      if (!empresa) setForm(EMPRESA_VAZIA);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao salvar empresa."),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        {empresa ? (
+          <Button type="button" size="icon" variant="ghost" className="size-9">
+            <Pencil className="size-4" />
+          </Button>
+        ) : (
+          <Button size="sm" className="h-11">
+            <Plus className="size-4" /> Nova empresa
+          </Button>
+        )}
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{empresa ? "Editar empresa" : "Nova empresa cliente"}</DialogTitle>
+        </DialogHeader>
+        <Campo
+          label="Nome"
+          value={form.nome}
+          onChange={(v) => setForm((f) => ({ ...f, nome: v }))}
+        />
+        <Campo
+          label="Documento (CNPJ)"
+          value={form.documento}
+          onChange={(v) => setForm((f) => ({ ...f, documento: v }))}
+        />
+        <Campo
+          label="E-mail de contato"
+          value={form.email_contato}
+          onChange={(v) => setForm((f) => ({ ...f, email_contato: v }))}
+        />
+        <Campo
+          label="Telefone"
+          value={form.telefone_contato}
+          onChange={(v) => setForm((f) => ({ ...f, telefone_contato: v }))}
+        />
+        <DialogFooter>
+          <Button
+            className="h-11 w-full"
+            onClick={() => salvar.mutate()}
+            disabled={salvar.isPending}
+          >
+            {salvar.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : empresa ? (
+              <Save className="size-4" />
+            ) : (
+              <Plus className="size-4" />
+            )}
+            {empresa ? "Salvar" : "Criar empresa"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ----------------------------------------------------------------- canais
+type CanalVenda = { id: string; nome: string; tipo: string; ativo: boolean };
+
+const CANAL_TIPO_LABEL: Record<string, string> = {
+  ota: "OTA",
+  site_proprio: "Site próprio",
+  parceiro: "Parceiro",
+  outro: "Outro",
+};
+
+function AdminCanais() {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-canais-venda"],
+    queryFn: () => listarCanaisVenda(),
+  });
+
+  const alternarAtivo = useMutation({
+    mutationFn: (c: CanalVenda) => atualizarCanalVenda(c.id, { ativo: !c.ativo }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin-canais-venda"] }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atualizar canal."),
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-fluid-lg">Canais de venda</h2>
+          <p className="mt-1 text-sm text-muted-foreground">OTAs, agências e canais diretos.</p>
+        </div>
+        <CanalDialog />
+      </div>
+
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Carregando…</p>
+      ) : !data?.length ? (
+        <p className="text-sm text-muted-foreground">Nenhum canal cadastrado ainda.</p>
+      ) : (
+        <div className="space-y-3">
+          {data.map((c) => (
+            <div
+              key={c.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4"
+            >
+              <div>
+                <p className="font-medium">{c.nome}</p>
+                <p className="text-xs text-muted-foreground">
+                  {CANAL_TIPO_LABEL[c.tipo] ?? c.tipo}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <AtivoBadge ativo={c.ativo} />
+                <CanalDialog canal={c} />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={alternarAtivo.isPending}
+                  onClick={() => alternarAtivo.mutate(c)}
+                >
+                  {c.ativo ? "Inativar" : "Ativar"}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CanalDialog({ canal }: { canal?: CanalVenda }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [nome, setNome] = useState(canal?.nome ?? "");
+  const [tipo, setTipo] = useState<"ota" | "site_proprio" | "parceiro" | "outro">(
+    (canal?.tipo as "ota" | "site_proprio" | "parceiro" | "outro" | undefined) ?? "outro",
+  );
+
+  const salvar = useMutation({
+    mutationFn: async () => {
+      if (!nome.trim()) throw new Error("Informe o nome do canal.");
+      if (canal) await atualizarCanalVenda(canal.id, { nome: nome.trim(), tipo });
+      else await criarCanalVenda(nome.trim(), tipo);
+    },
+    onSuccess: () => {
+      toast.success(canal ? "Canal atualizado." : "Canal criado.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-canais-venda"] });
+      setOpen(false);
+      if (!canal) {
+        setNome("");
+        setTipo("outro");
+      }
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao salvar canal."),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        {canal ? (
+          <Button type="button" size="icon" variant="ghost" className="size-9">
+            <Pencil className="size-4" />
+          </Button>
+        ) : (
+          <Button size="sm" className="h-11">
+            <Plus className="size-4" /> Novo canal
+          </Button>
+        )}
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{canal ? "Editar canal" : "Novo canal de venda"}</DialogTitle>
+        </DialogHeader>
+        <Campo label="Nome" value={nome} onChange={setNome} />
+        <div>
+          <Label>Tipo</Label>
+          <Select value={tipo} onValueChange={(v) => setTipo(v as typeof tipo)}>
+            <SelectTrigger className="mt-2 h-11">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="site_proprio">Site próprio</SelectItem>
+              <SelectItem value="ota">OTA</SelectItem>
+              <SelectItem value="parceiro">Parceiro</SelectItem>
+              <SelectItem value="outro">Outro</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <DialogFooter>
+          <Button
+            className="h-11 w-full"
+            onClick={() => salvar.mutate()}
+            disabled={salvar.isPending}
+          >
+            {salvar.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : canal ? (
+              <Save className="size-4" />
+            ) : (
+              <Plus className="size-4" />
+            )}
+            {canal ? "Salvar" : "Criar canal"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------- fornecedores
+function AdminFornecedores() {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-fornecedores"],
+    queryFn: () => listarFornecedores(),
+  });
+  const [removendo, setRemovendo] = useState<string | null>(null);
+
+  async function remover(f: Fornecedor) {
+    if (
+      !window.confirm(
+        `Remover o acesso do motorista "${f.nome}"? Se ele já tiver corridas no histórico, o cadastro só é desativado e o login revogado — nada é apagado.`,
+      )
+    ) {
+      return;
+    }
+    setRemovendo(f.id);
+    try {
+      const res = await removerCadastroMotorista(f.id);
+      toast.success(
+        res.removido ? "Motorista removido." : "Motorista desativado e login revogado.",
+      );
+      void queryClient.invalidateQueries({ queryKey: ["admin-fornecedores"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao remover motorista.");
+    } finally {
+      setRemovendo(null);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-fluid-lg">Motoristas</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Fornecedores parceiros com acesso ao painel para ver as corridas atribuídas a eles.
+          </p>
+        </div>
+        <NovoMotoristaDialog />
+      </div>
+
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Carregando…</p>
+      ) : !data?.length ? (
+        <p className="text-sm text-muted-foreground">Nenhum motorista cadastrado ainda.</p>
+      ) : (
+        <div className="space-y-3">
+          {data.map((f) => (
+            <div
+              key={f.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4"
+            >
+              <div className="min-w-0">
+                <p className="font-medium">{f.nome}</p>
+                <p className="text-xs text-muted-foreground">
+                  {[f.email, f.telefone, f.cidade_atuacao].filter(Boolean).join(" · ")}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <AtivoBadge ativo={f.ativo} />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={removendo === f.id}
+                  onClick={() => void remover(f)}
+                >
+                  {removendo === f.id ? <Loader2 className="size-4 animate-spin" /> : "Remover"}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const MOTORISTA_VAZIO = {
+  nome: "",
+  email: "",
+  senha: "",
+  telefone: "",
+  cidade_atuacao: "",
+  regiao_atuacao: "",
+  categoria_veiculo_id: "" as string,
+  observacoes_internas: "",
+};
+
+function NovoMotoristaDialog() {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(MOTORISTA_VAZIO);
+
+  const { data: categorias } = useQuery({
+    queryKey: ["admin-categorias-veiculo"],
+    queryFn: () => listarCategoriasVeiculo(),
+    enabled: open,
+  });
+
+  const criar = useMutation({
+    mutationFn: async () => {
+      if (!form.nome.trim() || !form.email.trim() || !form.cidade_atuacao.trim()) {
+        throw new Error("Preencha nome, e-mail e cidade de atuação.");
+      }
+      if (form.senha.length < 8) throw new Error("A senha precisa ter no mínimo 8 caracteres.");
+      await criarNovoMotorista({
+        ...form,
+        categoria_veiculo_id: form.categoria_veiculo_id || null,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Motorista criado.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-fornecedores"] });
+      setOpen(false);
+      setForm(MOTORISTA_VAZIO);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao criar motorista."),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" className="h-11">
+          <Plus className="size-4" /> Novo motorista
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[85dvh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Novo motorista</DialogTitle>
+          <DialogDescription>
+            Cria o login e o cadastro de fornecedor juntos — ele passa a poder entrar no painel para
+            ver as corridas atribuídas a ele.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Campo
+            label="Nome"
+            value={form.nome}
+            onChange={(v) => setForm((f) => ({ ...f, nome: v }))}
+          />
+          <Campo
+            label="E-mail (login)"
+            value={form.email}
+            onChange={(v) => setForm((f) => ({ ...f, email: v }))}
+          />
+          <Campo
+            label="Senha (mín. 8 caracteres)"
+            value={form.senha}
+            onChange={(v) => setForm((f) => ({ ...f, senha: v }))}
+          />
+          <Campo
+            label="Telefone"
+            value={form.telefone}
+            onChange={(v) => setForm((f) => ({ ...f, telefone: v }))}
+          />
+          <Campo
+            label="Cidade de atuação"
+            value={form.cidade_atuacao}
+            onChange={(v) => setForm((f) => ({ ...f, cidade_atuacao: v }))}
+          />
+          <Campo
+            label="Região (opcional)"
+            value={form.regiao_atuacao}
+            onChange={(v) => setForm((f) => ({ ...f, regiao_atuacao: v }))}
+          />
+          <div>
+            <Label>Categoria de veículo</Label>
+            <Select
+              value={form.categoria_veiculo_id}
+              onValueChange={(v) => setForm((f) => ({ ...f, categoria_veiculo_id: v }))}
+            >
+              <SelectTrigger className="mt-2 h-11">
+                <SelectValue placeholder="Sem categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                {(categorias ?? []).map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div>
+          <Label>Observações internas</Label>
+          <Textarea
+            className="mt-2"
+            rows={2}
+            value={form.observacoes_internas}
+            onChange={(e) => setForm((f) => ({ ...f, observacoes_internas: e.target.value }))}
+          />
+        </div>
+        <DialogFooter>
+          <Button className="h-11 w-full" onClick={() => criar.mutate()} disabled={criar.isPending}>
+            {criar.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Plus className="size-4" />
+            )}
+            Criar motorista
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// --------------------------------------------------- importação de planilha
+// "Onde subimos as planilhas": lê um .xlsx/.csv no formato de exportação da
+// plataforma "Sou Motorista" no navegador (nada sobe pro servidor sem
+// validação antes) e manda só as linhas conferidas/selecionadas pro backend.
+// Ver src/lib/vps/dados-despacho.functions.ts::vpsImportarPedidos.
+type LinhaImportada = {
+  ok: boolean;
+  erro?: string | undefined;
+  duplicada?: boolean;
+  linha: PedidoImportRow;
+  dataDisplay: string;
+  canalNome?: string | undefined;
+  categoriaNome?: string | undefined;
+};
+
+function stripPrefixo(v: unknown, prefixo: RegExp): string | null {
+  if (!v) return null;
+  const s = String(v)
+    .trim()
+    .replace(prefixo, "")
+    .replace(/\.\s*$/, "")
+    .trim();
+  return s || null;
+}
+
+function primeiraCidade(v: unknown): string {
+  if (!v) return "";
+  const s = String(v).trim();
+  const primeira = s.split(">")[0]?.trim() ?? "";
+  const partes = primeira.split(" - ");
+  return (partes.length > 1 ? partes.slice(1).join(" - ") : primeira).trim();
+}
+
+function parseDataBr(v: unknown): { iso: string; display: string } | null {
+  if (v == null || v === "") return null;
+  if (v instanceof Date && !Number.isNaN(v.getTime())) {
+    return { iso: v.toISOString(), display: v.toLocaleString("pt-BR") };
+  }
+  const s = String(v).trim();
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2}))?/.exec(s);
+  if (!m) return null;
+  const [, dd, mm, yyyy, hh = "00", mi = "00"] = m;
+  const d = new Date(`${yyyy}-${mm}-${dd}T${hh}:${mi}:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  return { iso: d.toISOString(), display: d.toLocaleString("pt-BR") };
+}
+
+function combinarLookup(
+  nome: string | undefined,
+  lista: { id: string; nome: string }[],
+): string | null {
+  if (!nome) return null;
+  const n = nome.trim().toLowerCase();
+  return lista.find((x) => x.nome.trim().toLowerCase() === n)?.id ?? null;
+}
+
+function ImportarPedidosDialog() {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [linhas, setLinhas] = useState<LinhaImportada[]>([]);
+  const [selecionadas, setSelecionadas] = useState<boolean[]>([]);
+  const [lendo, setLendo] = useState(false);
+  const [importando, setImportando] = useState(false);
+  const [nomeArquivo, setNomeArquivo] = useState("");
+
+  const { data: canais } = useQuery({
+    queryKey: ["admin-canais-venda"],
+    queryFn: () => listarCanaisVenda(),
+    enabled: open,
+  });
+  const { data: categorias } = useQuery({
+    queryKey: ["admin-categorias-veiculo"],
+    queryFn: () => listarCategoriasVeiculo(),
+    enabled: open,
+  });
+
+  const validas = linhas.filter((l, i) => l.ok && !l.duplicada && selecionadas[i]).length;
+
+  async function lerArquivo(file: File) {
+    setLendo(true);
+    setNomeArquivo(file.name);
+    try {
+      const XLSX = await import("xlsx");
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { cellDates: true });
+      const primeiraAba = wb.SheetNames[0];
+      if (!primeiraAba) throw new Error("Planilha vazia.");
+      const ws = wb.Sheets[primeiraAba];
+      if (!ws) throw new Error("Planilha vazia.");
+      const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
+
+      const codigos = raw
+        .map((r) => String(r["Nº Pedido"] ?? "").trim())
+        .filter((c) => c.length > 0);
+      const existentes = new Set(codigos.length ? await verificarCodigosExistentes(codigos) : []);
+
+      const parseadas: LinhaImportada[] = raw.map((r) => {
+        const tipo = String(r["Tipo Serviço"] ?? "").toUpperCase();
+        const direcao: "IN" | "OUT" = tipo.includes("OUT") ? "OUT" : "IN";
+        const isIn = direcao === "IN";
+        const hotel = isIn
+          ? (stripPrefixo(r["Hotel In"], /^\s*in:\s*/i) ??
+            stripPrefixo(r["Hotel Out"], /^\s*out:\s*/i))
+          : (stripPrefixo(r["Hotel Out"], /^\s*out:\s*/i) ??
+            stripPrefixo(r["Hotel In"], /^\s*in:\s*/i));
+        const voo = isIn
+          ? (stripPrefixo(r["Voo In"], /^\s*in:\s*/i) ?? stripPrefixo(r["Voo Out"], /^\s*out:\s*/i))
+          : (stripPrefixo(r["Voo Out"], /^\s*out:\s*/i) ??
+            stripPrefixo(r["Voo In"], /^\s*in:\s*/i));
+        const dataFonte = isIn
+          ? r["Data Voo In"] || r["Data Atividade"]
+          : r["Data Voo Out"] || r["Data Atividade"];
+        const dt = parseDataBr(dataFonte) ?? parseDataBr(r["Data Atividade"]);
+        const passageiro = String(r["Pax"] ?? "").trim();
+        const cidade = primeiraCidade(r["Cidade"] ?? (isIn ? r["Destino"] : r["Origem"]));
+        const codigo = String(r["Nº Pedido"] ?? "").trim() || null;
+        const canalNome = String(r["Empresa"] ?? "").trim() || undefined;
+        const categoriaNome = String(r["Categoria"] ?? "").trim() || undefined;
+
+        const erros: string[] = [];
+        if (!passageiro) erros.push("Pax vazio");
+        if (!cidade) erros.push("Cidade vazia");
+        if (!dt) erros.push("Data inválida");
+
+        const linha: PedidoImportRow = {
+          codigo_reserva_canal: codigo,
+          codigo_fornecedor_reserva: String(r["Pedido Fornecedor"] ?? "").trim() || null,
+          passageiro_nome: passageiro,
+          passageiro_telefone: String(r["Telefone Pax"] ?? "").trim() || null,
+          cidade_atendimento: cidade,
+          hotel,
+          data_hora_encontro: dt?.iso ?? "",
+          direcao,
+          numero_voo: voo,
+          ponto_partida: String(r["Origem"] ?? "").trim() || null,
+          ponto_chegada: String(r["Destino"] ?? "").trim() || null,
+          empresa_cliente_id: null,
+          canal_venda_id: combinarLookup(canalNome, canais ?? []),
+          categoria_veiculo_id: combinarLookup(categoriaNome, categorias ?? []),
+        };
+
+        return {
+          ok: erros.length === 0,
+          erro: erros.join(", ") || undefined,
+          duplicada: codigo ? existentes.has(codigo) : false,
+          linha,
+          dataDisplay: dt?.display ?? "—",
+          canalNome,
+          categoriaNome,
+        };
+      });
+
+      setLinhas(parseadas);
+      setSelecionadas(parseadas.map((l) => l.ok && !l.duplicada));
+    } catch (e) {
+      toast.error("Falha ao ler planilha: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setLendo(false);
+    }
+  }
+
+  async function importar() {
+    const payload = linhas
+      .map((l, i) => ({ l, i }))
+      .filter(({ l, i }) => l.ok && !l.duplicada && selecionadas[i])
+      .map(({ l }) => l.linha);
+    if (payload.length === 0) {
+      toast.error("Nenhuma linha válida selecionada.");
+      return;
+    }
+    setImportando(true);
+    try {
+      const res = await importarPedidos(payload);
+      toast.success(
+        `${String(res.inseridos)} corridas importadas` +
+          (res.ignorados > 0 ? ` · ${String(res.ignorados)} ignoradas (duplicadas)` : "") +
+          ".",
+      );
+      void queryClient.invalidateQueries({ queryKey: ["admin-corridas"] });
+      setOpen(false);
+      setLinhas([]);
+      setSelecionadas([]);
+      setNomeArquivo("");
+    } catch (e) {
+      toast.error("Falha na importação: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setImportando(false);
+    }
+  }
+
+  const totalOk = linhas.filter((l) => l.ok && !l.duplicada).length;
+  const totalDup = linhas.filter((l) => l.duplicada).length;
+  const totalErr = linhas.filter((l) => !l.ok).length;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="secondary" className="h-11">
+          <FileSpreadsheet className="size-4" /> Importar planilha
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[85dvh] max-w-6xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Importar corridas de uma planilha</DialogTitle>
+          <DialogDescription>
+            Aceita .xlsx/.csv no formato de exportação da plataforma "Sou Motorista". Nada é enviado
+            até você conferir e clicar em importar.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+            <div>
+              <Label className="text-xs">Arquivo .xlsx, .xls ou .csv</Label>
+              <Input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="mt-1"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void lerArquivo(f);
+                }}
+              />
+              {nomeArquivo && <p className="mt-1 text-xs text-muted-foreground">{nomeArquivo}</p>}
+            </div>
+            {linhas.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {totalOk} válidas · {totalDup} duplicadas · {totalErr} com erro
+              </p>
+            )}
+          </div>
+
+          {lendo && <p className="text-sm text-muted-foreground">Lendo planilha…</p>}
+
+          {linhas.length > 0 && (
+            <div className="max-h-[50vh] overflow-auto rounded border border-border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-8"></TableHead>
+                    <TableHead>Código</TableHead>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Dir.</TableHead>
+                    <TableHead>Passageiro</TableHead>
+                    <TableHead>Cidade</TableHead>
+                    <TableHead>Canal</TableHead>
+                    <TableHead>Categoria</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {linhas.map((l, i) => (
+                    <TableRow key={i} className={!l.ok || l.duplicada ? "opacity-60" : ""}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selecionadas[i] ?? false}
+                          disabled={!l.ok || l.duplicada}
+                          onCheckedChange={(v) => {
+                            const s = [...selecionadas];
+                            s[i] = v === true;
+                            setSelecionadas(s);
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {l.linha.codigo_reserva_canal ?? "—"}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">{l.dataDisplay}</TableCell>
+                      <TableCell className="text-xs">{l.linha.direcao}</TableCell>
+                      <TableCell className="max-w-40 truncate text-xs">
+                        {l.linha.passageiro_nome || "—"}
+                      </TableCell>
+                      <TableCell className="text-xs">{l.linha.cidade_atendimento || "—"}</TableCell>
+                      <TableCell className="text-xs">
+                        {l.linha.canal_venda_id ? (
+                          l.canalNome
+                        ) : l.canalNome ? (
+                          <span className="text-amber-400">{l.canalNome} (não vinculado)</span>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {l.linha.categoria_veiculo_id ? (
+                          l.categoriaNome
+                        ) : l.categoriaNome ? (
+                          <span className="text-amber-400">{l.categoriaNome} (não vinculada)</span>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {!l.ok ? (
+                          <span className="text-red-400">{l.erro}</span>
+                        ) : l.duplicada ? (
+                          <span className="text-amber-400">Já existe</span>
+                        ) : (
+                          <span className="text-emerald-400">OK</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            Canais/categorias que não batem com um cadastro existente ficam em branco na corrida —
+            você vincula depois. Empresa cliente não é preenchida automaticamente.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button
+            onClick={() => void importar()}
+            disabled={importando || validas === 0}
+            className="h-11"
+          >
+            {importando ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="size-4" />
+            )}
+            Importar {validas} corridas
           </Button>
         </DialogFooter>
       </DialogContent>

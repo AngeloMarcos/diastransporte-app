@@ -54,15 +54,24 @@ import {
   vpsSalvarVeiculoFrota,
 } from "@/lib/vps/dados.functions";
 import {
+  vpsAtualizarCanalVenda,
+  vpsAtualizarCategoriaVeiculo,
+  vpsAtualizarEmpresaCliente,
   vpsCriarCanalVenda,
   vpsCriarCategoriaVeiculo,
   vpsCriarEmpresaCliente,
+  vpsCriarMotorista,
   vpsCriarPedido,
+  vpsImportarPedidos,
   vpsListarCanaisVenda,
   vpsListarCategoriasVeiculo,
   vpsListarEmpresasClientes,
+  vpsListarFornecedores,
   vpsListarPedidosAdmin,
   vpsPedidoDetalheAdmin,
+  vpsRemoverMotorista,
+  vpsVerificarCodigosExistentes,
+  type PedidoImportRow,
 } from "@/lib/vps/dados-despacho.functions";
 
 function erro(e: { message: string } | null): void {
@@ -487,6 +496,22 @@ export async function criarCategoriaVeiculo(
   throw new Error("Despacho ainda não disponível neste ambiente.");
 }
 
+export async function atualizarCategoriaVeiculo(
+  id: string,
+  campos: { nome: string; capacidade_passageiros: number | null } | { ativo: boolean },
+): Promise<void> {
+  if (MODO_VPS) {
+    await vpsAtualizarCategoriaVeiculo({
+      data:
+        "ativo" in campos
+          ? { id, ativo: campos.ativo, nome: "", capacidade_passageiros: null }
+          : { id, ...campos },
+    });
+    return;
+  }
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
 export async function listarEmpresasClientes() {
   if (MODO_VPS) return vpsListarEmpresasClientes();
   throw new Error("Despacho ainda não disponível neste ambiente.");
@@ -505,6 +530,36 @@ export async function criarEmpresaCliente(campos: {
   throw new Error("Despacho ainda não disponível neste ambiente.");
 }
 
+export async function atualizarEmpresaCliente(
+  id: string,
+  campos:
+    | {
+        nome: string;
+        documento: string | null;
+        email_contato: string | null;
+        telefone_contato: string | null;
+      }
+    | { ativo: boolean },
+): Promise<void> {
+  if (MODO_VPS) {
+    await vpsAtualizarEmpresaCliente({
+      data:
+        "ativo" in campos
+          ? {
+              id,
+              ativo: campos.ativo,
+              nome: "",
+              documento: null,
+              email_contato: null,
+              telefone_contato: null,
+            }
+          : { id, ...campos },
+    });
+    return;
+  }
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
 export async function listarCanaisVenda() {
   if (MODO_VPS) return vpsListarCanaisVenda();
   throw new Error("Despacho ainda não disponível neste ambiente.");
@@ -518,6 +573,77 @@ export async function criarCanalVenda(
     await vpsCriarCanalVenda({ data: { nome, tipo } });
     return;
   }
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+export async function atualizarCanalVenda(
+  id: string,
+  campos:
+    { nome: string; tipo: "ota" | "site_proprio" | "parceiro" | "outro" } | { ativo: boolean },
+): Promise<void> {
+  if (MODO_VPS) {
+    await vpsAtualizarCanalVenda({
+      data:
+        "ativo" in campos
+          ? { id, ativo: campos.ativo, nome: "", tipo: "outro" }
+          : { id, ...campos },
+    });
+    return;
+  }
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+// -------------------------------------------------------- fornecedores (motoristas)
+export type Fornecedor = {
+  id: string;
+  nome: string;
+  email: string | null;
+  telefone: string | null;
+  cidade_atuacao: string;
+  categoria_veiculo_id: string | null;
+  ativo: boolean;
+};
+
+export async function listarFornecedores(): Promise<Fornecedor[]> {
+  if (MODO_VPS) return vpsListarFornecedores();
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+export type NovoMotoristaInput = {
+  nome: string;
+  email: string;
+  senha: string;
+  telefone: string;
+  cidade_atuacao: string;
+  regiao_atuacao: string;
+  categoria_veiculo_id?: string | null;
+  observacoes_internas: string;
+};
+
+/** Cria login + cadastro de fornecedor numa transação só (ver vpsCriarMotorista). */
+export async function criarNovoMotorista(input: NovoMotoristaInput) {
+  if (MODO_VPS) return vpsCriarMotorista({ data: input });
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+/** Remove o motorista, ou — se ele já tiver corridas no histórico — só desativa e revoga o login. */
+export async function removerCadastroMotorista(
+  fornecedorId: string,
+): Promise<{ desativado: boolean; removido: boolean }> {
+  if (MODO_VPS) return vpsRemoverMotorista({ data: { fornecedorId } });
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+// ---------------------------------------------------- importação de pedidos
+export async function verificarCodigosExistentes(codigos: string[]): Promise<string[]> {
+  if (MODO_VPS) return vpsVerificarCodigosExistentes({ data: { codigos } });
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+export async function importarPedidos(
+  rows: PedidoImportRow[],
+): Promise<{ inseridos: number; ignorados: number }> {
+  if (MODO_VPS) return vpsImportarPedidos({ data: { rows } });
   throw new Error("Despacho ainda não disponível neste ambiente.");
 }
 

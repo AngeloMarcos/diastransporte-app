@@ -243,6 +243,25 @@ export const vpsCriarCategoriaVeiculo = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const vpsAtualizarCategoriaVeiculo = createServerFn({ method: "POST" })
+  .inputValidator((data) =>
+    categoriaSchema.extend({ id: z.string().uuid(), ativo: z.boolean().optional() }).parse(data),
+  )
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+    if (data.ativo !== undefined) {
+      await ctx.sql`UPDATE public.categorias_veiculo SET ativo = ${data.ativo} WHERE id = ${data.id}`;
+    } else {
+      await ctx.sql`
+        UPDATE public.categorias_veiculo
+           SET nome = ${data.nome}, capacidade_passageiros = ${data.capacidade_passageiros}
+         WHERE id = ${data.id}
+      `;
+    }
+    return { ok: true };
+  });
+
 type EmpresaRow = {
   id: string;
   nome: string;
@@ -282,6 +301,26 @@ export const vpsCriarEmpresaCliente = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const vpsAtualizarEmpresaCliente = createServerFn({ method: "POST" })
+  .inputValidator((data) =>
+    empresaSchema.extend({ id: z.string().uuid(), ativo: z.boolean().optional() }).parse(data),
+  )
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+    if (data.ativo !== undefined) {
+      await ctx.sql`UPDATE public.empresas_clientes SET ativo = ${data.ativo} WHERE id = ${data.id}`;
+    } else {
+      await ctx.sql`
+        UPDATE public.empresas_clientes
+           SET nome = ${data.nome}, documento = ${data.documento},
+               email_contato = ${data.email_contato}, telefone_contato = ${data.telefone_contato}
+         WHERE id = ${data.id}
+      `;
+    }
+    return { ok: true };
+  });
+
 type CanalRow = { id: string; nome: string; tipo: string; ativo: boolean };
 
 export const vpsListarCanaisVenda = createServerFn({ method: "GET" }).handler(
@@ -306,4 +345,224 @@ export const vpsCriarCanalVenda = createServerFn({ method: "POST" })
     await ctx.admin();
     await ctx.sql`INSERT INTO public.canais_venda (nome, tipo) VALUES (${data.nome}, ${data.tipo})`;
     return { ok: true };
+  });
+
+export const vpsAtualizarCanalVenda = createServerFn({ method: "POST" })
+  .inputValidator((data) =>
+    canalSchema.extend({ id: z.string().uuid(), ativo: z.boolean().optional() }).parse(data),
+  )
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+    if (data.ativo !== undefined) {
+      await ctx.sql`UPDATE public.canais_venda SET ativo = ${data.ativo} WHERE id = ${data.id}`;
+    } else {
+      await ctx.sql`UPDATE public.canais_venda SET nome = ${data.nome}, tipo = ${data.tipo} WHERE id = ${data.id}`;
+    }
+    return { ok: true };
+  });
+
+// -------------------------------------------------------------- fornecedores
+// (motoristas) — user_id referencia a MESMA tabela usuarios que a vitrine
+// pública usa (cliente e motorista/admin compartilham o cadastro). Ver
+// comentário em db/migrations/0007_carfleet_core.sql.
+type FornecedorRow = {
+  id: string;
+  nome: string;
+  email: string | null;
+  telefone: string | null;
+  cidade_atuacao: string;
+  categoria_veiculo_id: string | null;
+  ativo: boolean;
+};
+
+export const vpsListarFornecedores = createServerFn({ method: "GET" }).handler(
+  async (): Promise<FornecedorRow[]> => {
+    const ctx = await contexto();
+    await ctx.admin();
+    return ctx.sql<FornecedorRow[]>`
+      SELECT id, nome, email, telefone, cidade_atuacao, categoria_veiculo_id, ativo
+        FROM public.fornecedores ORDER BY nome
+    `.then((linhas) => [...linhas]);
+  },
+);
+
+const criarMotoristaSchema = z.object({
+  nome: z.string().min(2),
+  email: z.string().email(),
+  senha: z.string().min(8),
+  telefone: z.string().optional().default(""),
+  cidade_atuacao: z.string().min(1),
+  regiao_atuacao: z.string().optional().default(""),
+  categoria_veiculo_id: z.string().uuid().nullable().optional(),
+  observacoes_internas: z.string().optional().default(""),
+});
+
+export const vpsCriarMotorista = createServerFn({ method: "POST" })
+  .inputValidator((data) => criarMotoristaSchema.parse(data))
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+    const { hashSenha } = await import("./auth.server");
+    const senhaHash = await hashSenha(data.senha);
+
+    return ctx.sql.begin(async (sql) => {
+      const existentes = await sql<{ id: string }[]>`
+        SELECT id FROM public.usuarios WHERE lower(email) = lower(${data.email})
+      `;
+      if (existentes.length) throw new Error("Já existe uma conta com este e-mail.");
+
+      const [usuario] = await sql<{ id: string }[]>`
+        INSERT INTO public.usuarios (email, senha_hash, nome, telefone, motorista)
+        VALUES (${data.email.trim()}, ${senhaHash}, ${data.nome}, ${data.telefone || ""}, true)
+        RETURNING id
+      `;
+      if (!usuario) throw new Error("Não foi possível criar o usuário.");
+
+      const [fornecedor] = await sql<FornecedorRow[]>`
+        INSERT INTO public.fornecedores
+          (user_id, nome, email, telefone, cidade_atuacao, regiao_atuacao, categoria_veiculo_id)
+        VALUES (${usuario.id}, ${data.nome}, ${data.email}, ${data.telefone || null},
+                ${data.cidade_atuacao}, ${data.regiao_atuacao || null}, ${data.categoria_veiculo_id ?? null})
+        RETURNING id, nome, email, telefone, cidade_atuacao, categoria_veiculo_id, ativo
+      `;
+      if (!fornecedor) throw new Error("Não foi possível criar o cadastro de motorista.");
+
+      if (data.observacoes_internas.trim()) {
+        await sql`
+          INSERT INTO public.fornecedores_notas_internas (fornecedor_id, observacoes_internas)
+          VALUES (${fornecedor.id}, ${data.observacoes_internas.trim()})
+        `;
+      }
+
+      return { userId: usuario.id, fornecedor };
+    });
+  });
+
+export const vpsRemoverMotorista = createServerFn({ method: "POST" })
+  .inputValidator((data) => z.object({ fornecedorId: z.string().uuid() }).parse(data))
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+
+    return ctx.sql.begin(async (sql) => {
+      const [fornecedor] = await sql<{ id: string; user_id: string | null }[]>`
+        SELECT id, user_id FROM public.fornecedores WHERE id = ${data.fornecedorId}
+      `;
+      if (!fornecedor) throw new Error("Motorista não encontrado.");
+
+      const [total] = await sql<{ total: string }[]>`
+        SELECT count(*)::text AS total FROM public.pedidos WHERE fornecedor_id = ${fornecedor.id}
+      `;
+
+      if (Number(total?.total ?? "0") > 0) {
+        // Preserva histórico: apenas desativa e revoga o acesso, em vez de apagar.
+        await sql`
+          UPDATE public.fornecedores SET ativo = false, user_id = NULL WHERE id = ${fornecedor.id}
+        `;
+        if (fornecedor.user_id)
+          await sql`DELETE FROM public.usuarios WHERE id = ${fornecedor.user_id}`;
+        return { desativado: true, removido: false };
+      }
+
+      await sql`DELETE FROM public.fornecedores WHERE id = ${fornecedor.id}`;
+      if (fornecedor.user_id)
+        await sql`DELETE FROM public.usuarios WHERE id = ${fornecedor.user_id}`;
+      return { desativado: false, removido: true };
+    });
+  });
+
+// -------------------------------------------------- importação por planilha
+// "Onde subimos as planilhas": bulk-import de pedidos vindos de exportações
+// de OTA/plataforma (ex.: "Sou Motorista") — ver componente
+// src/components/import-pedidos-dialog.tsx, que faz o parse do .xlsx/.csv no
+// navegador e manda aqui só as linhas já validadas/mapeadas.
+const pedidoImportRowSchema = z.object({
+  codigo_reserva_canal: z.string().trim().max(80).nullable().default(null),
+  codigo_fornecedor_reserva: z.string().trim().max(80).nullable().default(null),
+  passageiro_nome: z.string().trim().min(2).max(200),
+  passageiro_telefone: z.string().trim().max(120).nullable().default(null),
+  cidade_atendimento: z.string().trim().min(2).max(120),
+  hotel: z.string().trim().max(200).nullable().default(null),
+  data_hora_encontro: z.string(),
+  direcao: z.enum(["IN", "OUT"]),
+  numero_voo: z.string().trim().max(30).nullable().default(null),
+  ponto_partida: z.string().trim().max(300).nullable().default(null),
+  ponto_chegada: z.string().trim().max(300).nullable().default(null),
+  canal_venda_id: z.string().uuid().nullable().default(null),
+  categoria_veiculo_id: z.string().uuid().nullable().default(null),
+  empresa_cliente_id: z.string().uuid().nullable().default(null),
+});
+const pedidosImportSchema = z.object({
+  rows: z.array(pedidoImportRowSchema).min(1).max(2000),
+});
+export type PedidoImportRow = z.infer<typeof pedidoImportRowSchema>;
+
+export const vpsVerificarCodigosExistentes = createServerFn({ method: "GET" })
+  .inputValidator((data) => z.object({ codigos: z.array(z.string()).max(2000) }).parse(data))
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+    if (!data.codigos.length) return [];
+    const linhas = await ctx.sql<{ codigo_reserva_canal: string }[]>`
+      SELECT codigo_reserva_canal FROM public.pedidos
+       WHERE codigo_reserva_canal IN ${ctx.sql(data.codigos)}
+    `;
+    return linhas.map((l) => l.codigo_reserva_canal);
+  });
+
+export const vpsImportarPedidos = createServerFn({ method: "POST" })
+  .inputValidator((data) => pedidosImportSchema.parse(data))
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+
+    const codigos = data.rows
+      .map((r) => r.codigo_reserva_canal)
+      .filter((c): c is string => Boolean(c && c.length > 0));
+
+    const existentes = new Set<string>();
+    for (let i = 0; i < codigos.length; i += 200) {
+      const chunk = codigos.slice(i, i + 200);
+      const linhas = await ctx.sql<{ codigo_reserva_canal: string }[]>`
+        SELECT codigo_reserva_canal FROM public.pedidos WHERE codigo_reserva_canal IN ${ctx.sql(chunk)}
+      `;
+      for (const l of linhas) existentes.add(l.codigo_reserva_canal);
+    }
+
+    const vistos = new Set<string>();
+    const aInserir = data.rows.filter((r) => {
+      const c = r.codigo_reserva_canal;
+      if (!c) return true;
+      if (existentes.has(c) || vistos.has(c)) return false;
+      vistos.add(c);
+      return true;
+    });
+    const ignorados = data.rows.length - aInserir.length;
+
+    let inseridos = 0;
+    await ctx.sql.begin(async (sql) => {
+      for (const r of aInserir) {
+        const [pedido] = await sql<{ id: number }[]>`
+          INSERT INTO public.pedidos
+            (codigo_reserva_canal, codigo_fornecedor_reserva, passageiro_nome, passageiro_telefone,
+             cidade_atendimento, hotel, data_hora_encontro, direcao, numero_voo, ponto_partida,
+             ponto_chegada, canal_venda_id, categoria_veiculo_id, empresa_cliente_id)
+          VALUES (${r.codigo_reserva_canal}, ${r.codigo_fornecedor_reserva}, ${r.passageiro_nome},
+                  ${r.passageiro_telefone}, ${r.cidade_atendimento}, ${r.hotel}, ${r.data_hora_encontro},
+                  ${r.direcao}, ${r.numero_voo}, ${r.ponto_partida}, ${r.ponto_chegada},
+                  ${r.canal_venda_id}, ${r.categoria_veiculo_id}, ${r.empresa_cliente_id})
+          RETURNING id
+        `;
+        if (pedido) {
+          await sql`
+            INSERT INTO public.pedidos_historico (pedido_id, status_anterior, status_novo)
+            VALUES (${pedido.id}, NULL, 'pendente_liberacao')
+          `;
+          inseridos += 1;
+        }
+      }
+    });
+
+    return { inseridos, ignorados };
   });
