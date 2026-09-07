@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   BellRing,
@@ -1627,7 +1627,20 @@ function AdminCorridas() {
     });
   }, [data, busca, filtroStatus]);
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando corridas…</p>;
+  const filtrosAtivos = busca.trim() !== "" || filtroStatus !== "todos";
+  function limparFiltros() {
+    setBusca("");
+    setFiltroStatus("todos");
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-11 w-full sm:max-w-md" />
+        <ListaCarregando />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -1671,9 +1684,24 @@ function AdminCorridas() {
       </div>
 
       {!data?.length ? (
-        <p className="text-sm text-muted-foreground">Nenhuma corrida cadastrada ainda.</p>
+        <ListaVazia
+          icon={Car}
+          titulo="Nenhuma corrida cadastrada ainda"
+          descricao='Crie a primeira com "Nova corrida" ou traga várias de uma vez com "Importar planilha".'
+        />
       ) : !filtradas.length ? (
-        <p className="text-sm text-muted-foreground">Nenhuma corrida encontrada.</p>
+        <ListaVazia
+          icon={Search}
+          titulo="Nenhuma corrida encontrada"
+          descricao="Tente outro termo de busca ou outro status."
+          acao={
+            filtrosAtivos && (
+              <Button size="sm" variant="outline" onClick={limparFiltros}>
+                Limpar filtros
+              </Button>
+            )
+          }
+        />
       ) : (
         <div className="space-y-3">
           {filtradas.map((p) => (
@@ -1758,12 +1786,12 @@ function CorridaCard({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
         <UserCog className="size-4 shrink-0 text-muted-foreground" />
         <Select
           value={p.fornecedor_id ?? "none"}
           onValueChange={(v) => mudarMotorista.mutate(v === "none" ? null : v)}
-          disabled={mudarMotorista.isPending}
+          disabled={mudarMotorista.isPending || fornecedoresAtivos.length === 0}
         >
           <SelectTrigger className="h-9 w-full sm:w-[260px]">
             <SelectValue placeholder="Sem motorista atribuído" />
@@ -1777,6 +1805,12 @@ function CorridaCard({
             ))}
           </SelectContent>
         </Select>
+        {fornecedoresAtivos.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            Nenhum motorista ativo — cadastre um na aba{" "}
+            <span className="font-medium text-foreground">Motoristas</span>.
+          </p>
+        )}
       </div>
     </article>
   );
@@ -2131,6 +2165,42 @@ function AtivoBadge({ ativo }: { ativo: boolean }) {
   );
 }
 
+/** Placeholder de carregamento pras listas do despacho — no lugar de um "Carregando…" mudo. */
+function ListaCarregando({ linhas = 3 }: { linhas?: number }) {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: linhas }).map((_, i) => (
+        <div key={i} className="rounded-lg border border-border bg-card p-4">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="mt-2 h-3 w-64" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Estado vazio das listas do despacho — tanto "nada cadastrado" quanto "nada bate com o filtro". */
+function ListaVazia({
+  icon: Icon,
+  titulo,
+  descricao,
+  acao,
+}: {
+  icon: LucideIcon;
+  titulo: string;
+  descricao?: string;
+  acao?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border p-10 text-center">
+      <Icon className="size-6 text-muted-foreground" />
+      <p className="text-sm font-medium">{titulo}</p>
+      {descricao && <p className="max-w-sm text-xs text-muted-foreground">{descricao}</p>}
+      {acao}
+    </div>
+  );
+}
+
 function AdminCategorias() {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
@@ -2150,16 +2220,22 @@ function AdminCategorias() {
         <div>
           <h2 className="font-display text-fluid-lg">Categorias de veículo</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Sedan, SUV, van — usadas para casar cada corrida com o tipo de carro certo.
+            {isLoading
+              ? "Sedan, SUV, van — usadas para casar cada corrida com o tipo de carro certo."
+              : `${String(data?.length ?? 0)} cadastrada(s) — sedan, SUV, van, usadas para casar cada corrida com o tipo de carro certo.`}
           </p>
         </div>
         <CategoriaDialog />
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando…</p>
+        <ListaCarregando />
       ) : !data?.length ? (
-        <p className="text-sm text-muted-foreground">Nenhuma categoria cadastrada ainda.</p>
+        <ListaVazia
+          icon={Tag}
+          titulo="Nenhuma categoria cadastrada ainda"
+          descricao="Cadastre as categorias de veículo pra poder casar cada corrida com o carro certo."
+        />
       ) : (
         <div className="space-y-3">
           {data.map((c) => (
@@ -2299,15 +2375,23 @@ function AdminEmpresas() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-fluid-lg">Empresas clientes</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Agências, OTAs e clientes B2B.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isLoading
+              ? "Agências, OTAs e clientes B2B."
+              : `${String(data?.length ?? 0)} cadastrada(s) — agências, OTAs e clientes B2B.`}
+          </p>
         </div>
         <EmpresaDialog />
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando…</p>
+        <ListaCarregando />
       ) : !data?.length ? (
-        <p className="text-sm text-muted-foreground">Nenhuma empresa cadastrada ainda.</p>
+        <ListaVazia
+          icon={Building2}
+          titulo="Nenhuma empresa cadastrada ainda"
+          descricao="Cadastre agências, OTAs ou clientes B2B pra vincular às corridas deles."
+        />
       ) : (
         <div className="space-y-3">
           {data.map((e) => (
@@ -2465,15 +2549,23 @@ function AdminCanais() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-fluid-lg">Canais de venda</h2>
-          <p className="mt-1 text-sm text-muted-foreground">OTAs, agências e canais diretos.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isLoading
+              ? "OTAs, agências e canais diretos."
+              : `${String(data?.length ?? 0)} cadastrado(s) — OTAs, agências e canais diretos.`}
+          </p>
         </div>
         <CanalDialog />
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando…</p>
+        <ListaCarregando />
       ) : !data?.length ? (
-        <p className="text-sm text-muted-foreground">Nenhum canal cadastrado ainda.</p>
+        <ListaVazia
+          icon={Radio}
+          titulo="Nenhum canal cadastrado ainda"
+          descricao="Cadastre os canais de venda pra saber de onde cada corrida veio."
+        />
       ) : (
         <div className="space-y-3">
           {data.map((c) => (
@@ -2623,16 +2715,22 @@ function AdminFornecedores() {
         <div>
           <h2 className="font-display text-fluid-lg">Motoristas</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Fornecedores parceiros com acesso ao painel para ver as corridas atribuídas a eles.
+            {isLoading
+              ? "Fornecedores parceiros com acesso ao painel para ver as corridas atribuídas a eles."
+              : `${String(data?.length ?? 0)} cadastrado(s) — fornecedores parceiros com acesso ao painel para ver as corridas atribuídas a eles.`}
           </p>
         </div>
         <NovoMotoristaDialog />
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando…</p>
+        <ListaCarregando />
       ) : !data?.length ? (
-        <p className="text-sm text-muted-foreground">Nenhum motorista cadastrado ainda.</p>
+        <ListaVazia
+          icon={UserCog}
+          titulo="Nenhum motorista cadastrado ainda"
+          descricao="Cadastre o primeiro motorista para poder atribuí-lo a uma corrida."
+        />
       ) : (
         <div className="space-y-3">
           {data.map((f) => (
@@ -2650,11 +2748,17 @@ function AdminFornecedores() {
                 <AtivoBadge ativo={f.ativo} />
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="icon"
+                  className="size-9 shrink-0 text-destructive"
+                  title={`Remover ${f.nome}`}
                   disabled={removendo === f.id}
                   onClick={() => void remover(f)}
                 >
-                  {removendo === f.id ? <Loader2 className="size-4 animate-spin" /> : "Remover"}
+                  {removendo === f.id ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="size-4" />
+                  )}
                 </Button>
               </div>
             </div>
