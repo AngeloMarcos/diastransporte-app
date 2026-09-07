@@ -6,7 +6,11 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", ".output", ".vinxi"] },
+  // vendor/car-fleet-co: staging area da fusão (roteiro em
+  // C:\Users\angel\.claude\plans\linear-rolling-marble.md) — código do
+  // car-fleet-co sendo consumido/portado aos poucos pras Etapas 3/6/7/9.
+  // Sai da lista assim que a pasta esvaziar de vez.
+  { ignores: ["dist", ".output", ".vinxi", "vendor/car-fleet-co/**"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
