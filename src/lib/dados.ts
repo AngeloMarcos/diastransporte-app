@@ -53,6 +53,17 @@ import {
   vpsSalvarRota,
   vpsSalvarVeiculoFrota,
 } from "@/lib/vps/dados.functions";
+import {
+  vpsCriarCanalVenda,
+  vpsCriarCategoriaVeiculo,
+  vpsCriarEmpresaCliente,
+  vpsCriarPedido,
+  vpsListarCanaisVenda,
+  vpsListarCategoriasVeiculo,
+  vpsListarEmpresasClientes,
+  vpsListarPedidosAdmin,
+  vpsPedidoDetalheAdmin,
+} from "@/lib/vps/dados-despacho.functions";
 
 function erro(e: { message: string } | null): void {
   if (e) throw new Error(e.message);
@@ -408,6 +419,106 @@ export async function removerFotoGaleria(id: string): Promise<void> {
     return;
   }
   throw new Error("Edição de frota ainda não disponível neste ambiente.");
+}
+
+// -------------------------------------------------------------- despacho
+// Portado do car-fleet-co (Etapa 6 do roteiro da fusão). Domínio inteiro
+// VPS-only por enquanto — mesmo motivo de frota acima: essas tabelas não
+// existem no lado Supabase, então não há ramo Supabase pra escrever aqui.
+export type FiltroPedidosAdmin = {
+  codigo?: string;
+  canal?: string;
+  status?: string;
+  empresa?: string;
+  fornecedor?: string;
+  direcao?: "IN" | "OUT";
+  passageiro?: string;
+  cidade?: string;
+  tipoData?: "atividade" | "emissao" | "alteracao";
+  de?: string;
+  ate?: string;
+};
+
+export async function listarPedidosAdmin(filtro: FiltroPedidosAdmin = {}) {
+  if (MODO_VPS) return vpsListarPedidosAdmin({ data: filtro });
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+export async function pedidoDetalheAdmin(id: number) {
+  if (MODO_VPS) return vpsPedidoDetalheAdmin({ data: { id } });
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+export type NovoPedidoInput = {
+  codigo_reserva_canal: string | null;
+  empresa_cliente_id: string | null;
+  canal_venda_id: string | null;
+  cidade_atendimento: string;
+  hotel: string | null;
+  data_hora_encontro: string;
+  direcao: "IN" | "OUT";
+  passageiro_nome: string;
+  passageiro_telefone: string | null;
+  ponto_partida: string | null;
+  ponto_chegada: string | null;
+  numero_voo: string | null;
+  categoria_veiculo_id: string | null;
+  observacoes_internas?: string;
+};
+
+export async function criarPedido(input: NovoPedidoInput) {
+  if (MODO_VPS) return vpsCriarPedido({ data: input });
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+export async function listarCategoriasVeiculo() {
+  if (MODO_VPS) return vpsListarCategoriasVeiculo();
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+export async function criarCategoriaVeiculo(
+  nome: string,
+  capacidade_passageiros: number | null,
+): Promise<void> {
+  if (MODO_VPS) {
+    await vpsCriarCategoriaVeiculo({ data: { nome, capacidade_passageiros } });
+    return;
+  }
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+export async function listarEmpresasClientes() {
+  if (MODO_VPS) return vpsListarEmpresasClientes();
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+export async function criarEmpresaCliente(campos: {
+  nome: string;
+  documento: string | null;
+  email_contato: string | null;
+  telefone_contato: string | null;
+}): Promise<void> {
+  if (MODO_VPS) {
+    await vpsCriarEmpresaCliente({ data: campos });
+    return;
+  }
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+export async function listarCanaisVenda() {
+  if (MODO_VPS) return vpsListarCanaisVenda();
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+export async function criarCanalVenda(
+  nome: string,
+  tipo: "ota" | "site_proprio" | "parceiro" | "outro",
+): Promise<void> {
+  if (MODO_VPS) {
+    await vpsCriarCanalVenda({ data: { nome, tipo } });
+    return;
+  }
+  throw new Error("Despacho ainda não disponível neste ambiente.");
 }
 
 // ------------------------------------------------------ usuários e acessos

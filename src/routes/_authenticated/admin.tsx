@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   BellRing,
   CalendarCheck,
+  Car,
   Check,
   FileText,
   KeyRound,
@@ -69,16 +70,24 @@ import {
   atribuirMotorista,
   atualizarStatusAgendamento,
   criarBlocoConteudo,
+  criarCanalVenda,
+  criarCategoriaVeiculo,
+  criarEmpresaCliente,
   criarFotoGaleria,
+  criarPedido,
   criarRota,
   criarVeiculoFrota,
   definirAdmin,
   definirMotorista,
   enviarImagem as uploadImagem,
   listarAgendamentos,
+  listarCanaisVenda,
+  listarCategoriasVeiculo,
   listarConteudoAdmin,
+  listarEmpresasClientes,
   listarFrotaGaleriaAdmin,
   listarFrotaVeiculosAdmin,
+  listarPedidosAdmin,
   listarRotasAdmin,
   listarUsuarios,
   redefinirSenha,
@@ -106,6 +115,8 @@ import { contarStatus, statusOpcoes, STATUS_META } from "@/lib/status";
 import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
 import { ROTA_COLUMNS, type RotaRow } from "@/lib/rotasMap";
 import type { FotoGaleriaRow, VeiculoFrotaRow } from "@/lib/dados-tipos";
+import type { PedidoStatus } from "@/lib/pedidos-transicoes";
+import { PEDIDO_STATUS_META, PEDIDO_STATUS_OPTIONS, formatarDataHora } from "@/lib/pedidos-status";
 import {
   definirPapelAdmin,
   listUsuarios,
@@ -173,6 +184,9 @@ const abas = [
   // nem aparece, em vez de aparecer e dar erro ao tentar carregar.
   { id: "frota", label: "Frota", icon: Truck, soVps: true },
   { id: "agendamentos", label: "Agendamentos", icon: CalendarCheck },
+  // Despacho (portado do car-fleet-co, Etapa 6/7 do roteiro da fusão) —
+  // mesmo motivo de "frota" acima: VPS-only, aba escondida fora de MODO_VPS.
+  { id: "corridas", label: "Corridas", icon: Car, soVps: true },
   { id: "conteudo", label: "Conteúdo do site", icon: FileText },
   { id: "usuarios", label: "Usuários e acessos", icon: Users },
 ] as const;
@@ -305,6 +319,11 @@ function AdminPage() {
           <TabsContent value="agendamentos" className="mt-6">
             <AdminAgendamentos />
           </TabsContent>
+          {MODO_VPS && (
+            <TabsContent value="corridas" className="mt-6">
+              <AdminCorridas />
+            </TabsContent>
+          )}
           <TabsContent value="conteudo" className="mt-6">
             <AdminConteudo />
           </TabsContent>
@@ -1524,6 +1543,435 @@ function FotoGaleriaCard({ foto }: { foto: FotoGaleriaRow }) {
         </button>
       </div>
     </div>
+  );
+}
+
+// ----------------------------------------------------------------- corridas
+// Despacho (portado do car-fleet-co, Etapa 6/7 do roteiro da fusão) — só
+// "ver quais corridas já existem" + "adicionar uma nova" por enquanto
+// (atribuir motorista, transição de status, importação em lote e voucher
+// ficam pra uma próxima leva, junto com o resto do painel de despacho).
+function AdminCorridas() {
+  const [busca, setBusca] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState<PedidoStatus | "todos">("todos");
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-corridas"],
+    queryFn: () => listarPedidosAdmin(),
+  });
+
+  const filtradas = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return (data ?? []).filter((p) => {
+      if (filtroStatus !== "todos" && p.status !== filtroStatus) return false;
+      if (!termo) return true;
+      return `${p.passageiro_nome} ${p.cidade_atendimento}`.toLowerCase().includes(termo);
+    });
+  }, [data, busca, filtroStatus]);
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando corridas…</p>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-1 flex-col gap-3 sm:flex-row">
+          <div className="relative sm:max-w-xs sm:flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-11 pl-8"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar por passageiro ou cidade"
+            />
+          </div>
+          <Select
+            value={filtroStatus}
+            onValueChange={(v) => setFiltroStatus(v as PedidoStatus | "todos")}
+          >
+            <SelectTrigger className="h-11 sm:w-[220px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os status</SelectItem>
+              {PEDIDO_STATUS_OPTIONS.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {PEDIDO_STATUS_META[s].label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">
+            {filtradas.length} de {data?.length ?? 0} corridas
+          </p>
+          <NovaCorridaDialog />
+        </div>
+      </div>
+
+      {!data?.length ? (
+        <p className="text-sm text-muted-foreground">Nenhuma corrida cadastrada ainda.</p>
+      ) : !filtradas.length ? (
+        <p className="text-sm text-muted-foreground">Nenhuma corrida encontrada.</p>
+      ) : (
+        <div className="space-y-3">
+          {filtradas.map((p) => (
+            <article key={p.id} className="rounded-lg border border-border bg-card p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="font-display text-lg break-words">{p.passageiro_nome}</h2>
+                    <Badge
+                      variant="outline"
+                      className={PEDIDO_STATUS_META[p.status as PedidoStatus].badgeClass}
+                    >
+                      {PEDIDO_STATUS_META[p.status as PedidoStatus].label}
+                    </Badge>
+                    <Badge variant="outline">{p.direcao === "IN" ? "Chegada" : "Saída"}</Badge>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {p.cidade_atendimento} · {formatarDataHora(p.data_hora_encontro as string)}
+                    {p.hotel ? ` · ${p.hotel as string}` : ""}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {(p.canal_nome as string | null) ?? "sem canal"}
+                    {p.empresa_nome ? ` · ${p.empresa_nome as string}` : ""}
+                    {" · "}
+                    {(p.fornecedor_nome as string | null) ?? "sem motorista atribuído"}
+                  </p>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const CORRIDA_VAZIA = {
+  passageiro_nome: "",
+  passageiro_telefone: "",
+  cidade_atendimento: "",
+  hotel: "",
+  data_hora_encontro: "",
+  direcao: "IN" as "IN" | "OUT",
+  ponto_partida: "",
+  ponto_chegada: "",
+  numero_voo: "",
+  categoria_veiculo_id: "" as string,
+  canal_venda_id: "" as string,
+  observacoes_internas: "",
+};
+
+function NovaCorridaDialog() {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(CORRIDA_VAZIA);
+
+  const { data: categorias } = useQuery({
+    queryKey: ["admin-categorias-veiculo"],
+    queryFn: () => listarCategoriasVeiculo(),
+    enabled: open,
+  });
+  const { data: canais } = useQuery({
+    queryKey: ["admin-canais-venda"],
+    queryFn: () => listarCanaisVenda(),
+    enabled: open,
+  });
+
+  const criar = useMutation({
+    mutationFn: async () => {
+      if (
+        !form.passageiro_nome.trim() ||
+        !form.cidade_atendimento.trim() ||
+        !form.data_hora_encontro
+      ) {
+        throw new Error("Preencha passageiro, cidade e data/hora.");
+      }
+      await criarPedido({
+        codigo_reserva_canal: null,
+        empresa_cliente_id: null,
+        canal_venda_id: form.canal_venda_id || null,
+        cidade_atendimento: form.cidade_atendimento,
+        hotel: form.hotel || null,
+        data_hora_encontro: new Date(form.data_hora_encontro).toISOString(),
+        direcao: form.direcao,
+        passageiro_nome: form.passageiro_nome,
+        passageiro_telefone: form.passageiro_telefone || null,
+        ponto_partida: form.ponto_partida || null,
+        ponto_chegada: form.ponto_chegada || null,
+        numero_voo: form.numero_voo || null,
+        categoria_veiculo_id: form.categoria_veiculo_id || null,
+        observacoes_internas: form.observacoes_internas,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Corrida criada.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-corridas"] });
+      setOpen(false);
+      setForm(CORRIDA_VAZIA);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao criar corrida."),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" className="h-11">
+          <Plus className="size-4" /> Nova corrida
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[85dvh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Nova corrida</DialogTitle>
+          <DialogDescription>
+            Cadastre manualmente uma corrida que não veio pelo checkout do site (telefone, WhatsApp,
+            outro canal).
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Campo
+            label="Passageiro"
+            value={form.passageiro_nome}
+            onChange={(v) => setForm((f) => ({ ...f, passageiro_nome: v }))}
+          />
+          <Campo
+            label="WhatsApp"
+            value={form.passageiro_telefone}
+            onChange={(v) => setForm((f) => ({ ...f, passageiro_telefone: v }))}
+          />
+          <Campo
+            label="Cidade de atendimento"
+            value={form.cidade_atendimento}
+            onChange={(v) => setForm((f) => ({ ...f, cidade_atendimento: v }))}
+          />
+          <div>
+            <Label>Data e hora do encontro</Label>
+            <Input
+              className="mt-2 h-11"
+              type="datetime-local"
+              value={form.data_hora_encontro}
+              onChange={(e) => setForm((f) => ({ ...f, data_hora_encontro: e.target.value }))}
+            />
+          </div>
+          <div>
+            <Label>Direção</Label>
+            <Select
+              value={form.direcao}
+              onValueChange={(v) => setForm((f) => ({ ...f, direcao: v as "IN" | "OUT" }))}
+            >
+              <SelectTrigger className="mt-2 h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="IN">Chegada (IN)</SelectItem>
+                <SelectItem value="OUT">Saída (OUT)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Categoria de veículo</Label>
+            <div className="mt-2 flex gap-2">
+              <Select
+                value={form.categoria_veiculo_id}
+                onValueChange={(v) => setForm((f) => ({ ...f, categoria_veiculo_id: v }))}
+              >
+                <SelectTrigger className="h-11 flex-1">
+                  <SelectValue placeholder="Sem categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(categorias ?? []).map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <NovaCategoriaDialog />
+            </div>
+          </div>
+          <div>
+            <Label>Canal de venda</Label>
+            <div className="mt-2 flex gap-2">
+              <Select
+                value={form.canal_venda_id}
+                onValueChange={(v) => setForm((f) => ({ ...f, canal_venda_id: v }))}
+              >
+                <SelectTrigger className="h-11 flex-1">
+                  <SelectValue placeholder="Sem canal" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(canais ?? []).map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <NovoCanalDialog />
+            </div>
+          </div>
+          <Campo
+            label="Hotel/pousada"
+            value={form.hotel}
+            onChange={(v) => setForm((f) => ({ ...f, hotel: v }))}
+          />
+          <Campo
+            label="Número do voo"
+            value={form.numero_voo}
+            onChange={(v) => setForm((f) => ({ ...f, numero_voo: v }))}
+          />
+          <Campo
+            label="Ponto de partida"
+            value={form.ponto_partida}
+            onChange={(v) => setForm((f) => ({ ...f, ponto_partida: v }))}
+          />
+          <Campo
+            label="Ponto de chegada"
+            value={form.ponto_chegada}
+            onChange={(v) => setForm((f) => ({ ...f, ponto_chegada: v }))}
+          />
+        </div>
+
+        <div>
+          <Label>Observações internas</Label>
+          <Textarea
+            className="mt-2"
+            rows={2}
+            value={form.observacoes_internas}
+            onChange={(e) => setForm((f) => ({ ...f, observacoes_internas: e.target.value }))}
+          />
+        </div>
+
+        <DialogFooter>
+          <Button className="h-11 w-full" onClick={() => criar.mutate()} disabled={criar.isPending}>
+            {criar.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Plus className="size-4" />
+            )}
+            Criar corrida
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function NovaCategoriaDialog() {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [nome, setNome] = useState("");
+  const [capacidade, setCapacidade] = useState<number | null>(null);
+
+  const criar = useMutation({
+    mutationFn: async () => {
+      if (!nome.trim()) throw new Error("Informe o nome da categoria.");
+      await criarCategoriaVeiculo(nome, capacidade);
+    },
+    onSuccess: () => {
+      toast.success("Categoria criada.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-categorias-veiculo"] });
+      setOpen(false);
+      setNome("");
+      setCapacidade(null);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao criar categoria."),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" size="icon" variant="secondary" className="size-11 shrink-0">
+          <Plus className="size-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Nova categoria de veículo</DialogTitle>
+        </DialogHeader>
+        <Campo label="Nome" value={nome} onChange={setNome} />
+        <CampoNumero
+          label="Capacidade de passageiros"
+          value={capacidade}
+          onChange={setCapacidade}
+        />
+        <DialogFooter>
+          <Button className="h-11 w-full" onClick={() => criar.mutate()} disabled={criar.isPending}>
+            {criar.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Plus className="size-4" />
+            )}
+            Criar categoria
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function NovoCanalDialog() {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [nome, setNome] = useState("");
+  const [tipo, setTipo] = useState<"ota" | "site_proprio" | "parceiro" | "outro">("outro");
+
+  const criar = useMutation({
+    mutationFn: async () => {
+      if (!nome.trim()) throw new Error("Informe o nome do canal.");
+      await criarCanalVenda(nome, tipo);
+    },
+    onSuccess: () => {
+      toast.success("Canal criado.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-canais-venda"] });
+      setOpen(false);
+      setNome("");
+      setTipo("outro");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao criar canal."),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" size="icon" variant="secondary" className="size-11 shrink-0">
+          <Plus className="size-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Novo canal de venda</DialogTitle>
+        </DialogHeader>
+        <Campo label="Nome" value={nome} onChange={setNome} />
+        <div>
+          <Label>Tipo</Label>
+          <Select value={tipo} onValueChange={(v) => setTipo(v as typeof tipo)}>
+            <SelectTrigger className="mt-2 h-11">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="site_proprio">Site próprio</SelectItem>
+              <SelectItem value="ota">OTA</SelectItem>
+              <SelectItem value="parceiro">Parceiro</SelectItem>
+              <SelectItem value="outro">Outro</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <DialogFooter>
+          <Button className="h-11 w-full" onClick={() => criar.mutate()} disabled={criar.isPending}>
+            {criar.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Plus className="size-4" />
+            )}
+            Criar canal
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
