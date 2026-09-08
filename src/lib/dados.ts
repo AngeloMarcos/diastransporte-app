@@ -71,6 +71,8 @@ import {
   vpsListarPedidosAdmin,
   vpsPedidoDetalheAdmin,
   vpsRemoverMotorista,
+  vpsSalvarNotasFornecedor,
+  vpsSalvarNotasInternas,
   vpsTransicionarStatusPedido,
   vpsVerificarCodigosExistentes,
   type PedidoImportRow,
@@ -494,6 +496,15 @@ export async function atribuirMotoristaPedido(pedidoId: number, fornecedorId: st
   throw new Error("Despacho ainda não disponível neste ambiente.");
 }
 
+/** Observações internas da corrida — nunca visíveis pro motorista, só pro admin. */
+export async function salvarNotasInternas(pedidoId: number, texto: string): Promise<void> {
+  if (MODO_VPS) {
+    await vpsSalvarNotasInternas({ data: { pedidoId, texto } });
+    return;
+  }
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
 export async function listarCategoriasVeiculo() {
   if (MODO_VPS) return vpsListarCategoriasVeiculo();
   throw new Error("Despacho ainda não disponível neste ambiente.");
@@ -616,10 +627,20 @@ export type Fornecedor = {
   cidade_atuacao: string;
   categoria_veiculo_id: string | null;
   ativo: boolean;
+  observacoes_internas: string | null;
 };
 
 export async function listarFornecedores(): Promise<Fornecedor[]> {
   if (MODO_VPS) return vpsListarFornecedores();
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+/** Observações internas do motorista (nunca visíveis pra ele, só pro admin). */
+export async function salvarNotasFornecedor(fornecedorId: string, texto: string): Promise<void> {
+  if (MODO_VPS) {
+    await vpsSalvarNotasFornecedor({ data: { fornecedorId, texto } });
+    return;
+  }
   throw new Error("Despacho ainda não disponível neste ambiente.");
 }
 

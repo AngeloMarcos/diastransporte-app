@@ -115,6 +115,7 @@ export const vpsListarPedidosAdmin = createServerFn({ method: "GET" })
   });
 
 type PedidoDetalheRow = PedidoListaRow & {
+  codigo_fornecedor_reserva: string | null;
   passageiro_telefone: string | null;
   ponto_partida: string | null;
   ponto_chegada: string | null;
@@ -287,6 +288,19 @@ export const vpsAtribuirMotoristaPedido = createServerFn({ method: "POST" })
     });
   });
 
+export const vpsSalvarNotasInternas = createServerFn({ method: "POST" })
+  .inputValidator((data) => z.object({ pedidoId: z.number().int(), texto: z.string() }).parse(data))
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+    await ctx.sql`
+      INSERT INTO public.pedidos_notas_internas (pedido_id, observacoes_internas)
+      VALUES (${data.pedidoId}, ${data.texto})
+      ON CONFLICT (pedido_id) DO UPDATE SET observacoes_internas = ${data.texto}, updated_at = now()
+    `;
+    return { ok: true };
+  });
+
 // ---------------------------------------------------- cadastros de apoio
 type CategoriaRow = {
   id: string;
@@ -455,16 +469,39 @@ type FornecedorRow = {
   ativo: boolean;
 };
 
+// observacoes_internas mora numa tabela satélite (fornecedores_notas_internas)
+// — mesmo motivo de pedidos_notas_internas: fica de fora do SELECT * de
+// quem não é admin (aqui não tem problema, a função inteira já é admin-only).
+type FornecedorListaRow = FornecedorRow & { observacoes_internas: string | null };
+
 export const vpsListarFornecedores = createServerFn({ method: "GET" }).handler(
-  async (): Promise<FornecedorRow[]> => {
+  async (): Promise<FornecedorListaRow[]> => {
     const ctx = await contexto();
     await ctx.admin();
-    return ctx.sql<FornecedorRow[]>`
-      SELECT id, nome, email, telefone, cidade_atuacao, categoria_veiculo_id, ativo
-        FROM public.fornecedores ORDER BY nome
+    return ctx.sql<FornecedorListaRow[]>`
+      SELECT f.id, f.nome, f.email, f.telefone, f.cidade_atuacao, f.categoria_veiculo_id, f.ativo,
+             n.observacoes_internas
+        FROM public.fornecedores f
+        LEFT JOIN public.fornecedores_notas_internas n ON n.fornecedor_id = f.id
+       ORDER BY f.nome
     `.then((linhas) => [...linhas]);
   },
 );
+
+export const vpsSalvarNotasFornecedor = createServerFn({ method: "POST" })
+  .inputValidator((data) =>
+    z.object({ fornecedorId: z.string().uuid(), texto: z.string() }).parse(data),
+  )
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+    await ctx.sql`
+      INSERT INTO public.fornecedores_notas_internas (fornecedor_id, observacoes_internas)
+      VALUES (${data.fornecedorId}, ${data.texto})
+      ON CONFLICT (fornecedor_id) DO UPDATE SET observacoes_internas = ${data.texto}, updated_at = now()
+    `;
+    return { ok: true };
+  });
 
 const criarMotoristaSchema = z.object({
   nome: z.string().min(2),

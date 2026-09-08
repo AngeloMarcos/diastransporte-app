@@ -9,19 +9,24 @@ import {
   CalendarCheck,
   Car,
   Check,
+  FileDown,
   FileSpreadsheet,
   FileText,
+  History,
+  Info,
   KeyRound,
   LayoutDashboard,
   Loader2,
   MessageCircle,
   Pencil,
   Plus,
+  Printer,
   Radio,
   Route as RouteIcon,
   Save,
   Search,
   ShieldAlert,
+  StickyNote,
   Tag,
   Trash2,
   Truck,
@@ -112,6 +117,7 @@ import {
   listarPedidosAdmin,
   listarRotasAdmin,
   listarUsuarios,
+  pedidoDetalheAdmin,
   redefinirSenha,
   removerAgendamento,
   removerBlocoConteudo,
@@ -121,6 +127,8 @@ import {
   removerVeiculoFrota,
   salvarBlocoConteudo,
   salvarFotoGaleria,
+  salvarNotasFornecedor,
+  salvarNotasInternas,
   salvarRota,
   salvarVeiculoFrota,
   transicionarStatusPedido,
@@ -1783,6 +1791,7 @@ function CorridaCard({
               ))}
             </SelectContent>
           </Select>
+          <CorridaDetalheDialog pedidoId={p.id} />
         </div>
       </div>
 
@@ -1813,6 +1822,172 @@ function CorridaCard({
         )}
       </div>
     </article>
+  );
+}
+
+// Ficha completa da corrida — o que os cards da lista não mostram: código de
+// reserva/fornecedor, telefone do passageiro, pontos de embarque/desembarque,
+// voo, observações internas (nunca vistas pelo motorista) e o histórico de
+// status. Existia como server function (pedidoDetalheAdmin) desde a Etapa 6
+// mas não tinha nenhuma tela que a chamasse — só a lista+criar.
+function CorridaDetalheDialog({ pedidoId }: { pedidoId: number }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [notas, setNotas] = useState("");
+
+  const { data: p, isLoading } = useQuery({
+    queryKey: ["admin-corrida-detalhe", pedidoId],
+    queryFn: () => pedidoDetalheAdmin(pedidoId),
+    enabled: open,
+  });
+
+  useEffect(() => {
+    if (p) setNotas(p.observacoes_internas);
+  }, [p]);
+
+  const salvarNotas = useMutation({
+    mutationFn: () => salvarNotasInternas(pedidoId, notas),
+    onSuccess: () => {
+      toast.success("Observações salvas.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-corrida-detalhe", pedidoId] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao salvar observações."),
+  });
+
+  async function baixarVoucher(autoprint: boolean) {
+    if (!p) return;
+    const { gerarVoucherPDF } = await import("@/lib/voucher");
+    await gerarVoucherPDF(
+      {
+        id: p.id,
+        codigo_reserva_canal: p.codigo_reserva_canal,
+        codigo_fornecedor_reserva: p.codigo_fornecedor_reserva,
+        passageiro_nome: p.passageiro_nome,
+        passageiro_telefone: p.passageiro_telefone,
+        cidade_atendimento: p.cidade_atendimento,
+        hotel: p.hotel,
+        direcao: p.direcao,
+        data_hora_encontro: p.data_hora_encontro,
+        ponto_partida: p.ponto_partida,
+        ponto_chegada: p.ponto_chegada,
+        numero_voo: p.numero_voo,
+        status: p.status as PedidoStatus,
+        observacao_motorista: p.observacao_motorista,
+        empresa: p.empresa_nome,
+        canal: p.canal_nome,
+        categoria: p.categoria_nome,
+        fornecedor: p.fornecedor_nome,
+      },
+      autoprint,
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" size="icon" variant="ghost" className="size-9" title="Ver detalhes">
+          <Info className="size-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[85dvh] max-w-2xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Corrida #{pedidoId}</DialogTitle>
+        </DialogHeader>
+        {isLoading || !p ? (
+          <div className="space-y-3">
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        ) : (
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+              <InfoCampo label="Código canal" valor={p.codigo_reserva_canal} />
+              <InfoCampo label="Código fornecedor" valor={p.codigo_fornecedor_reserva} />
+              <InfoCampo label="Telefone" valor={p.passageiro_telefone} />
+              <InfoCampo label="Partida" valor={p.ponto_partida} />
+              <InfoCampo label="Chegada" valor={p.ponto_chegada} />
+              <InfoCampo label="Voo" valor={p.numero_voo} />
+              <InfoCampo label="Categoria" valor={p.categoria_nome} />
+              <InfoCampo label="Emitido em" valor={formatarDataHora(p.data_emissao)} />
+              <InfoCampo label="Alterado em" valor={formatarDataHora(p.data_alteracao)} />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => void baixarVoucher(true)}>
+                <Printer className="size-4" /> Imprimir voucher
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => void baixarVoucher(false)}>
+                <FileDown className="size-4" /> Baixar PDF
+              </Button>
+            </div>
+
+            <div>
+              <Label>Observações internas</Label>
+              <p className="mb-2 text-xs text-muted-foreground">Nunca visíveis pro motorista.</p>
+              <Textarea
+                rows={3}
+                value={notas}
+                onChange={(e) => setNotas(e.target.value)}
+                placeholder="Ex.: cliente pediu cadeirinha de bebê, confirmar por WhatsApp antes."
+              />
+              <p className="mt-2 text-xs text-muted-foreground">
+                Observação do motorista: {p.observacao_motorista ?? "—"}
+              </p>
+              <Button
+                size="sm"
+                className="mt-2"
+                onClick={() => salvarNotas.mutate()}
+                disabled={salvarNotas.isPending}
+              >
+                {salvarNotas.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Save className="size-4" />
+                )}
+                Salvar observações
+              </Button>
+            </div>
+
+            <div>
+              <Label className="flex items-center gap-1.5">
+                <History className="size-3.5" /> Histórico de status
+              </Label>
+              {!p.historico.length ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Sem alterações registradas ainda.
+                </p>
+              ) : (
+                <ul className="mt-2 space-y-1.5 text-xs">
+                  {p.historico.map((h) => (
+                    <li key={h.id} className="flex flex-wrap gap-1.5">
+                      <span className="text-muted-foreground">
+                        {formatarDataHora(h.created_at)}
+                      </span>
+                      <span>
+                        {h.status_anterior
+                          ? PEDIDO_STATUS_META[h.status_anterior as PedidoStatus].label
+                          : "—"}
+                        {" → "}
+                        {PEDIDO_STATUS_META[h.status_novo as PedidoStatus].label}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InfoCampo({ label, valor }: { label: string; valor: string | null | undefined }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="break-words">{valor ?? "—"}</p>
+    </div>
   );
 }
 
@@ -2679,6 +2854,73 @@ function CanalDialog({ canal }: { canal?: CanalVenda }) {
 }
 
 // ---------------------------------------------------------- fornecedores
+// fornecedores_notas_internas era só-escrita: dava pra preencher na criação
+// do motorista, mas nunca mais ver/editar depois. Mesmo padrão de
+// observações internas de corrida (CorridaDetalheDialog acima).
+function NotasFornecedorDialog({ fornecedor: f }: { fornecedor: Fornecedor }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [notas, setNotas] = useState(f.observacoes_internas ?? "");
+
+  const salvar = useMutation({
+    mutationFn: () => salvarNotasFornecedor(f.id, notas),
+    onSuccess: () => {
+      toast.success("Observações salvas.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-fornecedores"] });
+      setOpen(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao salvar observações."),
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (v) setNotas(f.observacoes_internas ?? "");
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn("size-9 shrink-0", f.observacoes_internas && "text-primary")}
+          title="Observações internas"
+        >
+          <StickyNote className="size-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Observações internas — {f.nome}</DialogTitle>
+          <DialogDescription>Nunca visíveis pro motorista, só pro admin.</DialogDescription>
+        </DialogHeader>
+        <Textarea
+          rows={4}
+          value={notas}
+          onChange={(e) => setNotas(e.target.value)}
+          placeholder="Ex.: prefere corridas noturnas, veículo alugado até dezembro."
+        />
+        <DialogFooter>
+          <Button
+            className="h-11 w-full"
+            onClick={() => salvar.mutate()}
+            disabled={salvar.isPending}
+          >
+            {salvar.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Save className="size-4" />
+            )}
+            Salvar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AdminFornecedores() {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
@@ -2746,6 +2988,7 @@ function AdminFornecedores() {
               </div>
               <div className="flex items-center gap-2">
                 <AtivoBadge ativo={f.ativo} />
+                <NotasFornecedorDialog fornecedor={f} />
                 <Button
                   variant="ghost"
                   size="icon"
