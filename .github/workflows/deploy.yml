@@ -1,26 +1,31 @@
 name: Deploy VPS
 
-# Publica na VPS a cada push na main. Segredos necessários no repositório
+# ATENÇÃO: este arquivo veio de vendor/car-fleet-co ou do clone inicial do
+# wander-book-craft (Etapa 0/1 do roteiro da fusão) e nunca foi adaptado pra
+# este app — achado revisando por que um "git reset --hard" no staging
+# quebrava o deploy (causa real era outra, ver commit "Para de versionar
+# .env", mas isso aqui é um risco à parte). APP_DIR abaixo aponta pro
+# diretório de PRODUÇÃO do wander-book-craft (/opt/dias-transporte), não
+# pro staging deste app novo (/opt/diastransporte-app); o comentário
+# original também presumia repositório privado (este é público, por
+# decisão do roteiro) e usa docker-compose.yml/porta padrão em vez do
+# docker-compose.staging.yml/porta 3002 que o staging real usa. Trigger
+# automático desligado até isto ser revisado e apontado pro lugar certo —
+# hoje só roda se alguém disparar manualmente (workflow_dispatch), então
+# mesmo que as secrets SSH_HOST/SSH_USER/SSH_KEY existam neste repo, nada
+# dispara sozinho a cada push.
+#
+# Segredos necessários no repositório, quando isto for reativado
 # (Settings → Secrets and variables → Actions):
 #   SSH_HOST  → IP ou host da VPS
-#   SSH_USER  → usuário com acesso a /opt/dias-transporte e ao grupo docker
+#   SSH_USER  → usuário com acesso ao diretório de deploy e ao grupo docker
 #   SSH_KEY   → chave privada SSH (a pública já precisa estar em
 #               ~/.ssh/authorized_keys do SSH_USER na VPS)
 #   SSH_PORT  → opcional (padrão 22)
 # Variável opcional (Settings → Secrets and variables → Actions → Variables):
 #   APP_URL   → usada só pra conferir se o site respondeu depois do deploy
-#
-# Por que empacotar e mandar por scp em vez de "git pull" na VPS: este
-# repositório é privado e a VPS não guarda nenhuma credencial do GitHub (nem
-# deploy key, nem token) — o runner do Actions já tem o checkout autenticado
-# de graça, então ele empacota a árvore de trabalho aqui mesmo e manda por
-# scp; a VPS só entra por SSH pra extrair e rodar o build/up. Mesmo
-# mecanismo (tar + scp) já validado manualmente nesta VPS, evitando duplicar
-# autenticação (VPS → GitHub) só pra isso.
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -28,7 +33,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  APP_DIR: /opt/dias-transporte
+  APP_DIR: /opt/dias-transporte # ver aviso acima — confirmar/corrigir antes de reativar
 
 jobs:
   deploy:
