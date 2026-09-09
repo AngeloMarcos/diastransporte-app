@@ -288,6 +288,128 @@ export const vpsAtribuirMotoristaPedido = createServerFn({ method: "POST" })
     });
   });
 
+// --------------------------------------------------- painel do motorista
+// Etapa 9 do roteiro da fusão: o modelo novo de motorista (fornecedores +
+// pedidos.fornecedor_id) tinha corridas atribuíveis desde a Etapa 6, mas o
+// próprio motorista não tinha nenhuma tela pra ver/agir sobre elas — só o
+// admin enxergava. Checagem de pré-condição feita direto no banco de
+// produção antes de escrever isto: zero agendamentos com motorista_id
+// pendente/confirmado, zero usuarios.motorista=true — o modelo antigo
+// (agendamentos.motorista_id, rota /motorista) nunca teve uso real, então
+// dá pra substituir com segurança em vez de manter os dois em paralelo.
+async function fornecedorDoMotorista(
+  ctx: Awaited<ReturnType<typeof contexto>>,
+  userId: string,
+): Promise<string> {
+  const linhas = await ctx.sql<{ id: string }[]>`
+    SELECT id FROM public.fornecedores WHERE user_id = ${userId} LIMIT 1
+  `;
+  const id = linhas[0]?.id;
+  if (!id) throw new Error("Nenhum cadastro de motorista vinculado a este usuário.");
+  return id;
+}
+
+export const vpsMeuFornecedor = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{
+    id: string;
+    nome: string;
+    telefone: string | null;
+    cidade_atuacao: string;
+    email: string;
+  } | null> => {
+    const ctx = await contexto();
+    const usuario = await ctx.motorista();
+    const linhas = await ctx.sql<
+      { id: string; nome: string; telefone: string | null; cidade_atuacao: string }[]
+    >`
+      SELECT id, nome, telefone, cidade_atuacao FROM public.fornecedores WHERE user_id = ${usuario.id}
+    `;
+    const fornecedor = linhas[0];
+    if (!fornecedor) return null;
+    return { ...fornecedor, email: usuario.email };
+  },
+);
+
+type PedidoMotoristaRow = {
+  id: number;
+  cidade_atendimento: string;
+  hotel: string | null;
+  data_hora_encontro: string;
+  direcao: "IN" | "OUT";
+  passageiro_nome: string;
+  passageiro_telefone: string | null;
+  ponto_partida: string | null;
+  ponto_chegada: string | null;
+  numero_voo: string | null;
+  status: string;
+  observacao_motorista: string | null;
+};
+
+export const vpsListarPedidosMotorista = createServerFn({ method: "GET" }).handler(
+  async (): Promise<PedidoMotoristaRow[]> => {
+    const ctx = await contexto();
+    const usuario = await ctx.motorista();
+    const fornecedorId = await fornecedorDoMotorista(ctx, usuario.id);
+    return ctx.sql<PedidoMotoristaRow[]>`
+      SELECT id, cidade_atendimento, hotel, data_hora_encontro, direcao, passageiro_nome,
+             passageiro_telefone, ponto_partida, ponto_chegada, numero_voo, status,
+             observacao_motorista
+        FROM public.pedidos
+       WHERE fornecedor_id = ${fornecedorId}
+       ORDER BY data_hora_encontro DESC
+    `.then((linhas) => [...linhas]);
+  },
+);
+
+export const vpsTransicionarStatusPedidoMotorista = createServerFn({ method: "POST" })
+  .inputValidator((data) =>
+    z.object({ pedidoId: z.number().int(), novoStatus: z.string() }).parse(data),
+  )
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    const usuario = await ctx.motorista();
+    const fornecedorId = await fornecedorDoMotorista(ctx, usuario.id);
+
+    return ctx.sql.begin(async (sql) => {
+      const [pedido] = await sql<
+        { id: number; status: PedidoStatus; fornecedor_id: string | null }[]
+      >`
+        SELECT id, status, fornecedor_id FROM public.pedidos WHERE id = ${data.pedidoId} FOR UPDATE
+      `;
+      if (!pedido) throw new Error(`Corrida ${String(data.pedidoId)} não encontrada.`);
+      if (pedido.fornecedor_id !== fornecedorId) {
+        throw new Error("Esta corrida não está atribuída a você.");
+      }
+      if (!transicaoValida(pedido.status, data.novoStatus as PedidoStatus, "motorista")) {
+        throw new Error(`Transição inválida: ${pedido.status} → ${data.novoStatus}`);
+      }
+
+      const [atualizado] = await sql`
+        UPDATE public.pedidos SET status = ${data.novoStatus} WHERE id = ${data.pedidoId} RETURNING *
+      `;
+      await sql`
+        INSERT INTO public.pedidos_historico (pedido_id, status_anterior, status_novo, alterado_por)
+        VALUES (${data.pedidoId}, ${pedido.status}, ${data.novoStatus}, ${usuario.id})
+      `;
+      return atualizado;
+    });
+  });
+
+export const vpsSalvarObservacaoMotorista = createServerFn({ method: "POST" })
+  .inputValidator((data) => z.object({ pedidoId: z.number().int(), texto: z.string() }).parse(data))
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    const usuario = await ctx.motorista();
+    const fornecedorId = await fornecedorDoMotorista(ctx, usuario.id);
+    const linhas = await ctx.sql<{ id: number }[]>`
+      UPDATE public.pedidos SET observacao_motorista = ${data.texto}
+       WHERE id = ${data.pedidoId} AND fornecedor_id = ${fornecedorId}
+       RETURNING id
+    `;
+    if (!linhas[0]) throw new Error("Corrida não encontrada ou não atribuída a você.");
+    return { ok: true };
+  });
+
 export const vpsSalvarNotasInternas = createServerFn({ method: "POST" })
   .inputValidator((data) => z.object({ pedidoId: z.number().int(), texto: z.string() }).parse(data))
   .handler(async ({ data }) => {

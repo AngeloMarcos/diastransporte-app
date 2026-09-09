@@ -69,11 +69,15 @@ import {
   vpsListarEmpresasClientes,
   vpsListarFornecedores,
   vpsListarPedidosAdmin,
+  vpsListarPedidosMotorista,
+  vpsMeuFornecedor,
   vpsPedidoDetalheAdmin,
   vpsRemoverMotorista,
   vpsSalvarNotasFornecedor,
   vpsSalvarNotasInternas,
+  vpsSalvarObservacaoMotorista,
   vpsTransicionarStatusPedido,
+  vpsTransicionarStatusPedidoMotorista,
   vpsVerificarCodigosExistentes,
   type PedidoImportRow,
 } from "@/lib/vps/dados-despacho.functions";
@@ -500,6 +504,41 @@ export async function atribuirMotoristaPedido(pedidoId: number, fornecedorId: st
 export async function salvarNotasInternas(pedidoId: number, texto: string): Promise<void> {
   if (MODO_VPS) {
     await vpsSalvarNotasInternas({ data: { pedidoId, texto } });
+    return;
+  }
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+// -------------------------------------------------------- painel do motorista
+// (modelo despacho: fornecedores + pedidos.fornecedor_id — Etapa 9 do
+// roteiro da fusão). VPS-only, como o resto do despacho. Distinto de
+// meuFornecedor/listarCorridasMotorista mais abaixo, que são o modelo
+// antigo (agendamentos.motorista_id) — mantido funcionando nos dois
+// backends pra não regredir o pouco uso que já existisse lá.
+export async function meuFornecedor(): Promise<{
+  id: string;
+  nome: string;
+  telefone: string | null;
+  cidade_atuacao: string;
+  email: string;
+} | null> {
+  if (MODO_VPS) return vpsMeuFornecedor();
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+export async function listarPedidosMotorista() {
+  if (MODO_VPS) return vpsListarPedidosMotorista();
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+export async function transicionarStatusPedidoMotorista(pedidoId: number, novoStatus: string) {
+  if (MODO_VPS) return vpsTransicionarStatusPedidoMotorista({ data: { pedidoId, novoStatus } });
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+export async function salvarObservacaoMotorista(pedidoId: number, texto: string): Promise<void> {
+  if (MODO_VPS) {
+    await vpsSalvarObservacaoMotorista({ data: { pedidoId, texto } });
     return;
   }
   throw new Error("Despacho ainda não disponível neste ambiente.");
