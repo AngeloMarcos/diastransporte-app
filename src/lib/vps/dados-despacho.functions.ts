@@ -70,6 +70,79 @@ type PedidoListaRow = {
   fornecedor_nome: string | null;
 };
 
+// Painel resumido do despacho (status/hoje/sem motorista) — existia como a
+// própria home do admin no car-fleet-co original (`/admin`, dashboard.tsx);
+// aqui vira uma seção a mais dentro da aba "Visão geral" já existente do
+// host, em vez de uma rota própria — mesmo dado, um lugar só. Ficou de fora
+// da Etapa 7 por engano (portei a lógica de listar/importar/atribuir, mas
+// não essa) — usuário notou faltar ao comparar com o painel original.
+export const vpsDashboardDespacho = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{
+    porStatus: Record<string, number>;
+    hoje: {
+      id: number;
+      passageiro_nome: string;
+      cidade_atendimento: string;
+      data_hora_encontro: string;
+      status: string;
+      direcao: "IN" | "OUT";
+    }[];
+    semMotorista: {
+      id: number;
+      passageiro_nome: string;
+      cidade_atendimento: string;
+      data_hora_encontro: string;
+      status: string;
+    }[];
+  }> => {
+    const ctx = await contexto();
+    await ctx.admin();
+
+    const porStatusLinhas = await ctx.sql<{ status: PedidoStatus; total: string }[]>`
+      SELECT status, count(*)::text AS total FROM public.pedidos GROUP BY status
+    `;
+    const porStatus: Record<string, number> = {};
+    for (const l of porStatusLinhas) porStatus[l.status] = Number(l.total);
+
+    const inicioHoje = new Date();
+    inicioHoje.setHours(0, 0, 0, 0);
+    const fimHoje = new Date();
+    fimHoje.setHours(23, 59, 59, 999);
+
+    const hoje = await ctx.sql<
+      {
+        id: number;
+        passageiro_nome: string;
+        cidade_atendimento: string;
+        data_hora_encontro: string;
+        status: string;
+        direcao: "IN" | "OUT";
+      }[]
+    >`
+      SELECT id, passageiro_nome, cidade_atendimento, data_hora_encontro, status, direcao
+        FROM public.pedidos
+       WHERE data_hora_encontro BETWEEN ${inicioHoje.toISOString()} AND ${fimHoje.toISOString()}
+       ORDER BY data_hora_encontro
+    `;
+    const semMotorista = await ctx.sql<
+      {
+        id: number;
+        passageiro_nome: string;
+        cidade_atendimento: string;
+        data_hora_encontro: string;
+        status: string;
+      }[]
+    >`
+      SELECT id, passageiro_nome, cidade_atendimento, data_hora_encontro, status
+        FROM public.pedidos
+       WHERE fornecedor_id IS NULL AND status <> 'venda_cancelada'
+       ORDER BY data_hora_encontro DESC
+       LIMIT 20
+    `;
+    return { porStatus, hoje: [...hoje], semMotorista: [...semMotorista] };
+  },
+);
+
 export const vpsListarPedidosAdmin = createServerFn({ method: "GET" })
   .inputValidator((data) => filtroPedidos.parse(data ?? {}))
   .handler(async ({ data: f }) => {

@@ -67,6 +67,7 @@ import {
   vpsListarCanaisVenda,
   vpsListarCategoriasVeiculo,
   vpsListarEmpresasClientes,
+  vpsDashboardDespacho,
   vpsListarFornecedores,
   vpsListarPedidosAdmin,
   vpsListarPedidosMotorista,
@@ -458,6 +459,14 @@ export type FiltroPedidosAdmin = {
 
 export async function listarPedidosAdmin(filtro: FiltroPedidosAdmin = {}) {
   if (MODO_VPS) return vpsListarPedidosAdmin({ data: filtro });
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+/** Resumo do despacho pra "Visão geral": contagem por status, corridas de
+ * hoje e corridas sem motorista atribuído. Equivalente ao dashboard próprio
+ * que o car-fleet-co tinha antes da fusão. */
+export async function dashboardDespacho() {
+  if (MODO_VPS) return vpsDashboardDespacho();
   throw new Error("Despacho ainda não disponível neste ambiente.");
 }
 

@@ -17,6 +17,7 @@ import {
   KeyRound,
   LayoutDashboard,
   Loader2,
+  LogOut,
   MessageCircle,
   Pencil,
   Plus,
@@ -101,6 +102,7 @@ import {
   criarNovoMotorista,
   criarPedido,
   criarRota,
+  dashboardDespacho,
   criarVeiculoFrota,
   definirAdmin,
   definirMotorista,
@@ -136,7 +138,7 @@ import {
   type Fornecedor,
 } from "@/lib/dados";
 import type { PedidoImportRow } from "@/lib/vps/dados-despacho.functions";
-import { useAuth } from "@/hooks/useAuth";
+import { encerrarSessaoAtual, useAuth } from "@/hooks/useAuth";
 import { MODO_VPS } from "@/lib/vps/config";
 import { cn } from "@/lib/utils";
 import { formatBRL } from "@/data/rotas";
@@ -233,10 +235,21 @@ const abas = [
 function AdminPage() {
   const { user, isAdmin, carregando } = useAuth();
   const navigate = useNavigate();
+  const queryClientSair = useQueryClient();
   const [aba, setAba] = useState<(typeof abas)[number]["id"]>("geral");
   const [permissaoNotif, setPermissaoNotif] = useState<NotificationPermission | null>(null);
   const idsPendentesVistos = useRef<Set<string> | null>(null);
   const abasVisiveis = abas.filter((a) => !("soVps" in a && a.soVps) || MODO_VPS);
+
+  // Duplica o "Sair" que já existe no Header (mesmo padrão de lá) aqui no
+  // rodapé do menu lateral — pedido explícito do usuário ao pedir que a
+  // sidebar ficasse mais parecida com a do car-fleet-co original.
+  async function sair() {
+    await queryClientSair.cancelQueries();
+    queryClientSair.clear();
+    await encerrarSessaoAtual();
+    void navigate({ to: "/auth", replace: true });
+  }
 
   useEffect(() => {
     if (!carregando && !isAdmin) {
@@ -322,73 +335,88 @@ function AdminPage() {
         <Tabs
           value={aba}
           onValueChange={(v) => setAba(v as (typeof abas)[number]["id"])}
-          className="mt-6"
+          orientation="vertical"
+          className="mt-6 flex flex-col gap-6 md:flex-row md:items-start"
         >
-          {/* Abas roláveis na horizontal em telas estreitas (celular/tablet retrato) */}
-          <div className="-mx-4 overflow-x-auto px-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <TabsList className="inline-flex h-auto w-max justify-start gap-1 bg-secondary/60 p-1">
+          {/* Menu lateral fixo em telas médias+ (mesmo layout do car-fleet-co
+              original, portado aqui em vez de virar um painel à parte —
+              continua sendo o mesmo <Tabs>/estado de sempre, só reestilizado
+              de barra horizontal pra sidebar). Em telas estreitas vira uma
+              faixa rolável no topo, como já era antes. */}
+          <div className="-mx-4 overflow-x-auto px-4 [-ms-overflow-style:none] [scrollbar-width:none] md:mx-0 md:w-56 md:shrink-0 md:overflow-visible md:px-0 md:[scrollbar-width:auto] [&::-webkit-scrollbar]:hidden">
+            <TabsList className="inline-flex h-auto w-max justify-start gap-1 bg-secondary/60 p-1 md:flex md:w-full md:flex-col md:items-stretch md:gap-0.5 md:bg-transparent md:p-0">
               {abasVisiveis.map(({ id, label, icon: Icon }) => (
                 <TabsTrigger
                   key={id}
                   value={id}
-                  className="min-h-11 shrink-0 gap-1.5 whitespace-nowrap px-3 text-sm"
+                  className="min-h-11 shrink-0 gap-2 whitespace-nowrap px-3 text-sm md:w-full md:justify-start md:rounded-lg md:px-3 md:py-2.5 md:data-[state=active]:bg-secondary md:data-[state=active]:shadow-none"
                 >
                   <Icon className="size-4 shrink-0" /> {label}
                   {id === "agendamentos" && pendentesCount > 0 && (
-                    <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+                    <span className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
                       {pendentesCount}
                     </span>
                   )}
                 </TabsTrigger>
               ))}
             </TabsList>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4 hidden w-full md:flex"
+              onClick={() => void sair()}
+            >
+              <LogOut className="size-4" /> Sair
+            </Button>
           </div>
 
-          <TabsContent value="geral" className="mt-6">
-            <AdminVisaoGeral onIrPara={setAba} />
-          </TabsContent>
-          <TabsContent value="rotas" className="mt-6">
-            <AdminRotas />
-          </TabsContent>
-          {MODO_VPS && (
-            <TabsContent value="frota" className="mt-6">
-              <AdminFrota />
+          <div className="min-w-0 flex-1">
+            <TabsContent value="geral" className="mt-0">
+              <AdminVisaoGeral onIrPara={setAba} />
             </TabsContent>
-          )}
-          <TabsContent value="agendamentos" className="mt-6">
-            <AdminAgendamentos />
-          </TabsContent>
-          {MODO_VPS && (
-            <TabsContent value="corridas" className="mt-6">
-              <AdminCorridas />
+            <TabsContent value="rotas" className="mt-0">
+              <AdminRotas />
             </TabsContent>
-          )}
-          {MODO_VPS && (
-            <TabsContent value="fornecedores" className="mt-6">
-              <AdminFornecedores />
+            {MODO_VPS && (
+              <TabsContent value="frota" className="mt-0">
+                <AdminFrota />
+              </TabsContent>
+            )}
+            <TabsContent value="agendamentos" className="mt-0">
+              <AdminAgendamentos />
             </TabsContent>
-          )}
-          {MODO_VPS && (
-            <TabsContent value="empresas" className="mt-6">
-              <AdminEmpresas />
+            {MODO_VPS && (
+              <TabsContent value="corridas" className="mt-0">
+                <AdminCorridas />
+              </TabsContent>
+            )}
+            {MODO_VPS && (
+              <TabsContent value="fornecedores" className="mt-0">
+                <AdminFornecedores />
+              </TabsContent>
+            )}
+            {MODO_VPS && (
+              <TabsContent value="empresas" className="mt-0">
+                <AdminEmpresas />
+              </TabsContent>
+            )}
+            {MODO_VPS && (
+              <TabsContent value="canais" className="mt-0">
+                <AdminCanais />
+              </TabsContent>
+            )}
+            {MODO_VPS && (
+              <TabsContent value="categorias" className="mt-0">
+                <AdminCategorias />
+              </TabsContent>
+            )}
+            <TabsContent value="conteudo" className="mt-0">
+              <AdminConteudo />
             </TabsContent>
-          )}
-          {MODO_VPS && (
-            <TabsContent value="canais" className="mt-6">
-              <AdminCanais />
+            <TabsContent value="usuarios" className="mt-0">
+              <AdminUsuarios />
             </TabsContent>
-          )}
-          {MODO_VPS && (
-            <TabsContent value="categorias" className="mt-6">
-              <AdminCategorias />
-            </TabsContent>
-          )}
-          <TabsContent value="conteudo" className="mt-6">
-            <AdminConteudo />
-          </TabsContent>
-          <TabsContent value="usuarios" className="mt-6">
-            <AdminUsuarios />
-          </TabsContent>
+          </div>
         </Tabs>
       </main>
       <Footer />
@@ -428,6 +456,16 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
   const { data: rotas, isLoading: carregandoRotas } = useQuery({
     queryKey: ["admin-rotas"],
     queryFn: () => listarRotasAdmin(),
+  });
+
+  // Resumo do despacho (pedidos/corridas) — VPS-only, como o resto desse
+  // domínio. Era a home própria do painel do car-fleet-co antes da fusão;
+  // agora é só mais uma seção desta mesma aba.
+  const { data: despacho, isLoading: carregandoDespacho } = useQuery({
+    queryKey: ["admin-dashboard-despacho"],
+    queryFn: () => dashboardDespacho(),
+    enabled: MODO_VPS,
+    refetchInterval: 30_000,
   });
 
   if (carregandoAgendamentos || carregandoRotas) {
@@ -607,6 +645,142 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
           <p className="mt-4 text-sm text-muted-foreground">Nenhum agendamento ainda.</p>
         )}
       </div>
+
+      {MODO_VPS && (
+        <div className="space-y-6 border-t border-border pt-8">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-display text-xl">Despacho</h2>
+            <Button
+              variant="secondary"
+              className="h-11 shrink-0"
+              onClick={() => onIrPara("corridas")}
+            >
+              Ver corridas
+            </Button>
+          </div>
+
+          {carregandoDespacho ? (
+            <p className="text-sm text-muted-foreground">Carregando despacho…</p>
+          ) : (
+            <>
+              <div className="rounded-lg border border-border bg-card p-5">
+                <h3 className="font-display text-lg">Status das corridas</h3>
+                {(() => {
+                  const porStatus = despacho?.porStatus ?? {};
+                  const totalPedidos = Object.values(porStatus).reduce((s, n) => s + n, 0);
+                  return totalPedidos ? (
+                    <>
+                      <div className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-muted">
+                        {PEDIDO_STATUS_OPTIONS.map((s) =>
+                          porStatus[s] ? (
+                            <div
+                              key={s}
+                              className={cn(
+                                "h-full",
+                                PEDIDO_STATUS_META[s].badgeClass.match(/bg-\S+/)?.[0],
+                              )}
+                              style={{ width: `${((porStatus[s] ?? 0) / totalPedidos) * 100}%` }}
+                              title={`${PEDIDO_STATUS_META[s].label}: ${String(porStatus[s])}`}
+                            />
+                          ) : null,
+                        )}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+                        {PEDIDO_STATUS_OPTIONS.filter((s) => porStatus[s]).map((s) => (
+                          <span key={s} className="inline-flex items-center gap-1.5">
+                            <span
+                              className={cn(
+                                "size-2 rounded-full",
+                                PEDIDO_STATUS_META[s].badgeClass.match(/bg-\S+/)?.[0],
+                              )}
+                            />
+                            {PEDIDO_STATUS_META[s].label}: {porStatus[s]}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="mt-4 text-sm text-muted-foreground">
+                      Nenhuma corrida cadastrada ainda.
+                    </p>
+                  );
+                })()}
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-lg border border-border bg-card p-5">
+                  <h3 className="font-display text-lg">Corridas de hoje</h3>
+                  {despacho?.hoje.length ? (
+                    <div className="mt-4 divide-y divide-border">
+                      {despacho.hoje.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => onIrPara("corridas")}
+                          className="flex w-full flex-wrap items-center justify-between gap-2 py-3 text-left"
+                        >
+                          <div>
+                            <p className="text-sm font-medium">
+                              {p.passageiro_nome} · {p.cidade_atendimento}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatarDataHora(p.data_hora_encontro)} ·{" "}
+                              {p.direcao === "IN" ? "Chegada" : "Saída"}
+                            </p>
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className={PEDIDO_STATUS_META[p.status as PedidoStatus].badgeClass}
+                          >
+                            {PEDIDO_STATUS_META[p.status as PedidoStatus].label}
+                          </Badge>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-4 text-sm text-muted-foreground">Nenhuma corrida hoje.</p>
+                  )}
+                </div>
+
+                <div className="rounded-lg border border-border bg-card p-5">
+                  <h3 className="font-display text-lg">Sem motorista atribuído</h3>
+                  {despacho?.semMotorista.length ? (
+                    <div className="mt-4 divide-y divide-border">
+                      {despacho.semMotorista.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => onIrPara("corridas")}
+                          className="flex w-full flex-wrap items-center justify-between gap-2 py-3 text-left"
+                        >
+                          <div>
+                            <p className="text-sm font-medium">
+                              #{p.id} · {p.passageiro_nome} · {p.cidade_atendimento}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatarDataHora(p.data_hora_encontro)}
+                            </p>
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className={PEDIDO_STATUS_META[p.status as PedidoStatus].badgeClass}
+                          >
+                            {PEDIDO_STATUS_META[p.status as PedidoStatus].label}
+                          </Badge>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-4 text-sm text-muted-foreground">
+                      Todas as corridas ativas têm motorista.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
