@@ -16,6 +16,16 @@ dist-ssr
 .nitro
 *.local
 
+# .env de verdade (segredos por ambiente) nunca deveria estar versionado —
+# achado ao investigar por que "git reset --hard origin/main" quebrava o
+# deploy no staging: o .env commitado (herdado do wander-book-craft) tinha
+# só as chaves anon/publishable do Supabase (baixo risco, já vão pro bundle
+# do cliente mesmo), mas sobrescrevia o .env real do servidor a cada pull.
+# .env.example continua versionado como referência.
+.env
+.env.*
+!.env.example
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
