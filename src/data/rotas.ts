@@ -1,21 +1,21 @@
-import frota1 from "@/assets/frota-1.jpeg.asset.json";
-import frota2 from "@/assets/frota-2.jpeg.asset.json";
-import frota3 from "@/assets/frota-3.jpeg.asset.json";
-import frota4 from "@/assets/frota-4.jpeg.asset.json";
-import frota5 from "@/assets/frota-5.jpeg.asset.json";
-import frota6 from "@/assets/frota-6.jpeg.asset.json";
-import frota7 from "@/assets/frota-7.jpeg.asset.json";
-import frota8 from "@/assets/frota-8.jpeg.asset.json";
+import frota1 from "@/assets/frota-1.jpeg";
+import frota2 from "@/assets/frota-2.jpeg";
+import frota3 from "@/assets/frota-3.jpeg";
+import frota4 from "@/assets/frota-4.jpeg";
+import frota5 from "@/assets/frota-5.jpeg";
+import frota6 from "@/assets/frota-6.jpeg";
+import frota7 from "@/assets/frota-7.jpeg";
+import frota8 from "@/assets/frota-8.jpeg";
 
 export const fotos = {
-  cronosPredio: frota1.url,
-  cronosNoite: frota2.url,
-  cronosChuva: frota3.url,
-  fileira: frota4.url,
-  cronosTCross: frota5.url,
-  tcrossCronos: frota6.url,
-  cronosMar: frota7.url,
-  frotaPorDoSol: frota8.url,
+  cronosPredio: frota1,
+  cronosNoite: frota2,
+  cronosChuva: frota3,
+  fileira: frota4,
+  cronosTCross: frota5,
+  tcrossCronos: frota6,
+  cronosMar: frota7,
+  frotaPorDoSol: frota8,
 };
 
 export const EMPRESA = {

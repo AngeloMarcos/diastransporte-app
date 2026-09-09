@@ -266,15 +266,17 @@ export const vpsCriarReservas = createServerFn({ method: "POST" })
       return linhasCriadas;
     });
 
-    // Fora da transação e sem await: o despacho (car-fleet-co) é um sistema
-    // à parte, na mesma VPS — uma falha ou lentidão dele nunca pode travar
-    // nem reverter o checkout do cliente aqui. Ver integracao-carfleet.server.ts.
-    // Import dinâmico (não top-level) pelo mesmo motivo de auth.server/db.server
-    // acima: é um módulo *.server.ts, só deve existir no bundle do servidor.
-    void import("./integracao-carfleet.server").then(({ notificarDespacho }) => {
+    // Fora da transação e sem await: uma falha ou lentidão criando o pedido
+    // de despacho nunca pode travar nem reverter o checkout do cliente
+    // aqui. Ver despacho-sync.server.ts (insert direto na mesma base desde
+    // a fusão — antes disso era uma chamada HTTP pro car-fleet-co, quando
+    // ainda eram dois apps separados). Import dinâmico (não top-level) pelo
+    // mesmo motivo de auth.server/db.server acima: é um módulo *.server.ts,
+    // só deve existir no bundle do servidor.
+    void import("./despacho-sync.server").then(({ criarPedidoDespacho }) => {
       for (const agendamento of criados) {
-        void notificarDespacho(ctx.sql, agendamento, usuario).catch((erro: unknown) => {
-          console.error("[integracao car-fleet-co] falha ao notificar despacho:", erro);
+        void criarPedidoDespacho(ctx.sql, agendamento, usuario).catch((erro: unknown) => {
+          console.error("[despacho-sync] falha ao criar pedido do despacho:", erro);
         });
       }
     });

@@ -2,7 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Car, LayoutDashboard, LogIn, LogOut, Phone, UserRound } from "lucide-react";
 
-import logo from "@/assets/logo.jpeg.asset.json";
+import logo from "@/assets/logo.jpeg";
 import { EMPRESA } from "@/data/rotas";
 import { whatsappLink } from "@/lib/whatsapp";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,7 @@ export function Header() {
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
         <Link to="/" className="flex min-w-0 min-h-11 items-center gap-2.5">
           <img
-            src={logo.url}
+            src={logo}
             alt="Logo Dias Transporte"
             width={44}
             height={44}

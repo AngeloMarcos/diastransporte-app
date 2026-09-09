@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Instagram, MessageCircle } from "lucide-react";
-import logo from "@/assets/logo.jpeg.asset.json";
+import logo from "@/assets/logo.jpeg";
 import { EMPRESA } from "@/data/rotas";
 import { whatsappLink } from "@/lib/whatsapp";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ export function Footer() {
         <div className="md:col-span-2">
           <div className="flex items-center gap-2">
             <img
-              src={logo.url}
+              src={logo}
               alt="Logo Dias Transporte"
               width={40}
               height={40}
@@ -20,7 +20,6 @@ export function Footer() {
               decoding="async"
               className="h-10 w-10 rounded-sm object-contain"
             />
-
 
             <span className="font-display text-lg tracking-wide">{EMPRESA.nome}</span>
           </div>

@@ -1,19 +1,9 @@
-# Stack do Dias Transporte na VPS: proxy + app + Postgres + volume de uploads.
-# Copie .env.example para .env e ajuste antes de subir.
+# STAGING TEMPORARIO da fusao (nao e' o docker-compose.yml oficial do
+# repositorio - esse continua representando a topologia de producao real,
+# com Caddy, pra Etapa 8). Sem Caddy aqui: publica a porta do app direto,
+# pra nao colidir com 80/443 do Dias Transporte real. Ver roteiro em
+# C:\Users\angel\.claude\plans\linear-rolling-marble.md.
 services:
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    depends_on:
-      - app
-    volumes:
-      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    ports:
-      - "80:80"
-      - "443:443"
-
   db:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -47,7 +37,7 @@ services:
     volumes:
       - uploads:/var/lib/dias-transporte/uploads
     ports:
-      - "127.0.0.1:3000:3000" # o Caddy/Nginx do host faz o proxy e o HTTPS
+      - "3002:3000" # staging temporario, direto por IP (sem Caddy/domínio ainda)
     healthcheck:
       # Sem isso "restart: unless-stopped" só reagia a um crash de verdade
       # (processo morto) — um processo travado mas ainda de pé (ex.: preso
@@ -79,5 +69,3 @@ services:
 volumes:
   db:
   uploads:
-  caddy_data:
-  caddy_config:
