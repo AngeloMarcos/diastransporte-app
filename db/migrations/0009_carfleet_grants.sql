@@ -7,8 +7,6 @@
 -- sequence pedidos_id_seq" mesmo com o INSERT na tabela já liberado.
 -- Mesmo GRANT que o car-fleet-co já tinha pro equivalente dele (carfleet_app).
 
-BEGIN;
 
 GRANT USAGE, SELECT ON SEQUENCE public.pedidos_id_seq TO dias_app;
 
-COMMIT;

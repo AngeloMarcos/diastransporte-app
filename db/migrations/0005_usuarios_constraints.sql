@@ -13,7 +13,6 @@
 -- Auditado antes de escrever: 3 usuários e 0 sessões nesta VPS agora, nenhum
 -- viola as constraints abaixo.
 
-BEGIN;
 
 ALTER TABLE public.usuarios
   ADD CONSTRAINT ck_usuarios_email_formato
@@ -27,4 +26,3 @@ ALTER TABLE public.sessoes
   ADD CONSTRAINT ck_sessoes_user_agent
     CHECK (length(user_agent) <= 500);
 
-COMMIT;

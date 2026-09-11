@@ -17,6 +17,7 @@ import type {
 import type { RotaRow } from "@/lib/rotasMap";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
+import { transicaoValidaAgendamento, type StatusAgendamento } from "@/lib/status";
 
 async function contexto() {
   const [{ lerCookieSessao, exigirUsuario, exigirAdmin, exigirMotorista }, { sql }] =
@@ -322,7 +323,22 @@ export const vpsAtualizarStatus = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const ctx = await contexto();
     await ctx.admin();
-    await ctx.sql`UPDATE public.agendamentos SET status = ${data.status} WHERE id = ${data.id}`;
+    // Achado revisando integridade do schema: esta função aceitava
+    // qualquer status vindo do admin sem validar a transição — dava pra
+    // "desconcluir" uma viagem de volta pra pendente ou pular direto pra
+    // cancelado sem querer. Mesmo padrão de vpsTransicionarStatusPedido
+    // (ver transicaoValidaAgendamento em @/lib/status), com FOR UPDATE pra
+    // evitar duas mudanças de status concorrentes lendo o mesmo "antes".
+    await ctx.sql.begin(async (sql) => {
+      const [antes] = await sql<{ status: StatusAgendamento }[]>`
+        SELECT status FROM public.agendamentos WHERE id = ${data.id} FOR UPDATE
+      `;
+      if (!antes) throw new Error("Agendamento não encontrado.");
+      if (!transicaoValidaAgendamento(antes.status, data.status)) {
+        throw new Error(`Transição inválida: ${antes.status} → ${data.status}`);
+      }
+      await sql`UPDATE public.agendamentos SET status = ${data.status} WHERE id = ${data.id}`;
+    });
     return { ok: true };
   });
 
@@ -634,7 +650,21 @@ export const vpsDefinirMotorista = createServerFn({ method: "POST" })
     if (atual.id === data.userId && !data.motorista) {
       throw new Error("Você não pode remover seu próprio acesso de motorista.");
     }
-    await ctx.sql`UPDATE public.usuarios SET motorista = ${data.motorista} WHERE id = ${data.userId}`;
+    await ctx.sql.begin(async (sql) => {
+      await sql`UPDATE public.usuarios SET motorista = ${data.motorista} WHERE id = ${data.userId}`;
+      // Achado revisando integridade do schema: nada garantia que
+      // fornecedores.user_id só apontasse pra usuários com motorista=true —
+      // remover o papel aqui deixava um cadastro de fornecedor "órfão",
+      // ainda ativo e ainda logável, apontando pra alguém que a tela de
+      // Usuários já não mostra mais como motorista. Mesmo tratamento que
+      // vpsRemoverMotorista já dá (desativa + revoga o acesso, preserva
+      // histórico em vez de apagar a linha).
+      if (!data.motorista) {
+        await sql`
+          UPDATE public.fornecedores SET ativo = false, user_id = NULL WHERE user_id = ${data.userId}
+        `;
+      }
+    });
     registrarAuditoria({
       acao: data.motorista ? "promover_motorista" : "remover_motorista",
       atorId: atual.id,

@@ -47,3 +47,30 @@ export const STATUS_ATIVOS = new Set(["pendente", "confirmado"]);
 export function podeConcluir(status: string): boolean {
   return status === "confirmado";
 }
+
+// Achado revisando backend/banco (integridade do schema): vpsAtualizarStatus
+// aceitava qualquer status vindo do admin, sem validar a transição — dava
+// pra "desconcluir" uma viagem de volta pra pendente sem querer, ou pular
+// direto pra cancelado. Mesma ideia de src/lib/pedidos-transicoes.ts
+// (transicoesPermitidas/transicaoValida), aplicada aos 4 status mais
+// simples de agendamento. "concluido" é terminal (só admite virar cancelado,
+// pra corrigir um engano) — nunca volta pra pendente/confirmado sozinho.
+export function transicoesPermitidasAgendamento(atual: StatusAgendamento): StatusAgendamento[] {
+  switch (atual) {
+    case "pendente":
+      return ["confirmado", "cancelado"];
+    case "confirmado":
+      return ["pendente", "concluido", "cancelado"];
+    case "concluido":
+      return ["cancelado"];
+    case "cancelado":
+      return ["pendente"];
+  }
+}
+
+export function transicaoValidaAgendamento(
+  atual: StatusAgendamento,
+  novo: StatusAgendamento,
+): boolean {
+  return transicoesPermitidasAgendamento(atual).includes(novo);
+}

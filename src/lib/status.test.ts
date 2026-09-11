@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { contarStatus, podeConcluir, STATUS_ATIVOS, statusOpcoes } from "./status";
+import {
+  contarStatus,
+  podeConcluir,
+  STATUS_ATIVOS,
+  statusOpcoes,
+  transicaoValidaAgendamento,
+} from "./status";
 
 describe("contarStatus", () => {
   it("conta cada status separadamente", () => {
@@ -44,5 +50,35 @@ describe("STATUS_ATIVOS", () => {
   it("trata concluído e cancelado como histórico", () => {
     expect(STATUS_ATIVOS.has("concluido")).toBe(false);
     expect(STATUS_ATIVOS.has("cancelado")).toBe(false);
+  });
+});
+
+describe("transicaoValidaAgendamento", () => {
+  it("permite o fluxo normal: pendente -> confirmado -> concluido", () => {
+    expect(transicaoValidaAgendamento("pendente", "confirmado")).toBe(true);
+    expect(transicaoValidaAgendamento("confirmado", "concluido")).toBe(true);
+  });
+
+  it("permite cancelar a partir de pendente ou confirmado", () => {
+    expect(transicaoValidaAgendamento("pendente", "cancelado")).toBe(true);
+    expect(transicaoValidaAgendamento("confirmado", "cancelado")).toBe(true);
+  });
+
+  it("concluido é terminal — só admite virar cancelado, nunca volta a pendente/confirmado", () => {
+    expect(transicaoValidaAgendamento("concluido", "cancelado")).toBe(true);
+    expect(transicaoValidaAgendamento("concluido", "pendente")).toBe(false);
+    expect(transicaoValidaAgendamento("concluido", "confirmado")).toBe(false);
+  });
+
+  it("cancelado só pode ser reaberto pra pendente, não pula direto pra confirmado/concluido", () => {
+    expect(transicaoValidaAgendamento("cancelado", "pendente")).toBe(true);
+    expect(transicaoValidaAgendamento("cancelado", "confirmado")).toBe(false);
+    expect(transicaoValidaAgendamento("cancelado", "concluido")).toBe(false);
+  });
+
+  it("não permite ficar no mesmo status (não é uma transição)", () => {
+    for (const s of statusOpcoes) {
+      expect(transicaoValidaAgendamento(s, s)).toBe(false);
+    }
   });
 });

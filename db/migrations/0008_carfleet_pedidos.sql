@@ -1,7 +1,6 @@
 -- Etapa 4 do roteiro de fusão — continuação de 0007_carfleet_core.sql:
 -- pedidos + suas tabelas satélite. Fonte: car-fleet-co/db/migrations/0001_init.sql.
 
-BEGIN;
 
 CREATE OR REPLACE FUNCTION public.set_data_alteracao()
 RETURNS trigger
@@ -162,4 +161,3 @@ CREATE TABLE IF NOT EXISTS public.pedidos_historico (
 
 CREATE INDEX IF NOT EXISTS idx_historico_pedido ON public.pedidos_historico (pedido_id);
 
-COMMIT;

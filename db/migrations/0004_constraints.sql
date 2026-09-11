@@ -12,7 +12,6 @@
 -- agendamentos e rotas), então não há dado existente que possa violar as
 -- constraints abaixo.
 
-BEGIN;
 
 ALTER TABLE public.agendamentos
   ADD CONSTRAINT ck_agendamentos_status
@@ -53,4 +52,3 @@ ALTER TABLE public.rotas
 CREATE INDEX IF NOT EXISTS agendamentos_carro_data_idx
   ON public.agendamentos (carro, data_viagem);
 
-COMMIT;

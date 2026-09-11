@@ -8,7 +8,6 @@
 -- build), não dá pra gravar como dado fixo no banco sem quebrar no próximo
 -- build — o fallback estático já cobre isso até o admin subir fotos reais.
 
-BEGIN;
 
 CREATE TABLE IF NOT EXISTS public.frota_veiculos (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -54,4 +53,3 @@ DROP TRIGGER IF EXISTS frota_galeria_updated_at ON public.frota_galeria;
 CREATE TRIGGER frota_galeria_updated_at BEFORE UPDATE ON public.frota_galeria
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-COMMIT;

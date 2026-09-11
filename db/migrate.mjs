@@ -6,7 +6,17 @@
 //   node db/migrate.mjs --seed     (aplica também db/seed.sql)
 //
 // 0002_roles.sql é ignorado aqui: ele exige a variável app_password e é
-// aplicado à mão com psql (ver MIGRACAO.md).
+// aplicado à mão com psql (ver MIGRACAO.md) — por isso é o único arquivo
+// que ainda tem BEGIN/COMMIT próprio. Os demais NÃO devem ter BEGIN/COMMIT
+// no arquivo: a transação é aberta aqui (sql.begin), envolvendo tanto o
+// DDL quanto o INSERT em schema_migrations. Achado revisando integridade
+// de schema: antes, cada arquivo abria/fechava sua própria transação, então
+// um crash entre o COMMIT do arquivo e o INSERT de bookkeeping (linha
+// abaixo) deixava o schema já alterado mas schema_migrations sem registro
+// — a próxima execução tentava reaplicar o arquivo inteiro, e statements
+// não-idempotentes (ex.: ADD CONSTRAINT sem IF NOT EXISTS) quebravam com
+// "already exists" até alguém arrumar a mão. Com os dois na mesma
+// transação, ou os dois commitam juntos, ou nenhum dos dois.
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -44,8 +54,10 @@ try {
     }
     const conteudo = await readFile(join(aqui, "migrations", arquivo), "utf8");
     console.log(`→ ${arquivo}`);
-    await sql.unsafe(conteudo);
-    await sql`INSERT INTO public.schema_migrations (nome) VALUES (${arquivo})`;
+    await sql.begin(async (tx) => {
+      await tx.unsafe(conteudo);
+      await tx`INSERT INTO public.schema_migrations (nome) VALUES (${arquivo})`;
+    });
   }
 
   if (process.argv.includes("--seed")) {

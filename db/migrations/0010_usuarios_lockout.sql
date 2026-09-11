@@ -5,10 +5,8 @@
 -- atacante paciente ou distribuído consegue tentar senhas comuns
 -- indefinidamente contra qualquer conta, sem nunca ser bloqueado.
 
-BEGIN;
 
 ALTER TABLE public.usuarios
   ADD COLUMN IF NOT EXISTS tentativas_falhas integer NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS bloqueado_ate timestamptz;
 
-COMMIT;

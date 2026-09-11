@@ -5,7 +5,6 @@
 --   * sem SECURITY DEFINER dependente de roles do Supabase
 -- Aplicar com a role de migration (DDL). O runtime usa a role de app (CRUD).
 
-BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -180,4 +179,3 @@ CREATE TRIGGER agendamentos_valor_oficial
 BEFORE INSERT OR UPDATE OF rota_id, carro, periodo, valor ON public.agendamentos
 FOR EACH ROW EXECUTE FUNCTION public.agendamentos_calcular_valor();
 
-COMMIT;

@@ -12,7 +12,6 @@
 -- dependência de identidade: timestamps e normalização de texto, portadas
 -- verbatim.
 
-BEGIN;
 
 -- --------------------------------------------------------------------- enums
 CREATE TYPE public.pedido_direcao AS ENUM ('IN', 'OUT');
@@ -152,4 +151,3 @@ DROP TRIGGER IF EXISTS trg_fornecedores_notas_updated ON public.fornecedores_not
 CREATE TRIGGER trg_fornecedores_notas_updated BEFORE UPDATE ON public.fornecedores_notas_internas
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-COMMIT;
