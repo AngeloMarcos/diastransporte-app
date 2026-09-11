@@ -25,7 +25,12 @@ const sql = postgres(url, { max: 1, onnotice: () => {} });
 const cache = new Map();
 
 async function baixar(caminho) {
-  if (!caminho || caminho.startsWith("/api/uploads/")) return caminho;
+  // /api/uploads/ já foi migrado antes; /frota/ são as fotos de frota
+  // estáticas deste app (public/frota/, ver db/seed.sql) — nunca estiveram
+  // no Lovable sob esse caminho, não faz sentido tentar buscá-las lá.
+  if (!caminho || caminho.startsWith("/api/uploads/") || caminho.startsWith("/frota/")) {
+    return caminho;
+  }
   if (cache.has(caminho)) return cache.get(caminho);
   const alvo = caminho.startsWith("http") ? caminho : `${origem}${caminho}`;
   const resposta = await fetch(alvo);
