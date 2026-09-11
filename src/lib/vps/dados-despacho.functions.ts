@@ -10,6 +10,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 
+import { limitesDoDiaEmMaranhao } from "@/lib/fuso-maranhao";
 import { transicaoValida, type PedidoStatus } from "@/lib/pedidos-transicoes";
 
 async function contexto() {
@@ -104,10 +105,10 @@ export const vpsDashboardDespacho = createServerFn({ method: "GET" }).handler(
     const porStatus: Record<string, number> = {};
     for (const l of porStatusLinhas) porStatus[l.status] = Number(l.total);
 
-    const inicioHoje = new Date();
-    inicioHoje.setHours(0, 0, 0, 0);
-    const fimHoje = new Date();
-    fimHoje.setHours(23, 59, 59, 999);
+    // Achado revisando performance/correção: setHours(0,0,0,0) usa o fuso do
+    // PROCESSO Node, não o de Maranhão (UTC-3 fixo) — num container rodando
+    // em UTC (padrão comum), "hoje" ficava até 3h errado perto da meia-noite.
+    const { inicio: inicioHoje, fim: fimHoje } = limitesDoDiaEmMaranhao();
 
     const hoje = await ctx.sql<
       {
@@ -121,7 +122,7 @@ export const vpsDashboardDespacho = createServerFn({ method: "GET" }).handler(
     >`
       SELECT id, passageiro_nome, cidade_atendimento, data_hora_encontro, status, direcao
         FROM public.pedidos
-       WHERE data_hora_encontro BETWEEN ${inicioHoje.toISOString()} AND ${fimHoje.toISOString()}
+       WHERE data_hora_encontro BETWEEN ${inicioHoje} AND ${fimHoje}
        ORDER BY data_hora_encontro
     `;
     const semMotorista = await ctx.sql<
@@ -794,7 +795,17 @@ export const vpsRemoverMotorista = createServerFn({ method: "POST" })
       `;
 
       if (Number(total?.total ?? "0") > 0) {
-        // Preserva histórico: apenas desativa e revoga o acesso, em vez de apagar.
+        // Preserva histórico: apenas desativa e revoga o acesso, em vez de
+        // apagar. Decisão registrada (achado revisando integridade do
+        // schema): DELETE FROM usuarios aqui é proposital, mesmo com
+        // fornecedores mantido — fornecedores.email/telefone (denormalizado)
+        // continua sendo o rastro de contato dessa pessoa. O que NÃO é
+        // proposital é pedidos_historico.alterado_por perder a referência
+        // (a FK é ON DELETE SET NULL, então um registro de histórico que
+        // apontava pra este usuário como quem mudou o status vira NULL, sem
+        // aviso). Não "consertar" isso pra ON DELETE CASCADE — isso
+        // apagaria histórico de despacho de verdade só porque o motorista
+        // saiu depois.
         await sql`
           UPDATE public.fornecedores SET ativo = false, user_id = NULL WHERE id = ${fornecedor.id}
         `;
