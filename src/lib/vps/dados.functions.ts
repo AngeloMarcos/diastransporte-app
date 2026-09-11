@@ -164,7 +164,12 @@ export const vpsMinhasViagens = createServerFn({ method: "GET" }).handler(
 export const vpsMinhasCorridas = createServerFn({ method: "GET" }).handler(
   async (): Promise<AgendamentoRow[]> => {
     const ctx = await contexto();
-    const usuario = await ctx.usuario();
+    // ctx.motorista() (não só ctx.usuario()) — achado revisando autorização:
+    // sem isso, o filtro motorista_id = usuario.id era a ÚNICA barreira, e
+    // vpsAtribuirMotorista não conferia que o id atribuído era de fato um
+    // motorista (corrigido abaixo). Um cliente comum atribuído por engano
+    // conseguiria ver a corrida mesmo sem o papel de motorista.
+    const usuario = await ctx.motorista();
     return ctx.sql<AgendamentoRow[]>`
       SELECT * FROM public.agendamentos WHERE motorista_id = ${usuario.id} ORDER BY created_at DESC
     `.then((linhas) => [...linhas]);
@@ -178,7 +183,7 @@ export const vpsConcluirCorrida = createServerFn({ method: "POST" })
   .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    const usuario = await ctx.usuario();
+    const usuario = await ctx.motorista(); // ver comentário em vpsMinhasCorridas
     const linhas = await ctx.sql<{ id: string }[]>`
       UPDATE public.agendamentos
          SET status = 'concluido'
@@ -328,6 +333,16 @@ export const vpsAtribuirMotorista = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const ctx = await contexto();
     await ctx.admin();
+    // Achado revisando autorização: sem esta checagem, qualquer uuid válido
+    // era aceito como motoristaId (um typo, um id de cliente comum) — a
+    // pessoa passaria a ver/concluir a corrida via vpsMinhasCorridas/
+    // vpsConcluirCorrida mesmo sem o papel de motorista.
+    if (data.motoristaId) {
+      const [motorista] = await ctx.sql<{ id: string }[]>`
+        SELECT id FROM public.usuarios WHERE id = ${data.motoristaId} AND motorista
+      `;
+      if (!motorista) throw new Error("Usuário não encontrado ou não é motorista.");
+    }
     await ctx.sql`
       UPDATE public.agendamentos SET motorista_id = ${data.motoristaId} WHERE id = ${data.id}
     `;
@@ -613,6 +628,12 @@ export const vpsDefinirMotorista = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const ctx = await contexto();
     const atual = await ctx.admin();
+    // Mesma proteção de vpsDefinirAdmin, por consistência — achado
+    // revisando autorização: esta função não tinha nenhuma, embora não seja
+    // tão grave (tirar "motorista" não tira acesso ao /admin).
+    if (atual.id === data.userId && !data.motorista) {
+      throw new Error("Você não pode remover seu próprio acesso de motorista.");
+    }
     await ctx.sql`UPDATE public.usuarios SET motorista = ${data.motorista} WHERE id = ${data.userId}`;
     registrarAuditoria({
       acao: data.motorista ? "promover_motorista" : "remover_motorista",

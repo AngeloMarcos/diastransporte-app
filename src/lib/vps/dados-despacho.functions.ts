@@ -334,6 +334,18 @@ export const vpsAtribuirMotoristaPedido = createServerFn({ method: "POST" })
       `;
       if (!antes) throw new Error(`Corrida ${String(data.pedidoId)} não encontrada.`);
 
+      // Achado revisando autorização: sem esta checagem, dava pra atribuir
+      // um fornecedor desativado (ex.: removido via vpsRemoverMotorista,
+      // que zera user_id e mantém a linha) — a corrida ficava presa, sem
+      // ninguém conseguindo acessá-la, já que fornecedorDoMotorista só acha
+      // fornecedor pelo user_id de quem está logado.
+      if (data.fornecedorId) {
+        const [fornecedor] = await sql<{ id: string }[]>`
+          SELECT id FROM public.fornecedores WHERE id = ${data.fornecedorId} AND ativo
+        `;
+        if (!fornecedor) throw new Error("Motorista não encontrado ou está desativado.");
+      }
+
       // Atribuir um motorista avança automaticamente o status pra
       // "motorista_atribuido" quando ele ainda estava só liberado — mas não
       // mexe no status se a corrida já foi além disso (ex.: trocar o
