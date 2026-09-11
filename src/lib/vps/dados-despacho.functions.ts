@@ -729,37 +729,52 @@ export const vpsCriarMotorista = createServerFn({ method: "POST" })
     const { hashSenha } = await import("./auth.server");
     const senhaHash = await hashSenha(data.senha);
 
-    return ctx.sql.begin(async (sql) => {
-      const existentes = await sql<{ id: string }[]>`
-        SELECT id FROM public.usuarios WHERE lower(email) = lower(${data.email})
-      `;
-      if (existentes.length) throw new Error("Já existe uma conta com este e-mail.");
-
-      const [usuario] = await sql<{ id: string }[]>`
-        INSERT INTO public.usuarios (email, senha_hash, nome, telefone, motorista)
-        VALUES (${data.email.trim()}, ${senhaHash}, ${data.nome}, ${data.telefone || ""}, true)
-        RETURNING id
-      `;
-      if (!usuario) throw new Error("Não foi possível criar o usuário.");
-
-      const [fornecedor] = await sql<FornecedorRow[]>`
-        INSERT INTO public.fornecedores
-          (user_id, nome, email, telefone, cidade_atuacao, regiao_atuacao, categoria_veiculo_id)
-        VALUES (${usuario.id}, ${data.nome}, ${data.email}, ${data.telefone || null},
-                ${data.cidade_atuacao}, ${data.regiao_atuacao || null}, ${data.categoria_veiculo_id ?? null})
-        RETURNING id, nome, email, telefone, cidade_atuacao, categoria_veiculo_id, ativo
-      `;
-      if (!fornecedor) throw new Error("Não foi possível criar o cadastro de motorista.");
-
-      if (data.observacoes_internas.trim()) {
-        await sql`
-          INSERT INTO public.fornecedores_notas_internas (fornecedor_id, observacoes_internas)
-          VALUES (${fornecedor.id}, ${data.observacoes_internas.trim()})
+    try {
+      return await ctx.sql.begin(async (sql) => {
+        // Checagem prévia só pra dar o erro amigável no caso comum
+        // (sequencial) sem esperar o banco reclamar — a garantia de
+        // verdade é o índice único em usuarios(lower(email)), e duas
+        // chamadas concorrentes pra este mesmo e-mail ainda podem passar
+        // as duas por aqui antes de qualquer uma commitar. O catch abaixo
+        // cobre esse caso, traduzindo a violação de unicidade (23505) do
+        // Postgres pra mensagem amigável em vez do erro cru vazando —
+        // achado revisando concorrência.
+        const existentes = await sql<{ id: string }[]>`
+          SELECT id FROM public.usuarios WHERE lower(email) = lower(${data.email})
         `;
-      }
+        if (existentes.length) throw new Error("Já existe uma conta com este e-mail.");
 
-      return { userId: usuario.id, fornecedor };
-    });
+        const [usuario] = await sql<{ id: string }[]>`
+          INSERT INTO public.usuarios (email, senha_hash, nome, telefone, motorista)
+          VALUES (${data.email.trim()}, ${senhaHash}, ${data.nome}, ${data.telefone || ""}, true)
+          RETURNING id
+        `;
+        if (!usuario) throw new Error("Não foi possível criar o usuário.");
+
+        const [fornecedor] = await sql<FornecedorRow[]>`
+          INSERT INTO public.fornecedores
+            (user_id, nome, email, telefone, cidade_atuacao, regiao_atuacao, categoria_veiculo_id)
+          VALUES (${usuario.id}, ${data.nome}, ${data.email}, ${data.telefone || null},
+                  ${data.cidade_atuacao}, ${data.regiao_atuacao || null}, ${data.categoria_veiculo_id ?? null})
+          RETURNING id, nome, email, telefone, cidade_atuacao, categoria_veiculo_id, ativo
+        `;
+        if (!fornecedor) throw new Error("Não foi possível criar o cadastro de motorista.");
+
+        if (data.observacoes_internas.trim()) {
+          await sql`
+            INSERT INTO public.fornecedores_notas_internas (fornecedor_id, observacoes_internas)
+            VALUES (${fornecedor.id}, ${data.observacoes_internas.trim()})
+          `;
+        }
+
+        return { userId: usuario.id, fornecedor };
+      });
+    } catch (erro) {
+      if (erro && typeof erro === "object" && "code" in erro && erro.code === "23505") {
+        throw new Error("Já existe uma conta com este e-mail.");
+      }
+      throw erro;
+    }
   });
 
 export const vpsRemoverMotorista = createServerFn({ method: "POST" })
@@ -864,28 +879,47 @@ export const vpsImportarPedidos = createServerFn({ method: "POST" })
     const ignorados = data.rows.length - aInserir.length;
 
     let inseridos = 0;
+    let ignoradosPorConflito = 0;
     await ctx.sql.begin(async (sql) => {
       for (const r of aInserir) {
-        const [pedido] = await sql<{ id: number }[]>`
-          INSERT INTO public.pedidos
-            (codigo_reserva_canal, codigo_fornecedor_reserva, passageiro_nome, passageiro_telefone,
-             cidade_atendimento, hotel, data_hora_encontro, direcao, numero_voo, ponto_partida,
-             ponto_chegada, canal_venda_id, categoria_veiculo_id, empresa_cliente_id)
-          VALUES (${r.codigo_reserva_canal}, ${r.codigo_fornecedor_reserva}, ${r.passageiro_nome},
-                  ${r.passageiro_telefone}, ${r.cidade_atendimento}, ${r.hotel}, ${r.data_hora_encontro},
-                  ${r.direcao}, ${r.numero_voo}, ${r.ponto_partida}, ${r.ponto_chegada},
-                  ${r.canal_venda_id}, ${r.categoria_veiculo_id}, ${r.empresa_cliente_id})
-          RETURNING id
-        `;
-        if (pedido) {
-          await sql`
-            INSERT INTO public.pedidos_historico (pedido_id, status_anterior, status_novo)
-            VALUES (${pedido.id}, NULL, 'pendente_liberacao')
-          `;
-          inseridos += 1;
+        try {
+          // Savepoint por linha — achado revisando concorrência: a
+          // deduplicação acima (existentes/vistos) roda ANTES desta
+          // transação abrir, então uma corrida real (outro import ou
+          // vpsCriarPedido inserindo o mesmo codigo_reserva_canal entre a
+          // checagem e este insert) ainda pode colidir com o índice único
+          // parcial. Sem savepoint, essa colisão abortava a transação
+          // inteira e descartava TODAS as linhas já inseridas antes dela
+          // no mesmo lote, não só a conflitante.
+          await sql.savepoint(async (sql) => {
+            const [pedido] = await sql<{ id: number }[]>`
+              INSERT INTO public.pedidos
+                (codigo_reserva_canal, codigo_fornecedor_reserva, passageiro_nome, passageiro_telefone,
+                 cidade_atendimento, hotel, data_hora_encontro, direcao, numero_voo, ponto_partida,
+                 ponto_chegada, canal_venda_id, categoria_veiculo_id, empresa_cliente_id)
+              VALUES (${r.codigo_reserva_canal}, ${r.codigo_fornecedor_reserva}, ${r.passageiro_nome},
+                      ${r.passageiro_telefone}, ${r.cidade_atendimento}, ${r.hotel}, ${r.data_hora_encontro},
+                      ${r.direcao}, ${r.numero_voo}, ${r.ponto_partida}, ${r.ponto_chegada},
+                      ${r.canal_venda_id}, ${r.categoria_veiculo_id}, ${r.empresa_cliente_id})
+              RETURNING id
+            `;
+            if (pedido) {
+              await sql`
+                INSERT INTO public.pedidos_historico (pedido_id, status_anterior, status_novo)
+                VALUES (${pedido.id}, NULL, 'pendente_liberacao')
+              `;
+              inseridos += 1;
+            }
+          });
+        } catch (erro) {
+          if (erro && typeof erro === "object" && "code" in erro && erro.code === "23505") {
+            ignoradosPorConflito += 1;
+            continue;
+          }
+          throw erro;
         }
       }
     });
 
-    return { inseridos, ignorados };
+    return { inseridos, ignorados: ignorados + ignoradosPorConflito };
   });

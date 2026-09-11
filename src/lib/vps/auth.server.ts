@@ -161,12 +161,25 @@ export async function autenticar(email: string, senha: string): Promise<UsuarioS
   }
 
   if (!(await conferirSenha(senha, linha.senha_hash))) {
-    const tentativas = linha.tentativas_falhas + 1;
-    const bloquear = tentativas >= MAX_TENTATIVAS_LOGIN;
+    // Incremento atômico dentro do próprio UPDATE — achado revisando
+    // concorrência: a versão anterior lia tentativas_falhas, somava 1 em
+    // TypeScript e regravava (check-then-act clássico). Tentativas de
+    // login em PARALELO (em vez de sequenciais) liam o mesmo valor antes
+    // de qualquer uma comitar, colapsando várias falhas num único
+    // incremento — o bloqueio de 5 tentativas dava pra contornar só
+    // paralelizando as tentativas em vez de serializá-las. O UPDATE em SQL
+    // trava a linha (MVCC) e faz a conta em cima do valor real da vez.
     await db`
       UPDATE public.usuarios
-         SET tentativas_falhas = ${bloquear ? 0 : tentativas},
-             bloqueado_ate = ${bloquear ? new Date(Date.now() + BLOQUEIO_MINUTOS * 60_000) : null}
+         SET tentativas_falhas = CASE
+               WHEN tentativas_falhas + 1 >= ${MAX_TENTATIVAS_LOGIN} THEN 0
+               ELSE tentativas_falhas + 1
+             END,
+             bloqueado_ate = CASE
+               WHEN tentativas_falhas + 1 >= ${MAX_TENTATIVAS_LOGIN}
+               THEN now() + make_interval(mins => ${BLOQUEIO_MINUTOS})
+               ELSE NULL
+             END
        WHERE id = ${linha.id}
     `;
     throw new Error(generico);
