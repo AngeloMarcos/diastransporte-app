@@ -927,7 +927,7 @@ function AdminRotas() {
     );
   }, [data, busca]);
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando rotas…</p>;
+  if (isLoading) return <ListaCarregando />;
 
   return (
     <div className="space-y-4">
@@ -949,10 +949,25 @@ function AdminRotas() {
         </div>
       </div>
 
-      {filtradas.length ? (
-        filtradas.map((rota) => <RotaEditor key={rota.id} rota={rota} />)
+      {!data?.length ? (
+        <ListaVazia
+          icon={RouteIcon}
+          titulo="Nenhuma rota cadastrada ainda"
+          descricao='Cadastre a primeira com "Nova rota".'
+        />
+      ) : !filtradas.length ? (
+        <ListaVazia
+          icon={Search}
+          titulo="Nenhuma rota encontrada"
+          descricao="Tente outro termo de busca."
+          acao={
+            <Button size="sm" variant="outline" onClick={() => setBusca("")}>
+              Limpar busca
+            </Button>
+          }
+        />
       ) : (
-        <p className="text-sm text-muted-foreground">Nenhuma rota encontrada.</p>
+        filtradas.map((rota) => <RotaEditor key={rota.id} rota={rota} />)
       )}
     </div>
   );
@@ -1366,20 +1381,61 @@ function NovoVeiculoDialog() {
 }
 
 function AdminVeiculosLista() {
+  const [busca, setBusca] = useState("");
   const { data, isLoading } = useQuery({
     queryKey: ["admin-frota-veiculos"],
     queryFn: () => listarFrotaVeiculosAdmin(),
   });
 
-  if (isLoading) return <p className="mt-4 text-sm text-muted-foreground">Carregando…</p>;
+  const filtrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return data ?? [];
+    return (data ?? []).filter((v) => `${v.nome} ${v.modelo ?? ""}`.toLowerCase().includes(termo));
+  }, [data, busca]);
+
+  if (isLoading) {
+    return (
+      <div className="mt-4">
+        <ListaCarregando />
+      </div>
+    );
+  }
   if (!data?.length) {
-    return <p className="mt-4 text-sm text-muted-foreground">Nenhum veículo cadastrado ainda.</p>;
+    return (
+      <div className="mt-4">
+        <ListaVazia
+          icon={Truck}
+          titulo="Nenhum veículo cadastrado ainda"
+          descricao='Cadastre com "Novo veículo" — enquanto não houver nenhum, o site mostra os dois carros padrão.'
+        />
+      </div>
+    );
   }
   return (
     <div className="mt-4 space-y-4">
-      {data.map((v) => (
-        <VeiculoEditor key={v.id} veiculo={v} />
-      ))}
+      <div className="relative sm:max-w-xs">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          className="h-11 pl-8"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar por nome ou modelo"
+        />
+      </div>
+      {!filtrados.length ? (
+        <ListaVazia
+          icon={Search}
+          titulo="Nenhum veículo encontrado"
+          descricao="Tente outro termo de busca."
+          acao={
+            <Button size="sm" variant="outline" onClick={() => setBusca("")}>
+              Limpar busca
+            </Button>
+          }
+        />
+      ) : (
+        filtrados.map((v) => <VeiculoEditor key={v.id} veiculo={v} />)
+      )}
     </div>
   );
 }
@@ -2552,10 +2608,17 @@ function ListaVazia({
 
 function AdminCategorias() {
   const queryClient = useQueryClient();
+  const [busca, setBusca] = useState("");
   const { data, isLoading } = useQuery({
     queryKey: ["admin-categorias-veiculo"],
     queryFn: () => listarCategoriasVeiculo(),
   });
+
+  const filtradas = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return data ?? [];
+    return (data ?? []).filter((c) => c.nome.toLowerCase().includes(termo));
+  }, [data, busca]);
 
   const alternarAtivo = useMutation({
     mutationFn: (c: CategoriaVeiculo) => atualizarCategoriaVeiculo(c.id, { ativo: !c.ativo }),
@@ -2577,6 +2640,18 @@ function AdminCategorias() {
         <CategoriaDialog />
       </div>
 
+      {!isLoading && Boolean(data?.length) && (
+        <div className="relative sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 pl-8"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por nome"
+          />
+        </div>
+      )}
+
       {isLoading ? (
         <ListaCarregando />
       ) : !data?.length ? (
@@ -2585,9 +2660,20 @@ function AdminCategorias() {
           titulo="Nenhuma categoria cadastrada ainda"
           descricao="Cadastre as categorias de veículo pra poder casar cada corrida com o carro certo."
         />
+      ) : !filtradas.length ? (
+        <ListaVazia
+          icon={Search}
+          titulo="Nenhuma categoria encontrada"
+          descricao="Tente outro termo de busca."
+          acao={
+            <Button size="sm" variant="outline" onClick={() => setBusca("")}>
+              Limpar busca
+            </Button>
+          }
+        />
       ) : (
         <div className="space-y-3">
-          {data.map((c) => (
+          {filtradas.map((c) => (
             <div
               key={c.id}
               className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4"
@@ -2708,10 +2794,23 @@ type EmpresaCliente = {
 
 function AdminEmpresas() {
   const queryClient = useQueryClient();
+  const [busca, setBusca] = useState("");
   const { data, isLoading } = useQuery({
     queryKey: ["admin-empresas-clientes"],
     queryFn: () => listarEmpresasClientes(),
   });
+
+  const filtradas = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return data ?? [];
+    return (data ?? []).filter((e) =>
+      [e.nome, e.documento, e.email_contato, e.telefone_contato]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(termo),
+    );
+  }, [data, busca]);
 
   const alternarAtivo = useMutation({
     mutationFn: (e: EmpresaCliente) => atualizarEmpresaCliente(e.id, { ativo: !e.ativo }),
@@ -2733,6 +2832,18 @@ function AdminEmpresas() {
         <EmpresaDialog />
       </div>
 
+      {!isLoading && Boolean(data?.length) && (
+        <div className="relative sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 pl-8"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por nome, documento ou contato"
+          />
+        </div>
+      )}
+
       {isLoading ? (
         <ListaCarregando />
       ) : !data?.length ? (
@@ -2741,9 +2852,20 @@ function AdminEmpresas() {
           titulo="Nenhuma empresa cadastrada ainda"
           descricao="Cadastre agências, OTAs ou clientes B2B pra vincular às corridas deles."
         />
+      ) : !filtradas.length ? (
+        <ListaVazia
+          icon={Search}
+          titulo="Nenhuma empresa encontrada"
+          descricao="Tente outro termo de busca."
+          acao={
+            <Button size="sm" variant="outline" onClick={() => setBusca("")}>
+              Limpar busca
+            </Button>
+          }
+        />
       ) : (
         <div className="space-y-3">
-          {data.map((e) => (
+          {filtradas.map((e) => (
             <div
               key={e.id}
               className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4"
@@ -2882,10 +3004,17 @@ const CANAL_TIPO_LABEL: Record<string, string> = {
 
 function AdminCanais() {
   const queryClient = useQueryClient();
+  const [busca, setBusca] = useState("");
   const { data, isLoading } = useQuery({
     queryKey: ["admin-canais-venda"],
     queryFn: () => listarCanaisVenda(),
   });
+
+  const filtrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return data ?? [];
+    return (data ?? []).filter((c) => c.nome.toLowerCase().includes(termo));
+  }, [data, busca]);
 
   const alternarAtivo = useMutation({
     mutationFn: (c: CanalVenda) => atualizarCanalVenda(c.id, { ativo: !c.ativo }),
@@ -2907,6 +3036,18 @@ function AdminCanais() {
         <CanalDialog />
       </div>
 
+      {!isLoading && Boolean(data?.length) && (
+        <div className="relative sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 pl-8"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por nome"
+          />
+        </div>
+      )}
+
       {isLoading ? (
         <ListaCarregando />
       ) : !data?.length ? (
@@ -2915,9 +3056,20 @@ function AdminCanais() {
           titulo="Nenhum canal cadastrado ainda"
           descricao="Cadastre os canais de venda pra saber de onde cada corrida veio."
         />
+      ) : !filtrados.length ? (
+        <ListaVazia
+          icon={Search}
+          titulo="Nenhum canal encontrado"
+          descricao="Tente outro termo de busca."
+          acao={
+            <Button size="sm" variant="outline" onClick={() => setBusca("")}>
+              Limpar busca
+            </Button>
+          }
+        />
       ) : (
         <div className="space-y-3">
-          {data.map((c) => (
+          {filtrados.map((c) => (
             <div
               key={c.id}
               className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4"
@@ -3097,11 +3249,24 @@ function NotasFornecedorDialog({ fornecedor: f }: { fornecedor: Fornecedor }) {
 
 function AdminFornecedores() {
   const queryClient = useQueryClient();
+  const [busca, setBusca] = useState("");
   const { data, isLoading } = useQuery({
     queryKey: ["admin-fornecedores"],
     queryFn: () => listarFornecedores(),
   });
   const [removendo, setRemovendo] = useState<string | null>(null);
+
+  const filtrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return data ?? [];
+    return (data ?? []).filter((f) =>
+      [f.nome, f.email, f.telefone, f.cidade_atuacao]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(termo),
+    );
+  }, [data, busca]);
 
   async function remover(f: Fornecedor) {
     if (
@@ -3139,6 +3304,18 @@ function AdminFornecedores() {
         <NovoMotoristaDialog />
       </div>
 
+      {!isLoading && Boolean(data?.length) && (
+        <div className="relative sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 pl-8"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por nome, e-mail ou cidade"
+          />
+        </div>
+      )}
+
       {isLoading ? (
         <ListaCarregando />
       ) : !data?.length ? (
@@ -3147,9 +3324,20 @@ function AdminFornecedores() {
           titulo="Nenhum motorista cadastrado ainda"
           descricao="Cadastre o primeiro motorista para poder atribuí-lo a uma corrida."
         />
+      ) : !filtrados.length ? (
+        <ListaVazia
+          icon={Search}
+          titulo="Nenhum motorista encontrado"
+          descricao="Tente outro termo de busca."
+          acao={
+            <Button size="sm" variant="outline" onClick={() => setBusca("")}>
+              Limpar busca
+            </Button>
+          }
+        />
       ) : (
         <div className="space-y-3">
-          {data.map((f) => (
+          {filtrados.map((f) => (
             <div
               key={f.id}
               className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4"
@@ -3723,25 +3911,24 @@ function AdminAgendamentos() {
     });
   }, [lista, busca, filtroStatus]);
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando…</p>;
+  if (isLoading) return <ListaCarregando />;
 
   return (
     <div className="space-y-4">
       {MODO_VPS && (
-        // Sprint 4 do roteiro "Despacho Unificado": desde o Sprint 3, toda
-        // reserva nova também vira um pedido no car-fleet-co — é lá que o
-        // despacho de verdade deve acontecer daqui pra frente. A atribuição
-        // de motorista abaixo continua funcionando (não removida: serve de
-        // reserva manual caso o car-fleet-co saia do ar), só deixou de ser
+        // Desde a fusão (Etapa 6 do roteiro), toda reserva nova também vira
+        // um pedido na aba "Corridas" deste mesmo painel — não é mais outro
+        // app (o texto antigo aqui apontava pro car-fleet-co como sistema
+        // separado, o que deixou de existir). A atribuição de motorista
+        // abaixo continua funcionando como reserva manual, só deixou de ser
         // o caminho principal.
         <Alert>
           <Truck className="size-4" />
-          <AlertTitle>O despacho agora acontece no car-fleet-co</AlertTitle>
+          <AlertTitle>O despacho agora acontece na aba "Corridas"</AlertTitle>
           <AlertDescription>
-            Toda reserva nova é enviada automaticamente pro backoffice de despacho — é lá que
-            motorista, status e acompanhamento da corrida devem ser feitos. A atribuição de
-            motorista aqui embaixo continua disponível como reserva manual, não é mais o caminho
-            principal.
+            Toda reserva nova vira automaticamente uma corrida ali — é lá que motorista, status e
+            acompanhamento devem ser feitos. A atribuição de motorista aqui embaixo continua
+            disponível como reserva manual, não é mais o caminho principal.
           </AlertDescription>
         </Alert>
       )}
@@ -3789,9 +3976,25 @@ function AdminAgendamentos() {
       </div>
 
       {!lista.length ? (
-        <p className="text-sm text-muted-foreground">Nenhum agendamento ainda.</p>
+        <ListaVazia icon={CalendarCheck} titulo="Nenhum agendamento ainda" />
       ) : !filtrados.length ? (
-        <p className="text-sm text-muted-foreground">Nenhum agendamento encontrado.</p>
+        <ListaVazia
+          icon={Search}
+          titulo="Nenhum agendamento encontrado"
+          descricao="Tente outro termo de busca ou outro status."
+          acao={
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setBusca("");
+                setFiltroStatus("todos");
+              }}
+            >
+              Limpar filtros
+            </Button>
+          }
+        />
       ) : (
         <div className="space-y-4">
           {filtrados.map((a) => {
@@ -4137,6 +4340,7 @@ function AdminUsuarios() {
   const redefinirSenha = useServerFn(redefinirSenhaUsuario);
   const [busca, setBusca] = useState("");
   const [soAdmins, setSoAdmins] = useState(false);
+  const [soMotoristas, setSoMotoristas] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin-usuarios"],
@@ -4175,13 +4379,15 @@ function AdminUsuarios() {
     const termo = busca.trim().toLowerCase();
     let base = data ?? [];
     if (soAdmins) base = base.filter((u) => u.isAdmin);
+    if (soMotoristas) base = base.filter((u) => u.isMotorista);
     if (!termo) return base;
     return base.filter((u) =>
       [u.email, u.nome, u.telefone].some((c) => c.toLowerCase().includes(termo)),
     );
-  }, [data, busca, soAdmins]);
+  }, [data, busca, soAdmins, soMotoristas]);
 
   const totalAdmins = (data ?? []).filter((u) => u.isAdmin).length;
+  const totalMotoristas = (data ?? []).filter((u) => u.isMotorista).length;
 
   if (isLoading) {
     return (
@@ -4218,6 +4424,13 @@ function AdminUsuarios() {
             onClick={() => setSoAdmins((v) => !v)}
           >
             Só admins ({totalAdmins})
+          </Button>
+          <Button
+            variant={soMotoristas ? "default" : "secondary"}
+            className="h-11 shrink-0"
+            onClick={() => setSoMotoristas((v) => !v)}
+          >
+            Só motoristas ({totalMotoristas})
           </Button>
           <div className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
