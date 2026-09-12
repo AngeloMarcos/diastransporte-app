@@ -42,6 +42,7 @@ import { toast } from "sonner";
 
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
+import { ConfirmarAcao } from "@/components/site/ConfirmarAcao";
 import { StatusBadge } from "@/components/site/StatusBadge";
 import {
   AlertDialog,
@@ -1059,28 +1060,28 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
           >
             {aberto ? "Fechar" : "Editar"}
           </Button>
-          <Button
-            size="icon"
-            variant="secondary"
-            className="size-11 shrink-0 text-destructive"
-            title="Remover rota"
-            disabled={remover.isPending}
-            onClick={() => {
-              if (
-                window.confirm(
-                  `Remover a rota ${rota.origem} → ${rota.destino}? Essa ação não pode ser desfeita.`,
-                )
-              ) {
-                remover.mutate();
-              }
-            }}
-          >
-            {remover.isPending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Trash2 className="size-4" />
+          <ConfirmarAcao
+            titulo={`Remover a rota ${rota.origem} → ${rota.destino}?`}
+            descricao="Essa ação não pode ser desfeita."
+            textoConfirmar="Remover rota"
+            onConfirmar={() => remover.mutate()}
+            trigger={(abrir) => (
+              <Button
+                size="icon"
+                variant="secondary"
+                className="size-11 shrink-0 text-destructive"
+                title="Remover rota"
+                disabled={remover.isPending}
+                onClick={abrir}
+              >
+                {remover.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Trash2 className="size-4" />
+                )}
+              </Button>
             )}
-          </Button>
+          />
         </div>
       </div>
 
@@ -1522,24 +1523,28 @@ function VeiculoEditor({ veiculo }: { veiculo: VeiculoFrotaRow }) {
           >
             {aberto ? "Fechar" : "Editar"}
           </Button>
-          <Button
-            size="icon"
-            variant="secondary"
-            className="size-11 shrink-0 text-destructive"
-            title="Remover veículo"
-            disabled={remover.isPending}
-            onClick={() => {
-              if (window.confirm(`Remover "${veiculo.nome}"? Essa ação não pode ser desfeita.`)) {
-                remover.mutate();
-              }
-            }}
-          >
-            {remover.isPending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Trash2 className="size-4" />
+          <ConfirmarAcao
+            titulo={`Remover "${veiculo.nome}"?`}
+            descricao="Essa ação não pode ser desfeita."
+            textoConfirmar="Remover veículo"
+            onConfirmar={() => remover.mutate()}
+            trigger={(abrir) => (
+              <Button
+                size="icon"
+                variant="secondary"
+                className="size-11 shrink-0 text-destructive"
+                title="Remover veículo"
+                disabled={remover.isPending}
+                onClick={abrir}
+              >
+                {remover.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Trash2 className="size-4" />
+                )}
+              </Button>
             )}
-          </Button>
+          />
         </div>
       </div>
 
@@ -1819,17 +1824,23 @@ function FotoGaleriaCard({ foto }: { foto: FotoGaleriaRow }) {
         >
           {foto.ativo ? "Ocultar" : "Mostrar"}
         </button>
-        <button
-          type="button"
-          aria-label="Remover foto"
-          disabled={remover.isPending}
-          onClick={() => {
-            if (window.confirm("Remover esta foto da galeria?")) remover.mutate();
-          }}
-          className="grid size-8 shrink-0 place-items-center rounded-sm text-destructive hover:bg-secondary"
-        >
-          <Trash2 className="size-4" />
-        </button>
+        <ConfirmarAcao
+          titulo="Remover esta foto da galeria?"
+          descricao="Essa ação não pode ser desfeita."
+          textoConfirmar="Remover foto"
+          onConfirmar={() => remover.mutate()}
+          trigger={(abrir) => (
+            <button
+              type="button"
+              aria-label="Remover foto"
+              disabled={remover.isPending}
+              onClick={abrir}
+              className="grid size-8 shrink-0 place-items-center rounded-sm text-destructive hover:bg-secondary"
+            >
+              <Trash2 className="size-4" />
+            </button>
+          )}
+        />
       </div>
     </div>
   );
@@ -3269,13 +3280,6 @@ function AdminFornecedores() {
   }, [data, busca]);
 
   async function remover(f: Fornecedor) {
-    if (
-      !window.confirm(
-        `Remover o acesso do motorista "${f.nome}"? Se ele já tiver corridas no histórico, o cadastro só é desativado e o login revogado — nada é apagado.`,
-      )
-    ) {
-      return;
-    }
     setRemovendo(f.id);
     try {
       const res = await removerCadastroMotorista(f.id);
@@ -3351,20 +3355,28 @@ function AdminFornecedores() {
               <div className="flex items-center gap-2">
                 <AtivoBadge ativo={f.ativo} />
                 <NotasFornecedorDialog fornecedor={f} />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-9 shrink-0 text-destructive"
-                  title={`Remover ${f.nome}`}
-                  disabled={removendo === f.id}
-                  onClick={() => void remover(f)}
-                >
-                  {removendo === f.id ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="size-4" />
+                <ConfirmarAcao
+                  titulo={`Remover o acesso do motorista "${f.nome}"?`}
+                  descricao="Se ele já tiver corridas no histórico, o cadastro só é desativado e o login revogado — nada é apagado."
+                  textoConfirmar="Remover acesso"
+                  onConfirmar={() => void remover(f)}
+                  trigger={(abrir) => (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-9 shrink-0 text-destructive"
+                      title={`Remover ${f.nome}`}
+                      disabled={removendo === f.id}
+                      onClick={abrir}
+                    >
+                      {removendo === f.id ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="size-4" />
+                      )}
+                    </Button>
                   )}
-                </Button>
+                />
               </div>
             </div>
           ))}
@@ -4097,17 +4109,23 @@ function AdminAgendamentos() {
                         </a>
                       </Button>
                     ) : null}
-                    <Button
-                      size="icon"
-                      variant="secondary"
-                      className="size-11 shrink-0 text-destructive"
-                      title="Remover agendamento"
-                      onClick={() => {
-                        if (window.confirm("Remover este agendamento?")) remover.mutate(a.id);
-                      }}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
+                    <ConfirmarAcao
+                      titulo="Remover este agendamento?"
+                      descricao="Essa ação não pode ser desfeita."
+                      textoConfirmar="Remover agendamento"
+                      onConfirmar={() => remover.mutate(a.id)}
+                      trigger={(abrir) => (
+                        <Button
+                          size="icon"
+                          variant="secondary"
+                          className="size-11 shrink-0 text-destructive"
+                          title="Remover agendamento"
+                          onClick={abrir}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      )}
+                    />
                   </div>
                 </div>
               </article>
@@ -4319,14 +4337,22 @@ function ConteudoEditor({ item }: { item: ConteudoItem }) {
           )}
           Salvar bloco
         </Button>
-        <Button
-          variant="secondary"
-          className="h-11"
-          onClick={() => remover.mutate()}
-          disabled={remover.isPending}
-        >
-          Remover
-        </Button>
+        <ConfirmarAcao
+          titulo={`Remover o bloco "${item.chave}"?`}
+          descricao="Esse bloco deixa de existir no conteúdo do site — se ele estiver em uso em alguma página (ex.: home_hero), o texto/imagem some de lá. Essa ação não pode ser desfeita."
+          textoConfirmar="Remover bloco"
+          onConfirmar={() => remover.mutate()}
+          trigger={(abrir) => (
+            <Button
+              variant="secondary"
+              className="h-11"
+              onClick={abrir}
+              disabled={remover.isPending}
+            >
+              Remover
+            </Button>
+          )}
+        />
       </div>
     </article>
   );

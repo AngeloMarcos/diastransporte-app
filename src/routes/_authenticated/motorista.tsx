@@ -13,10 +13,21 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { ConfirmarAcao } from "@/components/site/ConfirmarAcao";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { StatusBadge } from "@/components/site/StatusBadge";
 import { MinhasViagensSkeleton } from "@/components/site/Skeletons";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -238,6 +249,14 @@ function PedidoMotoristaCard({
   const status = p.status as PedidoStatus;
   const transicoes = transicoesPermitidas(status, "motorista");
   const [obs, setObs] = useState(p.observacao_motorista ?? "");
+  // Achado revisando UX (motorista): o Select mudava o status no toque, sem
+  // confirmação e sem desfazer — num touchscreen, um mis-tap na lista podia
+  // pular uma etapa da corrida sem querer. "pendente" guarda a escolha até
+  // confirmar; "selectKey" força o Select a remontar (voltando pro
+  // placeholder "Mudar status") tanto depois de confirmar quanto de
+  // cancelar — ele não tem um `value` controlado pra resetar de outro jeito.
+  const [pendente, setPendente] = useState<PedidoStatus | null>(null);
+  const [selectKey, setSelectKey] = useState(0);
 
   const mudarStatus = useMutation({
     mutationFn: (novoStatus: PedidoStatus) => transicionarStatusPedidoMotorista(p.id, novoStatus),
@@ -298,21 +317,58 @@ function PedidoMotoristaCard({
           </Button>
         ) : null}
         {transicoes.length > 0 && (
-          <Select
-            onValueChange={(v) => mudarStatus.mutate(v as PedidoStatus)}
-            disabled={mudarStatus.isPending}
-          >
-            <SelectTrigger className="h-9 w-[220px]">
-              <SelectValue placeholder="Mudar status" />
-            </SelectTrigger>
-            <SelectContent>
-              {transicoes.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {PEDIDO_STATUS_META[s].label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <>
+            <Select
+              key={selectKey}
+              onValueChange={(v) => setPendente(v as PedidoStatus)}
+              disabled={mudarStatus.isPending}
+            >
+              <SelectTrigger className="h-9 w-[220px]">
+                <SelectValue placeholder="Mudar status" />
+              </SelectTrigger>
+              <SelectContent>
+                {transicoes.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {PEDIDO_STATUS_META[s].label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <AlertDialog
+              open={pendente !== null}
+              onOpenChange={(aberto) => {
+                if (!aberto) {
+                  setPendente(null);
+                  setSelectKey((k) => k + 1);
+                }
+              }}
+            >
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Mudar status pra "{pendente ? PEDIDO_STATUS_META[pendente].label : ""}"?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    O escritório passa a ver essa corrida como "
+                    {pendente ? PEDIDO_STATUS_META[pendente].label.toLowerCase() : ""}".
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="h-11">Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="h-11"
+                    onClick={() => {
+                      if (pendente) mudarStatus.mutate(pendente);
+                      setPendente(null);
+                      setSelectKey((k) => k + 1);
+                    }}
+                  >
+                    Confirmar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
         )}
       </div>
 
@@ -412,11 +468,7 @@ function PainelMotoristaLegado() {
                     <CorridaCardLegado
                       key={a.id}
                       agendamento={a}
-                      onConcluir={() => {
-                        if (window.confirm(`Marcar "${a.trecho}" como concluída?`)) {
-                          concluir.mutate(a.id);
-                        }
-                      }}
+                      onConcluir={() => concluir.mutate(a.id)}
                       concluindo={concluir.isPending}
                     />
                   ))}
@@ -493,9 +545,18 @@ function CorridaCardLegado({
           </Button>
         ) : null}
         {onConcluir && podeConcluir(a.status) ? (
-          <Button size="sm" disabled={concluindo} onClick={onConcluir}>
-            <CheckCircle2 className="size-4" /> Concluir corrida
-          </Button>
+          <ConfirmarAcao
+            titulo={`Marcar "${a.trecho}" como concluída?`}
+            descricao="O escritório passa a ver essa corrida como finalizada."
+            textoConfirmar="Concluir corrida"
+            destrutivo={false}
+            onConfirmar={onConcluir}
+            trigger={(abrir) => (
+              <Button size="sm" disabled={concluindo} onClick={abrir}>
+                <CheckCircle2 className="size-4" /> Concluir corrida
+              </Button>
+            )}
+          />
         ) : a.status === "pendente" ? (
           <p className="text-xs text-muted-foreground">Aguardando confirmação do escritório.</p>
         ) : null}
