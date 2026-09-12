@@ -253,12 +253,16 @@ function Carrinho() {
                 <Label htmlFor="telefone">
                   WhatsApp <span className="text-primary-text">*</span>
                 </Label>
+                {/* Sem "required": não está dentro de um <form> de verdade
+                    (o botão "Finalizar" é onClick, não submit) — achado
+                    revisando UX, o atributo nunca fazia nada. A validação
+                    real é o if telefone.replace(...).length < 10 em
+                    finalizar() acima. */}
                 <Input
                   id="telefone"
                   type="tel"
                   inputMode="tel"
                   autoComplete="tel"
-                  required
                   value={telefone}
                   onChange={(e) => setTelefone(e.target.value)}
                   placeholder="(98) 90000-0000"
@@ -318,13 +322,30 @@ function Carrinho() {
                   </p>
                 )}
               </div>
-              <Button
-                className="min-h-11 shrink-0"
-                disabled={enviando}
-                onClick={() => void finalizar()}
-              >
-                {user ? "Finalizar reserva" : "Entrar e finalizar"}
-              </Button>
+              {/* Achado revisando UX: no celular (a maioria de quem reserva
+                  aqui), finalizar exigia criar conta — no desktop já
+                  existia este atalho de WhatsApp sem login, só faltava
+                  espelhar aqui. */}
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  asChild
+                  size="icon"
+                  variant="secondary"
+                  className="min-h-11 min-w-11 shrink-0 bg-whats text-whats-foreground hover:bg-whats/90"
+                  aria-label="Falar no WhatsApp sem finalizar"
+                >
+                  <a href={link} target="_blank" rel="noreferrer">
+                    <MessageCircle className="size-4" />
+                  </a>
+                </Button>
+                <Button
+                  className="min-h-11 shrink-0"
+                  disabled={enviando}
+                  onClick={() => void finalizar()}
+                >
+                  {user ? "Finalizar reserva" : "Entrar e finalizar"}
+                </Button>
+              </div>
             </div>
           </div>
         </>

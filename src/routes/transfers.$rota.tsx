@@ -523,11 +523,16 @@ function RotaDetalhe() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="data">Data do embarque</Label>
+                  {/* Sem "required": este input não está dentro de um <form>
+                      de verdade (o botão "Adicionar" é onClick, não
+                      submit), então o atributo nunca disparava a validação
+                      nativa do navegador — achado revisando UX, era código
+                      morto que sugeria uma garantia que não existia. A
+                      validação real é validarCampos() acima. */}
                   <Input
                     id="data"
                     ref={dataRef}
                     type="date"
-                    required
                     min={hojeISO}
                     value={data}
                     onChange={(e) => setData(e.target.value)}
@@ -546,25 +551,33 @@ function RotaDetalhe() {
                 </div>
               </div>
 
-              <div>
-                <Label>Período</Label>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant={periodo === "dia" ? "default" : "secondary"}
-                    onClick={() => setPeriodo("dia")}
-                  >
-                    Dia
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={periodo === "noite" ? "default" : "secondary"}
-                    onClick={() => setPeriodo("noite")}
-                  >
-                    18h às 5h
-                  </Button>
+              {/* Achado revisando UX: este toggle aparecia em toda rota, mas
+                  só sao-luis-barreirinhas tem preço noturno de verdade —
+                  nas outras 8, escolher "18h às 5h" mudava pro preço de dia
+                  em silêncio (via precoFinal ?? fallback), sem indicar que
+                  nada mudou. Esconder onde não existe é mais honesto que
+                  deixar escolher uma opção que não faz diferença nenhuma. */}
+              {temNoite && (
+                <div>
+                  <Label>Período</Label>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={periodo === "dia" ? "default" : "secondary"}
+                      onClick={() => setPeriodo("dia")}
+                    >
+                      Dia
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={periodo === "noite" ? "default" : "secondary"}
+                      onClick={() => setPeriodo("noite")}
+                    >
+                      18h às 5h
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div>
                 <Label>Veículo</Label>

@@ -5,11 +5,26 @@ import type { ItemCarrinho } from "@/lib/carrinho";
 import { formatBRL } from "@/data/rotas";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 /**
  * Item do carrinho com deslizar-para-remover (arrastar para a esquerda).
  * O botão de lixeira fica sempre visível — o gesto é apenas um atalho,
  * nunca a única forma de remover.
+ *
+ * Achado revisando UX: nem o gesto nem o botão pediam confirmação — um
+ * arrasto diagonal durante a rolagem de uma lista longa no celular podia
+ * apagar uma reserva sem querer, sem desfazer. Os dois agora só ABREM a
+ * confirmação; quem remove de verdade é o botão dentro do AlertDialog.
  */
 export function ItemCarrinhoCard({
   item,
@@ -22,6 +37,7 @@ export function ItemCarrinhoCard({
   const deslocamentoRef = useRef(0);
   const inicio = useRef<number | null>(null);
   const arrastando = useRef(false);
+  const [confirmando, setConfirmando] = useState(false);
 
   const LIMITE = 96;
 
@@ -32,8 +48,7 @@ export function ItemCarrinhoCard({
 
   function finalizar() {
     if (deslocamentoRef.current <= -LIMITE) {
-      onRemover(item.id);
-      return;
+      setConfirmando(true);
     }
     mover(0);
   }
@@ -103,7 +118,7 @@ export function ItemCarrinhoCard({
               size="icon"
               variant="secondary"
               aria-label={`Remover ${item.trecho} do carrinho`}
-              onClick={() => onRemover(item.id)}
+              onClick={() => setConfirmando(true)}
             >
               <Trash2 className="size-4" />
             </Button>
@@ -113,6 +128,24 @@ export function ItemCarrinhoCard({
           Dica: deslize o item para a esquerda para remover.
         </p>
       </div>
+
+      <AlertDialog open={confirmando} onOpenChange={setConfirmando}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover "{item.trecho}" do carrinho?</AlertDialogTitle>
+            <AlertDialogDescription>Essa ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="h-11">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="h-11 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => onRemover(item.id)}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

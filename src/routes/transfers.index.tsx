@@ -16,6 +16,12 @@ import { origemAtual } from "@/lib/origem-atual.functions";
 import logo from "@/assets/logo.jpeg";
 
 export const Route = createFileRoute("/transfers/")({
+  // Achado revisando UX: a busca da home, quando o termo batia com mais de
+  // uma rota (ex.: "Jeri", que casa com as duas rotas de Jericoacoara),
+  // jogava a pessoa pra cá sem carregar o termo — tinha que digitar tudo
+  // de novo. "busca" na query string carrega o termo de um lugar pro outro.
+  validateSearch: (busca: Record<string, unknown>): { busca?: string } =>
+    typeof busca["busca"] === "string" ? { busca: busca["busca"] } : {},
   loader: async () => ({ rotas: await listRotas(), origem: await origemAtual() }),
   head: ({ loaderData }) => ({
     meta: [
@@ -77,7 +83,8 @@ function Transfers() {
   const { rotas } = Route.useLoaderData() as { rotas: Rota[] };
   const [ordem, setOrdem] = useState<Ordem>("populares");
   const [filtro, setFiltro] = useState<Filtro>("todos");
-  const [busca, setBusca] = useState("");
+  const { busca: buscaNaUrl } = Route.useSearch();
+  const [busca, setBusca] = useState(buscaNaUrl ?? "");
 
   const lista = useMemo(() => {
     const termo = busca.trim().toLowerCase();

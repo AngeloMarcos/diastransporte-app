@@ -99,6 +99,11 @@ function Home() {
     const [unica] = filtradas;
     if (filtradas.length === 1 && unica) {
       void navigate({ to: "/transfers/$rota", params: { rota: unica.slug } });
+    } else if (busca.trim()) {
+      // Achado revisando UX: com múltiplos trechos batendo com o termo
+      // (ex.: "Jeri"), a busca virava a listagem inteira sem filtro — a
+      // pessoa tinha que digitar tudo de novo lá. Carrega o termo na URL.
+      void navigate({ to: "/transfers", search: { busca: busca.trim() } });
     } else {
       void navigate({ to: "/transfers" });
     }
