@@ -114,6 +114,12 @@ function PainelMotoristaDespacho() {
     queryKey: ["minhas-corridas-despacho"],
     queryFn: () => listarPedidosMotorista(),
     enabled: Boolean(fornecedor),
+    // Achado revisando UX: sem isto, se o escritório atribuísse uma corrida
+    // enquanto o motorista já estava com "Minhas corridas" aberta no
+    // celular, ele só via a novidade recarregando a página à mão — não tem
+    // pull-to-refresh nem nada. Mesmo intervalo já usado no equivalente do
+    // admin (30s).
+    refetchInterval: 30_000,
   });
 
   if (carregandoFornecedor || (isLoading && Boolean(fornecedor))) {

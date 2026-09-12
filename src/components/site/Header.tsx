@@ -115,15 +115,30 @@ export function Header() {
           </Button>
         </nav>
 
-        {/* Mobile: uma única ação secundária (navegação fica na barra inferior). */}
+        {/* Mobile: uma ação secundária (navegação fica na barra inferior) —
+            duas quando a pessoa acumula admin + motorista, achado
+            revisando UX: antes disso, quem era as duas coisas nunca tinha
+            um atalho de 1 toque pra "Minhas corridas" no celular, já que
+            "isAdmin" sempre ganhava sozinho aqui. */}
         {isAdmin ? (
-          <Link
-            to="/admin"
-            aria-label="Painel admin"
-            className="inline-grid size-11 shrink-0 place-items-center rounded-sm border border-border text-primary md:hidden"
-          >
-            <LayoutDashboard className="size-5" />
-          </Link>
+          <div className="flex shrink-0 items-center gap-2 md:hidden">
+            {isMotorista && (
+              <Link
+                to="/motorista"
+                aria-label="Minhas corridas"
+                className="inline-grid size-11 shrink-0 place-items-center rounded-sm border border-border text-muted-foreground"
+              >
+                <Car className="size-5" />
+              </Link>
+            )}
+            <Link
+              to="/admin"
+              aria-label="Painel admin"
+              className="inline-grid size-11 shrink-0 place-items-center rounded-sm border border-border text-primary"
+            >
+              <LayoutDashboard className="size-5" />
+            </Link>
+          </div>
         ) : isMotorista ? (
           <Link
             to="/motorista"

@@ -121,6 +121,7 @@ import {
   listarRotasAdmin,
   listarUsuarios,
   pedidoDetalheAdmin,
+  reativarMotorista,
   redefinirSenha,
   removerAgendamento,
   removerBlocoConteudo,
@@ -149,7 +150,13 @@ import {
   notificarNovaSolicitacao,
   tocarAlerta,
 } from "@/lib/notificacoes";
-import { contarStatus, statusOpcoes, STATUS_META } from "@/lib/status";
+import {
+  contarStatus,
+  statusOpcoes,
+  STATUS_META,
+  transicoesPermitidasAgendamento,
+  type StatusAgendamento,
+} from "@/lib/status";
 import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
 import { ROTA_COLUMNS, type RotaRow } from "@/lib/rotasMap";
 import type { FotoGaleriaRow, VeiculoFrotaRow } from "@/lib/dados-tipos";
@@ -162,7 +169,15 @@ import {
   type UsuarioAdmin,
 } from "@/lib/usuarios.functions";
 
+// Achado revisando UX: a aba ativa era só useState — sem URL de verdade,
+// não dava pra favoritar/compartilhar um link direto pra "Corridas" e um
+// F5 sempre voltava pra "Visão geral", perdendo o lugar onde a pessoa
+// estava. "aba" na query string resolve os dois; validação solta aqui (só
+// string) porque a lista de abas válidas (soVps incluso) só existe mais
+// abaixo no arquivo — o componente é quem decide o fallback pra "geral".
 export const Route = createFileRoute("/_authenticated/admin")({
+  validateSearch: (busca: Record<string, unknown>): { aba?: string } =>
+    typeof busca["aba"] === "string" ? { aba: busca["aba"] } : {},
   head: () => ({
     meta: [
       { title: "Painel do administrador — Dias Transporte" },
@@ -237,10 +252,20 @@ function AdminPage() {
   const { user, isAdmin, carregando } = useAuth();
   const navigate = useNavigate();
   const queryClientSair = useQueryClient();
-  const [aba, setAba] = useState<(typeof abas)[number]["id"]>("geral");
+  const abasVisiveis = abas.filter((a) => !("soVps" in a && a.soVps) || MODO_VPS);
+  // "aba" vem sempre da URL, não de um useState à parte — sem uma segunda
+  // fonte de verdade não tem como o botão "voltar" do navegador ou um F5
+  // ficarem fora de sincronia com o estado. Cai em "geral" se a query
+  // string não tiver nada, tiver um valor desconhecido, ou apontar pra uma
+  // aba VPS-only fora de MODO_VPS.
+  const { aba: abaNaUrl } = Route.useSearch();
+  const abaValida = abasVisiveis.find((a) => a.id === abaNaUrl);
+  const aba = abaValida?.id ?? "geral";
+  function setAba(novaAba: (typeof abas)[number]["id"]) {
+    void navigate({ to: "/admin", search: { aba: novaAba }, replace: true });
+  }
   const [permissaoNotif, setPermissaoNotif] = useState<NotificationPermission | null>(null);
   const idsPendentesVistos = useRef<Set<string> | null>(null);
-  const abasVisiveis = abas.filter((a) => !("soVps" in a && a.soVps) || MODO_VPS);
 
   // Duplica o "Sair" que já existe no Header (mesmo padrão de lá) aqui no
   // rodapé do menu lateral — pedido explícito do usuário ao pedir que a
@@ -274,6 +299,20 @@ function AdminPage() {
     refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
+
+  // Achado revisando UX: só Agendamentos tinha selo de pendência na barra,
+  // mesmo com Corridas sendo hoje o fluxo principal do despacho (ver aviso
+  // na aba Agendamentos) — um admin batendo o olho só na barra lateral
+  // nunca notava corridas sem motorista esperando. Mesma queryKey de
+  // AdminVisaoGeral (dashboardDespacho) — compartilha cache em vez de
+  // duplicar a consulta quando as duas estão montadas.
+  const { data: despachoLive } = useQuery({
+    queryKey: ["admin-dashboard-despacho"],
+    queryFn: () => dashboardDespacho(),
+    enabled: isAdmin && MODO_VPS,
+    refetchInterval: 30_000,
+  });
+  const semMotoristaCount = despachoLive?.semMotorista.length ?? 0;
 
   useEffect(() => {
     if (!agendamentosLive) return;
@@ -354,8 +393,19 @@ function AdminPage() {
                 >
                   <Icon className="size-4 shrink-0" /> {label}
                   {id === "agendamentos" && pendentesCount > 0 && (
-                    <span className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+                    <span
+                      className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground"
+                      title="Agendamentos pendentes"
+                    >
                       {pendentesCount}
+                    </span>
+                  )}
+                  {id === "corridas" && semMotoristaCount > 0 && (
+                    <span
+                      className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[11px] font-semibold text-background"
+                      title="Corridas sem motorista atribuído"
+                    >
+                      {semMotoristaCount}
                     </span>
                   )}
                 </TabsTrigger>
@@ -1002,6 +1052,20 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao remover rota."),
   });
 
+  // Achado revisando UX: esconder/mostrar uma rota exigia "Editar" → rolar
+  // até o checkbox → "Salvar alterações" (4 passos) — Categorias/Empresas/
+  // Canais já fazem o mesmo conceito em 1 clique direto na linha da lista.
+  // Usa `rota` (a prop, fonte de verdade) em vez de `form` (rascunho de
+  // edição em andamento) — não depende de ter aberto "Editar" antes.
+  const alternarAtivo = useMutation({
+    mutationFn: async () => salvarRota({ ...rota, ativo: !rota.ativo }),
+    onSuccess: () => {
+      toast.success(rota.ativo ? "Rota ocultada." : "Rota ativada.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-rotas"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atualizar."),
+  });
+
   async function enviarFoto(arquivo: File, destino: "principal" | "galeria") {
     setEnviandoFoto(true);
     try {
@@ -1038,16 +1102,7 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
             </h2>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               {formatBRL(rota.preco_pequeno)}
-              <Badge
-                variant="outline"
-                className={
-                  rota.ativo
-                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                    : "border-border bg-muted text-muted-foreground"
-                }
-              >
-                {rota.ativo ? "ativa" : "oculta"}
-              </Badge>
+              <AtivoBadge ativo={rota.ativo} />
               {rota.destaque ? <Badge variant="outline">{rota.destaque}</Badge> : null}
             </div>
           </div>
@@ -1059,6 +1114,14 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
             onClick={() => setAberto((v) => !v)}
           >
             {aberto ? "Fechar" : "Editar"}
+          </Button>
+          <Button
+            variant="ghost"
+            className="h-11 shrink-0"
+            disabled={alternarAtivo.isPending}
+            onClick={() => alternarAtivo.mutate()}
+          >
+            {rota.ativo ? "Inativar" : "Ativar"}
           </Button>
           <ConfirmarAcao
             titulo={`Remover a rota ${rota.origem} → ${rota.destino}?`}
@@ -1466,6 +1529,17 @@ function VeiculoEditor({ veiculo }: { veiculo: VeiculoFrotaRow }) {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao remover."),
   });
 
+  // Mesmo achado de RotaEditor::alternarAtivo — 1 clique em vez de
+  // Editar → rolar → Salvar. Usa `veiculo` (prop), não `form` (rascunho).
+  const alternarAtivo = useMutation({
+    mutationFn: async () => salvarVeiculoFrota({ ...veiculo, ativo: !veiculo.ativo }),
+    onSuccess: () => {
+      toast.success(veiculo.ativo ? "Veículo ocultado." : "Veículo ativado.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-frota-veiculos"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atualizar."),
+  });
+
   async function enviarFoto(arquivo: File) {
     setEnviandoFoto(true);
     try {
@@ -1502,16 +1576,7 @@ function VeiculoEditor({ veiculo }: { veiculo: VeiculoFrotaRow }) {
             <h3 className="font-display text-lg">{veiculo.nome}</h3>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               {veiculo.modelo || "sem modelo"}
-              <Badge
-                variant="outline"
-                className={
-                  veiculo.ativo
-                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                    : "border-border bg-muted text-muted-foreground"
-                }
-              >
-                {veiculo.ativo ? "visível" : "oculto"}
-              </Badge>
+              <AtivoBadge ativo={veiculo.ativo} />
             </div>
           </div>
         </div>
@@ -1522,6 +1587,14 @@ function VeiculoEditor({ veiculo }: { veiculo: VeiculoFrotaRow }) {
             onClick={() => setAberto((v) => !v)}
           >
             {aberto ? "Fechar" : "Editar"}
+          </Button>
+          <Button
+            variant="ghost"
+            className="h-11 shrink-0"
+            disabled={alternarAtivo.isPending}
+            onClick={() => alternarAtivo.mutate()}
+          >
+            {veiculo.ativo ? "Inativar" : "Ativar"}
           </Button>
           <ConfirmarAcao
             titulo={`Remover "${veiculo.nome}"?`}
@@ -1812,7 +1885,7 @@ function FotoGaleriaCard({ foto }: { foto: FotoGaleriaRow }) {
       />
       {!foto.ativo && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/70">
-          <Badge variant="outline">oculta</Badge>
+          <AtivoBadge ativo={false} />
         </div>
       )}
       <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-background/90 p-1.5">
@@ -3194,6 +3267,67 @@ function CanalDialog({ canal }: { canal?: CanalVenda }) {
 // fornecedores_notas_internas era só-escrita: dava pra preencher na criação
 // do motorista, mas nunca mais ver/editar depois. Mesmo padrão de
 // observações internas de corrida (CorridaDetalheDialog acima).
+// Achado revisando UX: motorista desativado (histórico preservado, login
+// revogado) não tinha NENHUM jeito de voltar — só dava pra criar um cadastro
+// novo do zero pra mesma pessoa. Precisa de e-mail/senha novos porque o
+// usuarios original foi apagado de vez (ver vpsReativarMotorista).
+function ReativarMotoristaDialog({ fornecedor: f }: { fornecedor: Fornecedor }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState(f.email ?? "");
+  const [senha, setSenha] = useState("");
+
+  const reativar = useMutation({
+    mutationFn: async () => {
+      if (!email.trim()) throw new Error("Informe o e-mail de login.");
+      if (senha.length < 8) throw new Error("A senha precisa ter no mínimo 8 caracteres.");
+      await reativarMotorista(f.id, email.trim(), senha);
+    },
+    onSuccess: () => {
+      toast.success("Motorista reativado — novo login criado.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-fornecedores"] });
+      setOpen(false);
+      setSenha("");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao reativar motorista."),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="secondary" size="sm" className="h-9">
+          Reativar
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Reativar {f.nome}</DialogTitle>
+          <DialogDescription>
+            O login antigo foi revogado — crie um e-mail e senha novos pra essa mesma pessoa voltar
+            a acessar o painel. O histórico de corridas dela continua intacto.
+          </DialogDescription>
+        </DialogHeader>
+        <Campo label="E-mail (login)" value={email} onChange={setEmail} />
+        <Campo label="Senha (mín. 8 caracteres)" value={senha} onChange={setSenha} />
+        <DialogFooter>
+          <Button
+            className="h-11 w-full"
+            onClick={() => reativar.mutate()}
+            disabled={reativar.isPending}
+          >
+            {reativar.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <UserCog className="size-4" />
+            )}
+            Reativar motorista
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function NotasFornecedorDialog({ fornecedor: f }: { fornecedor: Fornecedor }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -3354,6 +3488,7 @@ function AdminFornecedores() {
               </div>
               <div className="flex items-center gap-2">
                 <AtivoBadge ativo={f.ativo} />
+                {!f.ativo && <ReativarMotoristaDialog fornecedor={f} />}
                 <NotasFornecedorDialog fornecedor={f} />
                 <ConfirmarAcao
                   titulo={`Remover o acesso do motorista "${f.nome}"?`}
@@ -4068,9 +4203,19 @@ function AdminAgendamentos() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {statusOpcoes.map((s) => (
+                        {/* Achado revisando UX: este Select listava TODOS os
+                            status sem checar se a transição fazia sentido —
+                            dava pra "desconcluir" uma viagem de volta pra
+                            pendente sem querer. O backend já valida
+                            (transicaoValidaAgendamento, ver dados.functions.ts),
+                            aqui só espelha isso na lista de opções, mesmo
+                            padrão já usado no Select de status de Corridas. */}
+                        {[
+                          a.status,
+                          ...transicoesPermitidasAgendamento(a.status as StatusAgendamento),
+                        ].map((s) => (
                           <SelectItem key={s} value={s}>
-                            {STATUS_META[s].label}
+                            {STATUS_META[s as StatusAgendamento].label}
                           </SelectItem>
                         ))}
                       </SelectContent>

@@ -73,6 +73,7 @@ import {
   vpsListarPedidosMotorista,
   vpsMeuFornecedor,
   vpsPedidoDetalheAdmin,
+  vpsReativarMotorista,
   vpsRemoverMotorista,
   vpsSalvarNotasFornecedor,
   vpsSalvarNotasInternas,
@@ -714,6 +715,14 @@ export async function removerCadastroMotorista(
   fornecedorId: string,
 ): Promise<{ desativado: boolean; removido: boolean }> {
   if (MODO_VPS) return vpsRemoverMotorista({ data: { fornecedorId } });
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+/** Cria um login novo pra um fornecedor desativado, reativando o cadastro
+ * (ver vpsReativarMotorista — o usuário original foi apagado, não dá pra
+ * só virar um boolean de volta). */
+export async function reativarMotorista(fornecedorId: string, email: string, senha: string) {
+  if (MODO_VPS) return vpsReativarMotorista({ data: { fornecedorId, email, senha } });
   throw new Error("Despacho ainda não disponível neste ambiente.");
 }
 

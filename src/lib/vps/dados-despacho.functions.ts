@@ -778,6 +778,62 @@ export const vpsCriarMotorista = createServerFn({ method: "POST" })
     }
   });
 
+const reativarMotoristaSchema = z.object({
+  fornecedorId: z.string().uuid(),
+  email: z.string().email(),
+  senha: z.string().min(8),
+});
+
+// Achado revisando UX: motorista desativado (vpsRemoverMotorista, quando já
+// tem corridas no histórico) não tinha NENHUM jeito de voltar — a linha em
+// fornecedores fica ativo=false/user_id=NULL, mas o usuarios original é
+// apagado de vez, então não dá pra simplesmente "reverter" um boolean; tem
+// que nascer um login novo pra essa mesma pessoa/fornecedor. Mesma
+// transação/tratamento de e-mail duplicado de vpsCriarMotorista.
+export const vpsReativarMotorista = createServerFn({ method: "POST" })
+  .inputValidator((data) => reativarMotoristaSchema.parse(data))
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+    const { hashSenha } = await import("./auth.server");
+    const senhaHash = await hashSenha(data.senha);
+
+    try {
+      return await ctx.sql.begin(async (sql) => {
+        const [fornecedor] = await sql<{ id: string; nome: string; ativo: boolean }[]>`
+          SELECT id, nome, ativo FROM public.fornecedores WHERE id = ${data.fornecedorId} FOR UPDATE
+        `;
+        if (!fornecedor) throw new Error("Motorista não encontrado.");
+        if (fornecedor.ativo) throw new Error("Este motorista já está ativo.");
+
+        const existentes = await sql<{ id: string }[]>`
+          SELECT id FROM public.usuarios WHERE lower(email) = lower(${data.email})
+        `;
+        if (existentes.length) throw new Error("Já existe uma conta com este e-mail.");
+
+        const [usuario] = await sql<{ id: string }[]>`
+          INSERT INTO public.usuarios (email, senha_hash, nome, telefone, motorista)
+          VALUES (${data.email.trim()}, ${senhaHash}, ${fornecedor.nome}, '', true)
+          RETURNING id
+        `;
+        if (!usuario) throw new Error("Não foi possível criar o usuário.");
+
+        const [atualizado] = await sql<FornecedorRow[]>`
+          UPDATE public.fornecedores SET ativo = true, user_id = ${usuario.id}, email = ${data.email}
+           WHERE id = ${fornecedor.id}
+           RETURNING id, nome, email, telefone, cidade_atuacao, categoria_veiculo_id, ativo
+        `;
+        if (!atualizado) throw new Error("Não foi possível reativar o motorista.");
+        return atualizado;
+      });
+    } catch (erro) {
+      if (erro && typeof erro === "object" && "code" in erro && erro.code === "23505") {
+        throw new Error("Já existe uma conta com este e-mail.");
+      }
+      throw erro;
+    }
+  });
+
 export const vpsRemoverMotorista = createServerFn({ method: "POST" })
   .inputValidator((data) => z.object({ fornecedorId: z.string().uuid() }).parse(data))
   .handler(async ({ data }) => {
