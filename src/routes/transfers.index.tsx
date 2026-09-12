@@ -5,16 +5,19 @@ import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { TrustBadges } from "@/components/site/TrustBadges";
 import { RotaCard } from "@/components/site/RotaCard";
+import { ErroCarregamento } from "@/components/site/ErroCarregamento";
 import { ListagemHeroSkeleton, RotaGridSkeleton } from "@/components/site/Skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { type Rota } from "@/data/rotas";
 import { listRotas } from "@/lib/rotas.functions";
 import { whatsappLink } from "@/lib/whatsapp";
+import { origemAtual } from "@/lib/origem-atual.functions";
+import logo from "@/assets/logo.jpeg";
 
 export const Route = createFileRoute("/transfers/")({
-  loader: () => listRotas(),
-  head: () => ({
+  loader: async () => ({ rotas: await listRotas(), origem: await origemAtual() }),
+  head: ({ loaderData }) => ({
     meta: [
       { title: "Transfers e tarifário 2026 — Dias Transporte" },
       {
@@ -27,21 +30,29 @@ export const Route = createFileRoute("/transfers/")({
         property: "og:description",
         content: "Preço fechado por veículo em todos os trechos do Maranhão e da Rota das Emoções.",
       },
+      // Achado revisando SEO: ver o mesmo comentário em transfers.$rota.tsx.
+      ...(loaderData?.origem
+        ? [
+            { property: "og:image", content: `${loaderData.origem}${logo}` },
+            { name: "twitter:image", content: `${loaderData.origem}${logo}` },
+          ]
+        : []),
     ],
   }),
   component: Transfers,
   pendingMs: 200,
   pendingMinMs: 300,
   pendingComponent: TransfersPendente,
-  errorComponent: ({ error }) => (
-    <div className="min-h-screen">
-      <Header />
-      <div className="mx-auto max-w-6xl px-4 py-section" role="alert">
-        <h1 className="font-display text-fluid-2xl">Não conseguimos carregar o tarifário</h1>
-        <p className="mt-3 text-sm text-muted-foreground">{error.message}</p>
-      </div>
-      <Footer />
-    </div>
+  // Achado revisando UX: esta era uma das duas páginas do site que ainda
+  // mostravam um <div> cru com error.message vazando texto técnico e sem
+  // "tentar de novo" — todo o resto já usa ErroCarregamento (retry +
+  // caminho de volta). Página de bastante tráfego (lista completa de
+  // transfers) pra ficar um beco sem saída.
+  errorComponent: () => (
+    <ErroCarregamento
+      titulo="Não conseguimos carregar o tarifário"
+      descricao="A conexão pode ter oscilado. Tente de novo em instantes."
+    />
   ),
 });
 
@@ -63,7 +74,7 @@ type Ordem = "populares" | "menor" | "maior";
 type Filtro = "todos" | "pequeno" | "grande";
 
 function Transfers() {
-  const rotas = Route.useLoaderData() as Rota[];
+  const { rotas } = Route.useLoaderData() as { rotas: Rota[] };
   const [ordem, setOrdem] = useState<Ordem>("populares");
   const [filtro, setFiltro] = useState<Filtro>("todos");
   const [busca, setBusca] = useState("");

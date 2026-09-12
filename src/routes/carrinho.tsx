@@ -17,9 +17,14 @@ import { salvarRedirectPosLogin } from "@/lib/reserva";
 import { mensagemCarrinho, whatsappLink } from "@/lib/whatsapp";
 import { CarrinhoSkeleton } from "@/components/site/Skeletons";
 import { ErroCarregamento } from "@/components/site/ErroCarregamento";
+import { origemAtual } from "@/lib/origem-atual.functions";
+import logo from "@/assets/logo.jpeg";
 
 export const Route = createFileRoute("/carrinho")({
-  head: () => ({
+  // Só pra montar a URL absoluta do og:image abaixo — o carrinho em si é
+  // 100% client-side (localStorage), não há dado de servidor pra buscar.
+  loader: async () => ({ origem: await origemAtual() }),
+  head: ({ loaderData }) => ({
     meta: [
       { title: "Seu carrinho de transfers — Dias Transporte" },
       {
@@ -34,6 +39,13 @@ export const Route = createFileRoute("/carrinho")({
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      // Achado revisando SEO: ver o mesmo comentário em transfers.$rota.tsx.
+      ...(loaderData?.origem
+        ? [
+            { property: "og:image", content: `${loaderData.origem}${logo}` },
+            { name: "twitter:image", content: `${loaderData.origem}${logo}` },
+          ]
+        : []),
     ],
   }),
   component: Carrinho,

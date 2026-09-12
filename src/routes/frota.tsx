@@ -6,15 +6,19 @@ import { listConteudo } from "@/lib/conteudo.functions";
 import { listFrotaGaleria, listFrotaVeiculos } from "@/lib/frota.functions";
 import { mapearConteudo, texto } from "@/lib/conteudo";
 import { FrotaSkeleton, ListagemHeroSkeleton } from "@/components/site/Skeletons";
+import { ErroCarregamento } from "@/components/site/ErroCarregamento";
+import { origemAtual } from "@/lib/origem-atual.functions";
+import logo from "@/assets/logo.jpeg";
 
 export const Route = createFileRoute("/frota")({
   loader: async () => ({
     conteudo: await listConteudo(),
     veiculos: await listFrotaVeiculos(),
     galeria: await listFrotaGaleria(),
+    origem: await origemAtual(),
   }),
 
-  head: () => ({
+  head: ({ loaderData }) => ({
     meta: [
       { title: "Nossa frota — Dias Transporte" },
       {
@@ -27,6 +31,13 @@ export const Route = createFileRoute("/frota")({
         property: "og:description",
         content: "Carro pequeno até 4 passageiros e carro grande até 5, com porta-malas amplo.",
       },
+      // Achado revisando SEO: ver o mesmo comentário em transfers.$rota.tsx.
+      ...(loaderData?.origem
+        ? [
+            { property: "og:image", content: `${loaderData.origem}${logo}` },
+            { name: "twitter:image", content: `${loaderData.origem}${logo}` },
+          ]
+        : []),
     ],
   }),
   component: Frota,
@@ -40,15 +51,13 @@ export const Route = createFileRoute("/frota")({
       <Footer />
     </div>
   ),
-  errorComponent: ({ error }) => (
-    <div className="min-h-screen">
-      <Header />
-      <div className="mx-auto max-w-6xl px-4 py-section" role="alert">
-        <h1 className="font-display text-fluid-2xl">Não conseguimos carregar a frota</h1>
-        <p className="mt-3 text-sm text-muted-foreground">{error.message}</p>
-      </div>
-      <Footer />
-    </div>
+  // Achado revisando UX: mesmo caso de transfers.index.tsx — texto técnico
+  // cru sem "tentar de novo", diferente do resto do site.
+  errorComponent: () => (
+    <ErroCarregamento
+      titulo="Não conseguimos carregar a frota"
+      descricao="A conexão pode ter oscilado. Tente de novo em instantes."
+    />
   ),
 });
 

@@ -14,6 +14,8 @@ import { BottomNav } from "@/components/site/BottomNav";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { origemAtual } from "../lib/origem-atual.functions";
+import logo from "../assets/logo.jpeg";
 
 function NotFoundComponent() {
   return (
@@ -76,7 +78,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => ({
+  // Só pra montar a URL absoluta do og:image de fallback abaixo — ver
+  // src/lib/origem-atual.functions.ts. Roda em toda página.
+  loader: async () => ({ origem: await origemAtual() }),
+  head: ({ loaderData }) => ({
     meta: [
       { charSet: "utf-8" },
       {
@@ -98,6 +103,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      // Achado revisando SEO: fallback pra qualquer página que não declare
+      // og:image própria (contato, login) — nenhuma tinha, e esse é o
+      // canal pelo qual as pessoas de fato descobrem o link (WhatsApp).
+      // Páginas com foto mais específica (home, cada rota) sobrescrevem
+      // isto no próprio head() — ver transfers.$rota.tsx.
+      ...(loaderData?.origem
+        ? [
+            { property: "og:image", content: `${loaderData.origem}${logo}` },
+            { name: "twitter:image", content: `${loaderData.origem}${logo}` },
+          ]
+        : []),
       { name: "theme-color", content: "#111214" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },

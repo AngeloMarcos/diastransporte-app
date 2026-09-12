@@ -15,15 +15,18 @@ import { mapearConteudo, texto } from "@/lib/conteudo";
 import { whatsappLink } from "@/lib/whatsapp";
 import { HomeSkeleton } from "@/components/site/Skeletons";
 import { ErroCarregamento } from "@/components/site/ErroCarregamento";
+import { origemAtual } from "@/lib/origem-atual.functions";
+import logo from "@/assets/logo.jpeg";
 
 export const Route = createFileRoute("/")({
   loader: async () => ({
     rotas: await listRotas(),
     conteudo: await listConteudo(),
     veiculos: await listFrotaVeiculos(),
+    origem: await origemAtual(),
   }),
 
-  head: () => ({
+  head: ({ loaderData }) => ({
     meta: [
       { title: "Dias Transporte — Transfer São Luís e Lençóis Maranhenses" },
       {
@@ -37,6 +40,13 @@ export const Route = createFileRoute("/")({
         content:
           "Transfers particulares em São Luís e nos Lençóis Maranhenses. Preço fechado por veículo.",
       },
+      // Achado revisando SEO: ver o mesmo comentário em transfers.$rota.tsx.
+      ...(loaderData?.origem
+        ? [
+            { property: "og:image", content: `${loaderData.origem}${logo}` },
+            { name: "twitter:image", content: `${loaderData.origem}${logo}` },
+          ]
+        : []),
     ],
   }),
   component: Home,

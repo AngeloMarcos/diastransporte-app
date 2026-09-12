@@ -44,6 +44,8 @@ import { mensagemReserva, whatsappLink } from "@/lib/whatsapp";
 import { adicionarAoCarrinho } from "@/lib/carrinho";
 import { RotaDetalheSkeleton } from "@/components/site/Skeletons";
 import { ErroCarregamento } from "@/components/site/ErroCarregamento";
+import { origemAtual } from "@/lib/origem-atual.functions";
+import logo from "@/assets/logo.jpeg";
 
 const OUTRO_EMBARQUE = "outro";
 
@@ -52,7 +54,7 @@ export const Route = createFileRoute("/transfers/$rota")({
     const rotas = await listRotas();
     const rota = rotas.find((r) => r.slug === params.rota);
     if (!rota) throw notFound();
-    return { rota, rotas };
+    return { rota, rotas, origem: await origemAtual() };
   },
   head: ({ loaderData }) => {
     if (!loaderData) {
@@ -63,7 +65,7 @@ export const Route = createFileRoute("/transfers/$rota")({
         ],
       };
     }
-    const { rota } = loaderData;
+    const { rota, origem } = loaderData;
     const titulo = `Transfer ${rota.origem} → ${rota.destino} — Dias Transporte`;
     const desc = `${rota.resumo} A partir de ${formatBRL(rota.precoPequeno)} por veículo. Reserve pelo WhatsApp.`;
     return {
@@ -72,6 +74,37 @@ export const Route = createFileRoute("/transfers/$rota")({
         { name: "description", content: desc },
         { property: "og:title", content: titulo },
         { property: "og:description", content: desc },
+        // Achado revisando SEO: nenhuma página tinha og:image/twitter:image
+        // apesar de twitter:card=summary_large_image já estar declarado em
+        // várias — todo link compartilhado no WhatsApp (o canal principal
+        // do negócio) aparecia sem foto. Usa a logo como imagem provisória
+        // (funciona, mas é quadrada — uma arte 1200x630 renderizaria
+        // melhor no card horizontal). URL absoluta obrigatória: crawlers
+        // de preview buscam a página de fora, não resolvem caminho
+        // relativo ao navegador de quem compartilhou.
+        ...(origem
+          ? [
+              { property: "og:image", content: `${origem}${logo}` },
+              { name: "twitter:image", content: `${origem}${logo}` },
+            ]
+          : []),
+        // Achado revisando SEO: nenhuma página do site tinha dado
+        // estruturado — esta já tem um FAQ pronto (visível no Accordion
+        // logo abaixo, mesma constante `faq`) que pode virar rich result
+        // no Google. 'script:ld+json' é suportado nativamente pelo
+        // TanStack Router (vira <script type="application/ld+json"> no
+        // <head>, sem lib extra).
+        {
+          "script:ld+json": {
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            mainEntity: faq.map((f) => ({
+              "@type": "Question",
+              name: f.pergunta,
+              acceptedAnswer: { "@type": "Answer", text: f.resposta },
+            })),
+          },
+        },
       ],
     };
   },
@@ -117,6 +150,32 @@ const inclui = [
   "Paradas para banheiro e refeição no caminho",
 ];
 
+// Uma fonte só pro Accordion visível e pro FAQPage (JSON-LD) no head() —
+// achado revisando SEO: dado estruturado só vale a pena se bater com o que
+// a pessoa realmente vê na página, então não duplica o texto em dois lugares.
+const faq = [
+  {
+    pergunta: "O valor é por pessoa ou por carro?",
+    resposta:
+      "Por carro. O veículo é exclusivo do seu grupo, independente do número de passageiros (até o limite de cada porte).",
+  },
+  {
+    pergunta: "Vocês buscam no aeroporto de madrugada?",
+    resposta:
+      "Sim. Acompanhamos o status do voo e o motorista aguarda no desembarque. Entre 18h e 5h aplica-se a tarifa noturna quando houver.",
+  },
+  {
+    pergunta: "Como funciona o pagamento?",
+    resposta:
+      "Combinamos no WhatsApp: Pix, dinheiro ou cartão na maquininha do motorista. Sem taxa adicional escondida.",
+  },
+  {
+    pergunta: "Posso cancelar?",
+    resposta:
+      "Cancelamento sem custo até 24h antes do embarque. Alterações de horário podem ser feitas conforme disponibilidade.",
+  },
+];
+
 const politicas = [
   {
     icon: Briefcase,
@@ -139,7 +198,7 @@ const politicas = [
 ];
 
 function RotaDetalhe() {
-  const loaderData = Route.useLoaderData() as { rota: Rota; rotas: Rota[] };
+  const loaderData = Route.useLoaderData() as { rota: Rota; rotas: Rota[]; origem: string };
   const { rota, rotas } = loaderData;
   const navigate = useNavigate();
   const [indice, setIndice] = useState(0);
@@ -433,34 +492,12 @@ function RotaDetalhe() {
 
           <h2 className="mt-10 font-display text-fluid-lg">Perguntas frequentes</h2>
           <Accordion type="single" collapsible className="mt-4">
-            <AccordionItem value="1">
-              <AccordionTrigger>O valor é por pessoa ou por carro?</AccordionTrigger>
-              <AccordionContent>
-                Por carro. O veículo é exclusivo do seu grupo, independente do número de passageiros
-                (até o limite de cada porte).
-              </AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="2">
-              <AccordionTrigger>Vocês buscam no aeroporto de madrugada?</AccordionTrigger>
-              <AccordionContent>
-                Sim. Acompanhamos o status do voo e o motorista aguarda no desembarque. Entre 18h e
-                5h aplica-se a tarifa noturna quando houver.
-              </AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="3">
-              <AccordionTrigger>Como funciona o pagamento?</AccordionTrigger>
-              <AccordionContent>
-                Combinamos no WhatsApp: Pix, dinheiro ou cartão na maquininha do motorista. Sem taxa
-                adicional escondida.
-              </AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="4">
-              <AccordionTrigger>Posso cancelar?</AccordionTrigger>
-              <AccordionContent>
-                Cancelamento sem custo até 24h antes do embarque. Alterações de horário podem ser
-                feitas conforme disponibilidade.
-              </AccordionContent>
-            </AccordionItem>
+            {faq.map((f, i) => (
+              <AccordionItem key={f.pergunta} value={String(i + 1)}>
+                <AccordionTrigger>{f.pergunta}</AccordionTrigger>
+                <AccordionContent>{f.resposta}</AccordionContent>
+              </AccordionItem>
+            ))}
           </Accordion>
         </div>
 
