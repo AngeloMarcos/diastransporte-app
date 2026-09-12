@@ -75,6 +75,15 @@ export function totalCarrinho(itens: ItemCarrinho[]): number {
   return itens.reduce((soma, i) => soma + (i.valor ?? 0), 0);
 }
 
+/** Achado revisando UX: totalCarrinho soma só os itens com valor conhecido,
+ * então um carrinho com 1 item de R$650 e outro "sob consulta" (valor null,
+ * ex.: carro grande numa rota sem esse preço) mostrava um total de R$650
+ * como se fosse o valor completo, sem indicar que falta cobrar +1 item —
+ * carrinho.tsx usa isto pra avisar quando o total exibido está incompleto. */
+export function temItemSemPreco(itens: ItemCarrinho[]): boolean {
+  return itens.some((i) => i.valor === null);
+}
+
 /** Estado reativo do carrinho no cliente (SSR-safe: começa vazio). */
 export function useCarrinho() {
   const [itens, setItens] = useState<ItemCarrinho[]>([]);

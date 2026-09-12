@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatBRL } from "@/data/rotas";
 import { useAuth } from "@/hooks/useAuth";
-import { useCarrinho } from "@/lib/carrinho";
+import { temItemSemPreco, useCarrinho } from "@/lib/carrinho";
 import { contarConflitosPotenciais, criarReservas, perfilContato } from "@/lib/dados";
 import { salvarRedirectPosLogin } from "@/lib/reserva";
 import { mensagemCarrinho, whatsappLink } from "@/lib/whatsapp";
@@ -62,6 +62,7 @@ function Carrinho() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { itens, pronto, total, remover, limpar } = useCarrinho();
+  const semPreco = temItemSemPreco(itens);
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
   const [enviando, setEnviando] = useState(false);
@@ -256,6 +257,14 @@ function Carrinho() {
                 <p className="text-xs text-muted-foreground">
                   {itens.length} {itens.length === 1 ? "transfer" : "transfers"}
                 </p>
+                {semPreco && (
+                  <p className="mt-1 text-xs text-amber-400">
+                    {total ? "+ " : ""}
+                    {itens.filter((i) => i.valor === null).length}{" "}
+                    {itens.filter((i) => i.valor === null).length === 1 ? "item" : "itens"} com
+                    valor sob consulta
+                  </p>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button asChild variant="secondary" className="bg-whats text-whats-foreground">
@@ -283,6 +292,13 @@ function Carrinho() {
                 <p className="truncate font-display text-2xl">
                   {total ? formatBRL(total) : "Sob consulta"}
                 </p>
+                {semPreco && (
+                  <p className="truncate text-[11px] text-amber-400">
+                    {itens.filter((i) => i.valor === null).length}{" "}
+                    {itens.filter((i) => i.valor === null).length === 1 ? "item" : "itens"} sob
+                    consulta
+                  </p>
+                )}
               </div>
               <Button
                 className="min-h-11 shrink-0"

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Baby,
   CalendarCheck,
@@ -151,10 +151,19 @@ function RotaDetalhe() {
   const [embarqueEscolha, setEmbarqueEscolha] = useState("");
   const [embarqueOutro, setEmbarqueOutro] = useState("");
   const [observacoes, setObservacoes] = useState("");
+  // Achado revisando UX: no celular, o toast de campo faltando aparecia e
+  // sumia sem indicar QUAL campo — a pessoa clicava "Adicionar" fixo no
+  // rodapé sem saber que precisava rolar até a data ou o embarque.
+  const dataRef = useRef<HTMLInputElement>(null);
+  const embarqueRef = useRef<HTMLDivElement>(null);
 
   const maxPassageiros = carro === "pequeno" ? 4 : 5;
   const preco = precoFinal(rota, carro, periodo);
   const temNoite = rota.precoPequenoNoite !== undefined || rota.precoGrandeNoite !== undefined;
+  // Achado revisando UX: "Grande" ficava selecionável mesmo em rotas sem
+  // esse porte (precoGrande null) — só virava "Sob consulta" em silêncio,
+  // sem indicar que a opção nem existe pra este trecho.
+  const grandeDisponivel = rota.precoGrande !== null;
   // A zona ajuda a triagem, mas quem promete buscar na porta precisa do
   // endereço exato — combina os dois em vez de só um ou outro, pra não
   // obrigar o motorista a voltar a perguntar pelo WhatsApp depois.
@@ -173,20 +182,34 @@ function RotaDetalhe() {
 
   const trecho = `${rota.origem} → ${rota.destino}`;
 
-  /** Único caminho que cria a reserva: joga no carrinho. */
-  function adicionarItem(): boolean {
+  /** Validação compartilhada por qualquer caminho de reserva (carrinho ou
+   * WhatsApp direto) — achado revisando UX: "Reservar pelo WhatsApp" antes
+   * não passava por aqui, então dava pra mandar mensagem sem data nem
+   * embarque, direto contradizendo o aviso ao lado do campo de endereço. */
+  function validarCampos(): boolean {
     if (!data) {
       toast.error("Escolha a data do embarque.");
+      dataRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      dataRef.current?.focus();
       return false;
     }
     if (data < hojeISO) {
       toast.error("Escolha uma data a partir de hoje.");
+      dataRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      dataRef.current?.focus();
       return false;
     }
     if (!embarqueLocal) {
       toast.error("Escolha (ou informe) o local de embarque.");
+      embarqueRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return false;
     }
+    return true;
+  }
+
+  /** Único caminho que cria a reserva: joga no carrinho. */
+  function adicionarItem(): boolean {
+    if (!validarCampos()) return false;
     if (!rota.id) {
       toast.error("Esta rota está indisponível para reserva no momento.");
       return false;
@@ -234,6 +257,15 @@ function RotaDetalhe() {
       valor: preco ? formatBRL(preco) : "sob consulta",
     }),
   );
+
+  /** Não passa mais direto pelo href do link — exige a mesma validação de
+   * data/embarque que "Adicionar ao carrinho" já exige, senão a mensagem
+   * chega faltando justo o que o motorista precisa pra não perguntar de
+   * novo. */
+  function reservarPeloWhatsapp() {
+    if (!validarCampos()) return;
+    window.open(link, "_blank", "noreferrer");
+  }
 
   return (
     <div className="min-h-screen">
@@ -432,7 +464,13 @@ function RotaDetalhe() {
           </Accordion>
         </div>
 
-        <aside className="lg:sticky lg:top-24 lg:h-fit">
+        {/* order-first no celular: achado revisando UX — o formulário de
+            reserva vinha DEPOIS de galeria/tarifas/FAQ na ordem do DOM, e
+            sem grid-template em telas pequenas isso significava rolar a
+            página inteira antes de conseguir reservar. lg:order-none
+            restaura a ordem natural (conteúdo à esquerda, formulário à
+            direita) a partir do breakpoint onde o grid de 2 colunas entra. */}
+        <aside className="order-first lg:order-none lg:sticky lg:top-24 lg:h-fit">
           <div className="rounded-lg border border-border bg-card p-6">
             <p className="text-[11px] uppercase tracking-widest text-muted-foreground">
               Valor total
@@ -450,6 +488,7 @@ function RotaDetalhe() {
                   <Label htmlFor="data">Data do embarque</Label>
                   <Input
                     id="data"
+                    ref={dataRef}
                     type="date"
                     required
                     min={hojeISO}
@@ -506,11 +545,20 @@ function RotaDetalhe() {
                   <Button
                     type="button"
                     variant={carro === "grande" ? "default" : "secondary"}
+                    disabled={!grandeDisponivel}
+                    title={
+                      grandeDisponivel ? undefined : "Não oferecemos carro grande neste trecho"
+                    }
                     onClick={() => setCarro("grande")}
                   >
                     Grande
                   </Button>
                 </div>
+                {!grandeDisponivel && (
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Carro grande não disponível para este trecho.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -543,7 +591,7 @@ function RotaDetalhe() {
               </div>
             </div>
 
-            <div className="mt-6">
+            <div className="mt-6" ref={embarqueRef}>
               <Label htmlFor="embarque">Zona de embarque</Label>
               <Select value={embarqueEscolha} onValueChange={setEmbarqueEscolha}>
                 <SelectTrigger id="embarque" className="mt-2">
@@ -595,12 +643,10 @@ function RotaDetalhe() {
             </Button>
 
             <Button
-              asChild
               className="mt-2 w-full bg-whats text-whats-foreground hover:bg-whats/90"
+              onClick={reservarPeloWhatsapp}
             >
-              <a href={link} target="_blank" rel="noreferrer">
-                <MessageCircle className="size-4" /> Reservar pelo WhatsApp
-              </a>
+              <MessageCircle className="size-4" /> Reservar pelo WhatsApp
             </Button>
             <p className="mt-3 text-xs text-muted-foreground">
               &quot;Reservar agora&quot; leva você direto ao carrinho para finalizar. Cancelamento

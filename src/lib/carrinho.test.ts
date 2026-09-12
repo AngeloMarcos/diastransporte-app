@@ -4,6 +4,7 @@ import {
   lerCarrinho,
   limparCarrinho,
   removerDoCarrinho,
+  temItemSemPreco,
   totalCarrinho,
   type ItemCarrinho,
 } from "./carrinho";
@@ -86,5 +87,32 @@ describe("totalCarrinho", () => {
 
   it("soma zero pro carrinho vazio", () => {
     expect(totalCarrinho([])).toBe(0);
+  });
+});
+
+describe("temItemSemPreco", () => {
+  it("false quando todo item tem valor conhecido", () => {
+    expect(
+      temItemSemPreco([
+        { ...itemBase, id: "1" },
+        { ...itemBase, id: "2", valor: 700 },
+      ]),
+    ).toBe(false);
+  });
+
+  it("true quando pelo menos um item é sob consulta — mesmo com outros tendo preço", () => {
+    // Cenário real do achado: carrinho com um item precificado e outro
+    // "sob consulta" (ex.: carro grande numa rota sem esse preço) não pode
+    // deixar o total parecer completo.
+    expect(
+      temItemSemPreco([
+        { ...itemBase, id: "1" },
+        { ...itemBase, id: "2", valor: null },
+      ]),
+    ).toBe(true);
+  });
+
+  it("false pro carrinho vazio", () => {
+    expect(temItemSemPreco([])).toBe(false);
   });
 });
