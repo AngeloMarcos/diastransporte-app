@@ -25,6 +25,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-text: var(--primary-text);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -81,6 +82,14 @@
   --popover-foreground: oklch(0.97 0.002 265);
   --primary: oklch(0.55 0.21 25.5);
   --primary-foreground: oklch(0.99 0.002 265);
+  /* Achado revisando acessibilidade: --primary a 0.55 de luminosidade dá
+     ~3.6:1 de contraste contra --background, abaixo do mínimo AA (4.5:1)
+     pra texto normal — passa para ícone/borda/fundo de botão (onde a regra
+     de contraste é outra), mas falhava em texto pequeno de verdade (ex.: o
+     "*" de campo obrigatório, o rótulo do hero). Mesmo tom/matiz, só mais
+     claro (0.62 -> ~4.8:1) — usar text-primary-text em vez de text-primary
+     quando for TEXTO pequeno/normal, não ícone nem botão. */
+  --primary-text: oklch(0.62 0.21 25.5);
   --secondary: oklch(0.27 0.008 265);
   --secondary-foreground: oklch(0.97 0.002 265);
   --muted: oklch(0.27 0.008 265);

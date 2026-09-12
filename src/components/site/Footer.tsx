@@ -27,8 +27,11 @@ export function Footer() {
             {EMPRESA.assinatura}. Transfers particulares entre São Luís, Barreirinhas, Santo Amaro e
             toda a Rota das Emoções.
           </p>
+          {/* Achado revisando UX: apontava pro instagram.com genérico, não
+              pro perfil — trocado pro handle exibido ao lado ("@diastransporte").
+              Confirmar com o dono do site se é esse o @ de verdade. */}
           <a
-            href="https://instagram.com"
+            href="https://instagram.com/diastransporte"
             target="_blank"
             rel="noreferrer"
             className="mt-5 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"

@@ -29,7 +29,7 @@ function ItemLink({ item }: { item: Item }) {
       {...(item.params ? { params: item.params } : {})}
       activeOptions={{ exact: item.to === "/" }}
       className="relative mx-auto flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 px-1 py-2 text-[11px] leading-none text-muted-foreground transition-colors"
-      activeProps={{ className: "text-primary" }}
+      activeProps={{ className: "text-primary-text" }}
     >
       <span className="relative">
         <Icone className="size-6" />

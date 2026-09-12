@@ -64,23 +64,6 @@ const passos = [
   { n: "03", t: "Embarque tranquilo", d: "Buscamos no aeroporto ou na sua hospedagem." },
 ];
 
-const depoimentos = [
-  {
-    nome: "Camila R.",
-    texto:
-      "Chegamos em São Luís de madrugada e o motorista já estava esperando. Viagem confortável até Barreirinhas.",
-  },
-  {
-    nome: "Rodrigo M.",
-    texto: "Fizemos São Luís → Santo Amaro e depois Barreirinhas → Jeri. Pontualidade impecável.",
-  },
-  {
-    nome: "Família Aguiar",
-    texto:
-      "Pegamos o carro grande por causa das malas. Valeu cada centavo, o motorista foi atencioso.",
-  },
-];
-
 function Home() {
   const {
     rotas,
@@ -129,7 +112,9 @@ function Home() {
 
         <div className="absolute inset-0 overlay-escuro" />
         <div className="relative mx-auto w-full max-w-6xl px-4 py-section">
-          <span className="inline-block rounded-sm border border-primary/60 px-3 py-1 text-[11px] uppercase tracking-[0.25em] text-primary">
+          {/* text-primary-text (não text-primary): achado de acessibilidade
+              — vermelho de marca em 11px falhava o contraste mínimo AA. */}
+          <span className="inline-block rounded-sm border border-primary/60 px-3 py-1 text-[11px] uppercase tracking-[0.25em] text-primary-text">
             Tarifário temporada 2026
           </span>
           <h1 className="mt-5 max-w-3xl font-display text-fluid-hero leading-[0.95]">
@@ -261,23 +246,6 @@ function Home() {
               <p className="mt-2 text-sm text-muted-foreground">{p.d}</p>
             </div>
           ))}
-        </div>
-      </section>
-
-      <section className="border-y border-border bg-card">
-        <div className="mx-auto max-w-6xl px-4 py-section">
-          <h2 className="font-display text-fluid-xl">Quem já viajou com a gente</h2>
-          <div className="mt-8 grid gap-6 md:grid-cols-3">
-            {depoimentos.map((d) => (
-              <blockquote
-                key={d.nome}
-                className="rounded-lg border border-border bg-background p-6"
-              >
-                <p className="text-sm text-muted-foreground">“{d.texto}”</p>
-                <footer className="mt-4 text-sm font-semibold">{d.nome}</footer>
-              </blockquote>
-            ))}
-          </div>
         </div>
       </section>
 

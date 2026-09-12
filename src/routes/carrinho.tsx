@@ -75,7 +75,13 @@ function Carrinho() {
     if (!user) return;
     void (async () => {
       const perfil = await perfilContato(user.id).catch(() => null);
-      setNome((atual) => atual || perfil?.nome || user.email || "");
+      // Achado revisando UX: sem perfil.nome salvo, isto preenchia "Seu
+      // nome" com o e-mail cru (ex.: "joao83@gmail.com") — e esse valor ia
+      // direto na mensagem pro motorista. Sem fallback pra e-mail aqui: o
+      // campo fica vazio com o placeholder, a pessoa digita o nome de
+      // verdade (o fallback pro e-mail continua existindo só no envio pro
+      // banco, como contato_nome, se a pessoa realmente deixar em branco).
+      setNome((atual) => atual || perfil?.nome || "");
       setTelefone((atual) => atual || perfil?.telefone || "");
     })();
   }, [user]);
@@ -233,7 +239,7 @@ function Carrinho() {
               </div>
               <div>
                 <Label htmlFor="telefone">
-                  WhatsApp <span className="text-primary">*</span>
+                  WhatsApp <span className="text-primary-text">*</span>
                 </Label>
                 <Input
                   id="telefone"

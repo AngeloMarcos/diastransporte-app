@@ -87,7 +87,7 @@ export function Header() {
               {isAdmin && (
                 <Link
                   to="/admin"
-                  className="inline-flex items-center gap-1.5 text-sm font-medium uppercase tracking-wide text-primary"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium uppercase tracking-wide text-primary-text"
                 >
                   <LayoutDashboard className="size-4" /> Admin
                 </Link>
