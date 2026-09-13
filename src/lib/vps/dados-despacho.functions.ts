@@ -286,6 +286,54 @@ export const vpsCriarPedido = createServerFn({ method: "POST" })
     });
   });
 
+// Achado revisando UX (pedido do usuário: "melhore a edição de corrida...
+// pra que o admin possa editar tudo"): depois de criado (manual ou por
+// importação), um pedido só podia ter status/motorista/observações
+// internas alterados — passageiro, telefone, cidade, hotel, data/hora,
+// direção, voo, pontos de embarque/desembarque, empresa/canal/categoria
+// eram todos fixos pra sempre. Um erro de digitação (nome do passageiro,
+// horário errado) não tinha conserto sem apagar e recriar o pedido do
+// zero, perdendo o histórico de status. Reaproveita novoPedidoSchema (só
+// acrescenta id e codigo_fornecedor_reserva, que a criação manual não
+// preenche mas a edição precisa suportar pra pedidos vindos de
+// importação) — mesma validação de tamanho/formato dos dois caminhos.
+const edicaoPedidoSchema = novoPedidoSchema.omit({ observacoes_internas: true }).extend({
+  id: z.number().int(),
+  codigo_fornecedor_reserva: z.string().nullable().default(null),
+});
+
+export const vpsAtualizarPedido = createServerFn({ method: "POST" })
+  .inputValidator((data) => edicaoPedidoSchema.parse(data))
+  .handler(async ({ data }) => {
+    const ctx = await contexto();
+    await ctx.admin();
+    // status e fornecedor_id ficam de fora de propósito — são gerenciados
+    // pelas mutações dedicadas (vpsTransicionarStatusPedido/
+    // vpsAtribuirMotoristaPedido), que registram pedidos_historico; editar
+    // esses campos aqui também os deixaria fora do histórico de status.
+    const [atualizado] = await ctx.sql<{ id: number }[]>`
+      UPDATE public.pedidos SET
+        codigo_reserva_canal = ${data.codigo_reserva_canal},
+        codigo_fornecedor_reserva = ${data.codigo_fornecedor_reserva},
+        empresa_cliente_id = ${data.empresa_cliente_id},
+        canal_venda_id = ${data.canal_venda_id},
+        cidade_atendimento = ${data.cidade_atendimento},
+        hotel = ${data.hotel},
+        data_hora_encontro = ${data.data_hora_encontro},
+        direcao = ${data.direcao},
+        passageiro_nome = ${data.passageiro_nome},
+        passageiro_telefone = ${data.passageiro_telefone},
+        ponto_partida = ${data.ponto_partida},
+        ponto_chegada = ${data.ponto_chegada},
+        numero_voo = ${data.numero_voo},
+        categoria_veiculo_id = ${data.categoria_veiculo_id}
+      WHERE id = ${data.id}
+      RETURNING id
+    `;
+    if (!atualizado) throw new Error(`Pedido ${String(data.id)} não encontrado.`);
+    return { ok: true };
+  });
+
 // Só o lado admin por enquanto — o painel próprio do motorista (que também
 // usa transicaoValida, com role="motorista") é o car-fleet-co
 // "/motorista/*", ainda não portado (ver Etapa 9 do roteiro da fusão: fica

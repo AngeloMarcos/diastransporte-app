@@ -58,6 +58,7 @@ import {
   vpsAtualizarCanalVenda,
   vpsAtualizarCategoriaVeiculo,
   vpsAtualizarEmpresaCliente,
+  vpsAtualizarPedido,
   vpsCriarCanalVenda,
   vpsCriarCategoriaVeiculo,
   vpsCriarEmpresaCliente,
@@ -495,6 +496,22 @@ export type NovoPedidoInput = {
 
 export async function criarPedido(input: NovoPedidoInput) {
   if (MODO_VPS) return vpsCriarPedido({ data: input });
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+// Edição completa de um pedido já existente (achado revisando UX: só dava
+// pra mudar status/motorista/observações depois de criado — um erro de
+// digitação em qualquer outro campo não tinha conserto sem apagar e
+// recriar, perdendo o histórico). Deliberadamente sem status/fornecedor_id
+// aqui — ver comentário em vpsAtualizarPedido sobre por que esses dois
+// continuam só pelas mutações dedicadas.
+export type EdicaoPedidoInput = Omit<NovoPedidoInput, "observacoes_internas"> & {
+  id: number;
+  codigo_fornecedor_reserva: string | null;
+};
+
+export async function atualizarPedido(input: EdicaoPedidoInput) {
+  if (MODO_VPS) return vpsAtualizarPedido({ data: input });
   throw new Error("Despacho ainda não disponível neste ambiente.");
 }
 

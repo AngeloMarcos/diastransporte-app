@@ -95,6 +95,7 @@ import {
   atualizarCanalVenda,
   atualizarCategoriaVeiculo,
   atualizarEmpresaCliente,
+  atualizarPedido,
   atualizarStatusAgendamento,
   criarBlocoConteudo,
   criarCanalVenda,
@@ -2379,10 +2380,45 @@ function AdminPedidos() {
 // status. Também é aqui (não mais na linha da tabela) que dá pra mudar
 // status e motorista — consolidado num só lugar em vez de espalhado entre
 // os cards da lista e esta ficha, como era antes da tabela.
+type PedidoDetalheRow = NonNullable<Awaited<ReturnType<typeof pedidoDetalheAdmin>>>;
+
+/** "YYYY-MM-DDTHH:mm" no fuso do NAVEGADOR, pro valor inicial de um
+ * <input type="datetime-local">. Espelha o que NovaCorridaDialog já faz na
+ * criação (lê o valor do input como hora local e manda
+ * `new Date(v).toISOString()`) — mesma limitação existente ali (o horário
+ * pretendido é sempre Maranhão/UTC-3, então só bate exato se quem está
+ * editando também estiver nesse fuso), não uma regressão nova. */
+function paraDatetimeLocal(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${String(d.getFullYear())}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formularioDoPedido(p: PedidoDetalheRow) {
+  return {
+    codigo_reserva_canal: p.codigo_reserva_canal ?? "",
+    codigo_fornecedor_reserva: p.codigo_fornecedor_reserva ?? "",
+    empresa_cliente_id: p.empresa_cliente_id ?? "",
+    canal_venda_id: p.canal_venda_id ?? "",
+    cidade_atendimento: p.cidade_atendimento,
+    hotel: p.hotel ?? "",
+    data_hora_encontro: paraDatetimeLocal(p.data_hora_encontro),
+    direcao: p.direcao,
+    passageiro_nome: p.passageiro_nome,
+    passageiro_telefone: p.passageiro_telefone ?? "",
+    ponto_partida: p.ponto_partida ?? "",
+    ponto_chegada: p.ponto_chegada ?? "",
+    numero_voo: p.numero_voo ?? "",
+    categoria_veiculo_id: p.categoria_veiculo_id ?? "",
+  };
+}
+
 function CorridaDetalheDialog({ pedidoId }: { pedidoId: number }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [notas, setNotas] = useState("");
+  const [editando, setEditando] = useState(false);
+  const [form, setForm] = useState<ReturnType<typeof formularioDoPedido> | null>(null);
 
   const { data: p, isLoading } = useQuery({
     queryKey: ["admin-corrida-detalhe", pedidoId],
@@ -2391,8 +2427,71 @@ function CorridaDetalheDialog({ pedidoId }: { pedidoId: number }) {
   });
 
   useEffect(() => {
-    if (p) setNotas(p.observacoes_internas);
+    if (p) {
+      setNotas(p.observacoes_internas);
+      setForm(formularioDoPedido(p));
+    }
   }, [p]);
+
+  // Achado revisando UX (pedido do usuário: "editar tudo"): antes desta
+  // edição, um pedido só tinha status/motorista/observações internas
+  // editáveis depois de criado — passageiro, cidade, data/hora, empresa,
+  // canal, categoria etc. eram fixos pra sempre, sem conserto pra um erro
+  // de digitação a não ser apagar e recriar (perdendo o histórico de
+  // status). Reaproveita os mesmos cadastros de apoio já usados em
+  // NovaCorridaDialog.
+  const { data: categorias } = useQuery({
+    queryKey: ["admin-categorias-veiculo"],
+    queryFn: () => listarCategoriasVeiculo(),
+    enabled: open,
+  });
+  const { data: empresas } = useQuery({
+    queryKey: ["admin-empresas-clientes"],
+    queryFn: () => listarEmpresasClientes(),
+    enabled: open,
+  });
+  const { data: canais } = useQuery({
+    queryKey: ["admin-canais-venda"],
+    queryFn: () => listarCanaisVenda(),
+    enabled: open,
+  });
+
+  const salvarEdicao = useMutation({
+    mutationFn: async () => {
+      if (!form) return;
+      if (
+        !form.passageiro_nome.trim() ||
+        !form.cidade_atendimento.trim() ||
+        !form.data_hora_encontro
+      ) {
+        throw new Error("Preencha passageiro, cidade e data/hora.");
+      }
+      await atualizarPedido({
+        id: pedidoId,
+        codigo_reserva_canal: form.codigo_reserva_canal.trim() || null,
+        codigo_fornecedor_reserva: form.codigo_fornecedor_reserva.trim() || null,
+        empresa_cliente_id: form.empresa_cliente_id || null,
+        canal_venda_id: form.canal_venda_id || null,
+        cidade_atendimento: form.cidade_atendimento,
+        hotel: form.hotel.trim() || null,
+        data_hora_encontro: new Date(form.data_hora_encontro).toISOString(),
+        direcao: form.direcao,
+        passageiro_nome: form.passageiro_nome,
+        passageiro_telefone: form.passageiro_telefone.trim() || null,
+        ponto_partida: form.ponto_partida.trim() || null,
+        ponto_chegada: form.ponto_chegada.trim() || null,
+        numero_voo: form.numero_voo.trim() || null,
+        categoria_veiculo_id: form.categoria_veiculo_id || null,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Pedido atualizado.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-corridas"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-corrida-detalhe", pedidoId] });
+      setEditando(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao salvar pedido."),
+  });
 
   const salvarNotas = useMutation({
     mutationFn: () => salvarNotasInternas(pedidoId, notas),
@@ -2469,7 +2568,13 @@ function CorridaDetalheDialog({ pedidoId }: { pedidoId: number }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) setEditando(false);
+      }}
+    >
       <DialogTrigger asChild>
         <Button type="button" size="sm" variant="outline" title="Ver detalhes e editar">
           <Info className="size-4" /> Abrir
@@ -2542,17 +2647,205 @@ function CorridaDetalheDialog({ pedidoId }: { pedidoId: number }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-              <InfoCampo label="Código canal" valor={p.codigo_reserva_canal} />
-              <InfoCampo label="Código fornecedor" valor={p.codigo_fornecedor_reserva} />
-              <InfoCampo label="Telefone" valor={p.passageiro_telefone} />
-              <InfoCampo label="Partida" valor={p.ponto_partida} />
-              <InfoCampo label="Chegada" valor={p.ponto_chegada} />
-              <InfoCampo label="Voo" valor={p.numero_voo} />
-              <InfoCampo label="Categoria" valor={p.categoria_nome} />
-              <InfoCampo label="Emitido em" valor={formatarDataHora(p.data_emissao)} />
-              <InfoCampo label="Alterado em" valor={formatarDataHora(p.data_alteracao)} />
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-medium text-muted-foreground">
+                {editando ? "Editando dados do pedido" : "Dados do pedido"}
+              </h3>
+              {editando ? (
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setEditando(false);
+                      setForm(formularioDoPedido(p));
+                    }}
+                    disabled={salvarEdicao.isPending}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => salvarEdicao.mutate()}
+                    disabled={salvarEdicao.isPending}
+                  >
+                    {salvarEdicao.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Save className="size-4" />
+                    )}
+                    Salvar alterações
+                  </Button>
+                </div>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => setEditando(true)}>
+                  <Pencil className="size-4" /> Editar
+                </Button>
+              )}
             </div>
+
+            {editando && form ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <Campo
+                  label="Código reserva (canal)"
+                  value={form.codigo_reserva_canal}
+                  onChange={(v) => setForm((f) => (f ? { ...f, codigo_reserva_canal: v } : f))}
+                />
+                <Campo
+                  label="Código no fornecedor"
+                  value={form.codigo_fornecedor_reserva}
+                  onChange={(v) => setForm((f) => (f ? { ...f, codigo_fornecedor_reserva: v } : f))}
+                />
+                <Campo
+                  label="Passageiro"
+                  value={form.passageiro_nome}
+                  onChange={(v) => setForm((f) => (f ? { ...f, passageiro_nome: v } : f))}
+                />
+                <Campo
+                  label="WhatsApp"
+                  value={form.passageiro_telefone}
+                  onChange={(v) => setForm((f) => (f ? { ...f, passageiro_telefone: v } : f))}
+                />
+                <Campo
+                  label="Cidade de atendimento"
+                  value={form.cidade_atendimento}
+                  onChange={(v) => setForm((f) => (f ? { ...f, cidade_atendimento: v } : f))}
+                />
+                <div>
+                  <Label>Data e hora do encontro</Label>
+                  <Input
+                    className="mt-2 h-11"
+                    type="datetime-local"
+                    value={form.data_hora_encontro}
+                    onChange={(e) =>
+                      setForm((f) => (f ? { ...f, data_hora_encontro: e.target.value } : f))
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Direção</Label>
+                  <Select
+                    value={form.direcao}
+                    onValueChange={(v) =>
+                      setForm((f) => (f ? { ...f, direcao: v as "IN" | "OUT" } : f))
+                    }
+                  >
+                    <SelectTrigger className="mt-2 h-11">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="IN">Chegada (IN)</SelectItem>
+                      <SelectItem value="OUT">Saída (OUT)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Empresa cliente</Label>
+                  <div className="mt-2 flex gap-2">
+                    <Select
+                      value={form.empresa_cliente_id}
+                      onValueChange={(v) =>
+                        setForm((f) => (f ? { ...f, empresa_cliente_id: v } : f))
+                      }
+                    >
+                      <SelectTrigger className="h-11 flex-1">
+                        <SelectValue placeholder="Sem empresa" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(empresas ?? []).map((e) => (
+                          <SelectItem key={e.id} value={e.id}>
+                            {e.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <NovaEmpresaDialogInline />
+                  </div>
+                </div>
+                <div>
+                  <Label>Canal de venda</Label>
+                  <div className="mt-2 flex gap-2">
+                    <Select
+                      value={form.canal_venda_id}
+                      onValueChange={(v) => setForm((f) => (f ? { ...f, canal_venda_id: v } : f))}
+                    >
+                      <SelectTrigger className="h-11 flex-1">
+                        <SelectValue placeholder="Sem canal" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(canais ?? []).map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <NovoCanalDialog />
+                  </div>
+                </div>
+                <div>
+                  <Label>Categoria de veículo</Label>
+                  <div className="mt-2 flex gap-2">
+                    <Select
+                      value={form.categoria_veiculo_id}
+                      onValueChange={(v) =>
+                        setForm((f) => (f ? { ...f, categoria_veiculo_id: v } : f))
+                      }
+                    >
+                      <SelectTrigger className="h-11 flex-1">
+                        <SelectValue placeholder="Sem categoria" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(categorias ?? []).map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <NovaCategoriaDialog />
+                  </div>
+                </div>
+                <Campo
+                  label="Hotel/pousada"
+                  value={form.hotel}
+                  onChange={(v) => setForm((f) => (f ? { ...f, hotel: v } : f))}
+                />
+                <Campo
+                  label="Número do voo"
+                  value={form.numero_voo}
+                  onChange={(v) => setForm((f) => (f ? { ...f, numero_voo: v } : f))}
+                />
+                <Campo
+                  label="Ponto de partida"
+                  value={form.ponto_partida}
+                  onChange={(v) => setForm((f) => (f ? { ...f, ponto_partida: v } : f))}
+                />
+                <Campo
+                  label="Ponto de chegada"
+                  value={form.ponto_chegada}
+                  onChange={(v) => setForm((f) => (f ? { ...f, ponto_chegada: v } : f))}
+                />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+                <InfoCampo label="Passageiro" valor={p.passageiro_nome} />
+                <InfoCampo label="Cidade" valor={p.cidade_atendimento} />
+                <InfoCampo label="Data/hora" valor={formatarDataHora(p.data_hora_encontro)} />
+                <InfoCampo label="Empresa" valor={p.empresa_nome} />
+                <InfoCampo label="Canal" valor={p.canal_nome} />
+                <InfoCampo label="Código canal" valor={p.codigo_reserva_canal} />
+                <InfoCampo label="Código fornecedor" valor={p.codigo_fornecedor_reserva} />
+                <InfoCampo label="Telefone" valor={p.passageiro_telefone} />
+                <InfoCampo label="Hotel" valor={p.hotel} />
+                <InfoCampo label="Partida" valor={p.ponto_partida} />
+                <InfoCampo label="Chegada" valor={p.ponto_chegada} />
+                <InfoCampo label="Voo" valor={p.numero_voo} />
+                <InfoCampo label="Categoria" valor={p.categoria_nome} />
+                <InfoCampo label="Emitido em" valor={formatarDataHora(p.data_emissao)} />
+                <InfoCampo label="Alterado em" valor={formatarDataHora(p.data_alteracao)} />
+              </div>
+            )}
 
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => void baixarVoucher(true)}>
@@ -2645,6 +2938,9 @@ const CORRIDA_VAZIA = {
   numero_voo: "",
   categoria_veiculo_id: "" as string,
   canal_venda_id: "" as string,
+  // Achado revisando UX: faltava aqui (nunca dava pra escolher Empresa ao
+  // criar uma corrida manual, só quando ela vinha por importação).
+  empresa_cliente_id: "" as string,
   observacoes_internas: "",
 };
 
@@ -2663,6 +2959,11 @@ function NovaCorridaDialog() {
     queryFn: () => listarCanaisVenda(),
     enabled: open,
   });
+  const { data: empresas } = useQuery({
+    queryKey: ["admin-empresas-clientes"],
+    queryFn: () => listarEmpresasClientes(),
+    enabled: open,
+  });
 
   const criar = useMutation({
     mutationFn: async () => {
@@ -2675,7 +2976,7 @@ function NovaCorridaDialog() {
       }
       await criarPedido({
         codigo_reserva_canal: null,
-        empresa_cliente_id: null,
+        empresa_cliente_id: form.empresa_cliente_id || null,
         canal_venda_id: form.canal_venda_id || null,
         cidade_atendimento: form.cidade_atendimento,
         hotel: form.hotel || null,
@@ -2795,6 +3096,27 @@ function NovaCorridaDialog() {
                 </SelectContent>
               </Select>
               <NovoCanalDialog />
+            </div>
+          </div>
+          <div>
+            <Label>Empresa cliente</Label>
+            <div className="mt-2 flex gap-2">
+              <Select
+                value={form.empresa_cliente_id}
+                onValueChange={(v) => setForm((f) => ({ ...f, empresa_cliente_id: v }))}
+              >
+                <SelectTrigger className="h-11 flex-1">
+                  <SelectValue placeholder="Sem empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(empresas ?? []).map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <NovaEmpresaDialogInline />
             </div>
           </div>
           <Campo
@@ -2952,6 +3274,63 @@ function NovoCanalDialog() {
               <Plus className="size-4" />
             )}
             Criar canal
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Achado revisando UX: Categoria e Canal já tinham este "+" de criação
+// rápida ao lado do Select, direto no formulário de corrida — só Empresa
+// não (nem tinha o próprio Select de Empresa, ver NovaCorridaDialog e
+// CorridaDetalheDialog). Mesmo padrão minimalista das outras duas: só nome,
+// sem os campos extras (documento/e-mail/telefone) que EmpresaDialog pede —
+// quem precisar deles edita depois na aba Empresas.
+function NovaEmpresaDialogInline() {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [nome, setNome] = useState("");
+
+  const criar = useMutation({
+    mutationFn: async () => {
+      if (!nome.trim()) throw new Error("Informe o nome da empresa.");
+      await criarEmpresaCliente({
+        nome: nome.trim(),
+        documento: null,
+        email_contato: null,
+        telefone_contato: null,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Empresa criada.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-empresas-clientes"] });
+      setOpen(false);
+      setNome("");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao criar empresa."),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" size="icon" variant="secondary" className="size-11 shrink-0">
+          <Plus className="size-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Nova empresa cliente</DialogTitle>
+        </DialogHeader>
+        <Campo label="Nome" value={nome} onChange={setNome} />
+        <DialogFooter>
+          <Button className="h-11 w-full" onClick={() => criar.mutate()} disabled={criar.isPending}>
+            {criar.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Plus className="size-4" />
+            )}
+            Criar empresa
           </Button>
         </DialogFooter>
       </DialogContent>
