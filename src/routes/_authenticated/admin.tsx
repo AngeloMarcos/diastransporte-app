@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   BellRing,
@@ -137,6 +137,7 @@ import {
   salvarVeiculoFrota,
   transicionarStatusPedido,
   verificarCodigosExistentes,
+  type FiltroPedidosAdmin,
   type Fornecedor,
 } from "@/lib/dados";
 import type { PedidoImportRow } from "@/lib/vps/dados-despacho.functions";
@@ -228,6 +229,16 @@ function linkWhatsappCliente(telefone: string | null) {
   return `https://wa.me/${comDdi}`;
 }
 
+// Achado revisando UX (pedido direto do usuário, com print do painel antigo
+// do car-fleet-co ao lado): as 10 abas viviam soltas numa lista só,
+// misturando gestão do site (Rotas/Frota/Agendamentos/Conteúdo/Usuários)
+// com o despacho (Pedidos/Motoristas/Empresas/Canais/Categorias, todo
+// portado do car-fleet-co) sem nenhuma separação visual — "confuso" nas
+// palavras do usuário. Reordenado (site primeiro, despacho depois, "Visão
+// geral" solta na frente por cobrir os dois) e agrupado na sidebar via
+// GrupoLabel logo abaixo, igual ao menu do painel antigo. Renomeei
+// "Corridas" pra "Pedidos" pra bater com o nome que o resto da tela de
+// despacho já usa (tabela, filtros, dashboard).
 const abas = [
   { id: "geral", label: "Visão geral", icon: LayoutDashboard },
   { id: "rotas", label: "Rotas e preços", icon: RouteIcon },
@@ -237,15 +248,15 @@ const abas = [
   // nem aparece, em vez de aparecer e dar erro ao tentar carregar.
   { id: "frota", label: "Frota", icon: Truck, soVps: true },
   { id: "agendamentos", label: "Agendamentos", icon: CalendarCheck },
-  // Despacho (portado do car-fleet-co, Etapa 6/7 do roteiro da fusão) —
-  // mesmo motivo de "frota" acima: VPS-only, aba escondida fora de MODO_VPS.
-  { id: "corridas", label: "Corridas", icon: Car, soVps: true },
-  { id: "fornecedores", label: "Motoristas", icon: UserCog, soVps: true },
-  { id: "empresas", label: "Empresas", icon: Building2, soVps: true },
-  { id: "canais", label: "Canais", icon: Radio, soVps: true },
-  { id: "categorias", label: "Categorias", icon: Tag, soVps: true },
   { id: "conteudo", label: "Conteúdo do site", icon: FileText },
   { id: "usuarios", label: "Usuários e acessos", icon: Users },
+  // Despacho (portado do car-fleet-co, Etapa 6/7 do roteiro da fusão) —
+  // mesmo motivo de "frota" acima: VPS-only, aba escondida fora de MODO_VPS.
+  { id: "corridas", label: "Pedidos", icon: Car, soVps: true },
+  { id: "fornecedores", label: "Motoristas", icon: UserCog, soVps: true },
+  { id: "empresas", label: "Empresas", icon: Building2, soVps: true },
+  { id: "canais", label: "Canais de venda", icon: Radio, soVps: true },
+  { id: "categorias", label: "Categorias", icon: Tag, soVps: true },
 ] as const;
 
 function AdminPage() {
@@ -386,29 +397,39 @@ function AdminPage() {
           <div className="-mx-4 overflow-x-auto px-4 [-ms-overflow-style:none] [scrollbar-width:none] md:mx-0 md:w-56 md:shrink-0 md:overflow-visible md:px-0 md:[scrollbar-width:auto] [&::-webkit-scrollbar]:hidden">
             <TabsList className="inline-flex h-auto w-max justify-start gap-1 bg-secondary/60 p-1 md:flex md:w-full md:flex-col md:items-stretch md:gap-0.5 md:bg-transparent md:p-0">
               {abasVisiveis.map(({ id, label, icon: Icon }) => (
-                <TabsTrigger
-                  key={id}
-                  value={id}
-                  className="min-h-11 shrink-0 gap-2 whitespace-nowrap px-3 text-sm md:w-full md:justify-start md:rounded-lg md:px-3 md:py-2.5 md:data-[state=active]:bg-secondary md:data-[state=active]:shadow-none"
-                >
-                  <Icon className="size-4 shrink-0" /> {label}
-                  {id === "agendamentos" && pendentesCount > 0 && (
-                    <span
-                      className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground"
-                      title="Agendamentos pendentes"
-                    >
-                      {pendentesCount}
-                    </span>
-                  )}
-                  {id === "corridas" && semMotoristaCount > 0 && (
-                    <span
-                      className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[11px] font-semibold text-background"
-                      title="Corridas sem motorista atribuído"
-                    >
-                      {semMotoristaCount}
-                    </span>
-                  )}
-                </TabsTrigger>
+                <Fragment key={id}>
+                  {/* Só existe um segundo grupo (Despacho) quando MODO_VPS
+                      está ligado — nesse caso "rotas" é sempre o primeiro
+                      item do bloco Site e "corridas" o primeiro do bloco
+                      Despacho, dado o array reordenado acima. Escondido no
+                      scroller horizontal do mobile (hidden md:block): um
+                      rótulo de texto ali vira só mais um item confuso na
+                      faixa, a separação visual só faz sentido na coluna. */}
+                  {MODO_VPS && id === "rotas" && <GrupoLabel texto="Site" />}
+                  {MODO_VPS && id === "corridas" && <GrupoLabel texto="Despacho" />}
+                  <TabsTrigger
+                    value={id}
+                    className="min-h-11 shrink-0 gap-2 whitespace-nowrap px-3 text-sm md:w-full md:justify-start md:rounded-lg md:px-3 md:py-2.5 md:data-[state=active]:bg-secondary md:data-[state=active]:shadow-none"
+                  >
+                    <Icon className="size-4 shrink-0" /> {label}
+                    {id === "agendamentos" && pendentesCount > 0 && (
+                      <span
+                        className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground"
+                        title="Agendamentos pendentes"
+                      >
+                        {pendentesCount}
+                      </span>
+                    )}
+                    {id === "corridas" && semMotoristaCount > 0 && (
+                      <span
+                        className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[11px] font-semibold text-background"
+                        title="Pedidos sem motorista atribuído"
+                      >
+                        {semMotoristaCount}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                </Fragment>
               ))}
             </TabsList>
             <Button
@@ -438,7 +459,7 @@ function AdminPage() {
             </TabsContent>
             {MODO_VPS && (
               <TabsContent value="corridas" className="mt-0">
-                <AdminCorridas />
+                <AdminPedidos />
               </TabsContent>
             )}
             {MODO_VPS && (
@@ -472,6 +493,17 @@ function AdminPage() {
       </main>
       <Footer />
     </div>
+  );
+}
+
+/** Cabeçalho de seção na sidebar do admin (ex.: "Site" / "Despacho") — só
+ * aparece na coluna vertical (telas médias+), nunca na faixa horizontal do
+ * mobile. Puramente visual, não afeta navegação nem estado. */
+function GrupoLabel({ texto }: { texto: string }) {
+  return (
+    <p className="mb-1 mt-4 hidden px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground first:mt-0 md:block">
+      {texto}
+    </p>
   );
 }
 
@@ -706,7 +738,7 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
               className="h-11 shrink-0"
               onClick={() => onIrPara("corridas")}
             >
-              Ver corridas
+              Ver pedidos
             </Button>
           </div>
 
@@ -715,44 +747,30 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
           ) : (
             <>
               <div className="rounded-lg border border-border bg-card p-5">
-                <h3 className="font-display text-lg">Status das corridas</h3>
+                <h3 className="font-display text-lg">Status dos pedidos</h3>
                 {(() => {
                   const porStatus = despacho?.porStatus ?? {};
                   const totalPedidos = Object.values(porStatus).reduce((s, n) => s + n, 0);
+                  // Achado revisando UX: a barra+legenda combinava todos os
+                  // status numa única linha corrida — difícil de bater o
+                  // olho e achar um número específico. Trocado por um grid
+                  // de blocos (um por status), igual ao dashboard que o
+                  // car-fleet-co tinha antes da fusão (print trazido pelo
+                  // usuário) — cada bloco já mostra o rótulo e a contagem.
                   return totalPedidos ? (
-                    <>
-                      <div className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-muted">
-                        {PEDIDO_STATUS_OPTIONS.map((s) =>
-                          porStatus[s] ? (
-                            <div
-                              key={s}
-                              className={cn(
-                                "h-full",
-                                PEDIDO_STATUS_META[s].badgeClass.match(/bg-\S+/)?.[0],
-                              )}
-                              style={{ width: `${((porStatus[s] ?? 0) / totalPedidos) * 100}%` }}
-                              title={`${PEDIDO_STATUS_META[s].label}: ${String(porStatus[s])}`}
-                            />
-                          ) : null,
-                        )}
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
-                        {PEDIDO_STATUS_OPTIONS.filter((s) => porStatus[s]).map((s) => (
-                          <span key={s} className="inline-flex items-center gap-1.5">
-                            <span
-                              className={cn(
-                                "size-2 rounded-full",
-                                PEDIDO_STATUS_META[s].badgeClass.match(/bg-\S+/)?.[0],
-                              )}
-                            />
-                            {PEDIDO_STATUS_META[s].label}: {porStatus[s]}
-                          </span>
-                        ))}
-                      </div>
-                    </>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                      {PEDIDO_STATUS_OPTIONS.map((s) => (
+                        <div key={s} className="rounded-lg border border-border bg-background p-3">
+                          <p className="text-xs text-muted-foreground">
+                            {PEDIDO_STATUS_META[s].label}
+                          </p>
+                          <p className="mt-1 font-display text-xl">{porStatus[s] ?? 0}</p>
+                        </div>
+                      ))}
+                    </div>
                   ) : (
                     <p className="mt-4 text-sm text-muted-foreground">
-                      Nenhuma corrida cadastrada ainda.
+                      Nenhum pedido cadastrado ainda.
                     </p>
                   );
                 })()}
@@ -760,7 +778,7 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-lg border border-border bg-card p-5">
-                  <h3 className="font-display text-lg">Corridas de hoje</h3>
+                  <h3 className="font-display text-lg">Pedidos de hoje</h3>
                   {despacho?.hoje.length ? (
                     <div className="mt-4 divide-y divide-border">
                       {despacho.hoje.map((p) => (
@@ -789,7 +807,7 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
                       ))}
                     </div>
                   ) : (
-                    <p className="mt-4 text-sm text-muted-foreground">Nenhuma corrida hoje.</p>
+                    <p className="mt-4 text-sm text-muted-foreground">Nenhum pedido hoje.</p>
                   )}
                 </div>
 
@@ -823,7 +841,7 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
                     </div>
                   ) : (
                     <p className="mt-4 text-sm text-muted-foreground">
-                      Todas as corridas ativas têm motorista.
+                      Todos os pedidos ativos têm motorista.
                     </p>
                   )}
                 </div>
@@ -1923,42 +1941,145 @@ function FotoGaleriaCard({ foto }: { foto: FotoGaleriaRow }) {
 // Despacho (portado do car-fleet-co, Etapa 6/7 do roteiro da fusão) — falta
 // só o voucher em PDF (o resto: criar, importar em lote, transicionar
 // status e atribuir motorista já estão aqui).
-function AdminCorridas() {
-  const [busca, setBusca] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState<PedidoStatus | "todos">("todos");
+type CorridaRow = Awaited<ReturnType<typeof listarPedidosAdmin>>[number];
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["admin-corridas"],
-    queryFn: () => listarPedidosAdmin(),
+type PedidoFiltroDraft = {
+  codigo: string;
+  passageiro: string;
+  cidade: string;
+  direcao: "todas" | "IN" | "OUT";
+  status: PedidoStatus | "todos";
+  canal: string;
+  empresa: string;
+  fornecedor: string;
+  tipoData: "atividade" | "emissao" | "alteracao";
+  de: string;
+  ate: string;
+};
+
+const PEDIDO_FILTRO_VAZIO: PedidoFiltroDraft = {
+  codigo: "",
+  passageiro: "",
+  cidade: "",
+  direcao: "todas",
+  status: "todos",
+  canal: "todos",
+  empresa: "todas",
+  fornecedor: "todos",
+  tipoData: "atividade",
+  de: "",
+  ate: "",
+};
+
+// Monta o objeto por spread condicional (não atribuindo `undefined` a cada
+// campo) porque tsconfig liga exactOptionalPropertyTypes — um campo opcional
+// só pode estar ausente, nunca presente com valor undefined.
+function paraFiltroAplicado(f: PedidoFiltroDraft): FiltroPedidosAdmin {
+  const codigo = f.codigo.trim();
+  const passageiro = f.passageiro.trim();
+  const cidade = f.cidade.trim();
+  return {
+    ...(codigo && { codigo }),
+    ...(passageiro && { passageiro }),
+    ...(cidade && { cidade }),
+    ...(f.direcao !== "todas" && { direcao: f.direcao }),
+    ...(f.status !== "todos" && { status: f.status }),
+    ...(f.canal !== "todos" && { canal: f.canal }),
+    ...(f.empresa !== "todas" && { empresa: f.empresa }),
+    ...(f.fornecedor !== "todos" && { fornecedor: f.fornecedor }),
+    tipoData: f.tipoData,
+    ...(f.de && { de: f.de }),
+    ...(f.ate && { ate: f.ate }),
+  };
+}
+
+/** Baixa um CSV com os pedidos atualmente carregados na tela — mesma técnica
+ * (Blob + link temporário) do "Exportar CSV" que existia no painel próprio
+ * do car-fleet-co antes da fusão. Exporta a página vista, não a base
+ * inteira: é o que a pessoa está olhando na hora, filtros já aplicados. */
+function exportarPedidosCSV(linhas: CorridaRow[]) {
+  const cabecalho = [
+    "id",
+    "codigo",
+    "canal",
+    "empresa",
+    "cidade",
+    "hotel",
+    "direcao",
+    "passageiro",
+    "data_encontro",
+    "status",
+    "motorista",
+  ];
+  const corpo = linhas.map((r) => [
+    r.id,
+    r.codigo_reserva_canal ?? "",
+    r.canal_nome ?? "",
+    r.empresa_nome ?? "",
+    r.cidade_atendimento,
+    r.hotel ?? "",
+    r.direcao,
+    r.passageiro_nome,
+    r.data_hora_encontro,
+    PEDIDO_STATUS_META[r.status as PedidoStatus].label,
+    r.fornecedor_nome ?? "",
+  ]);
+  const csv = [cabecalho, ...corpo]
+    .map((linha) => linha.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `pedidos-${Date.now()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Achado revisando UX (pedido direto do usuário, com print da tela de
+// Pedidos do painel antigo do car-fleet-co ao lado): a lista aqui era uma
+// pilha de cards com só busca por texto + status — os filtros ricos que já
+// existiam prontos no backend desde a Etapa 6 (listarPedidosAdmin aceita
+// código/canal/empresa/motorista/direção/intervalo de datas, ver
+// FiltroPedidosAdmin em dados.ts) nunca tinham UI nenhuma. Reescrito como
+// tabela + painel de filtro completo, replicando as colunas e os campos de
+// filtro exatos do print (Código/Passageiro/Cidade/Direção/Status/Canal/
+// Empresa/Motorista/Tipo de data/De/Até), mais "Exportar CSV" (não existia
+// aqui, existia lá). O filtro só dispara no clique de "Filtrar" — os campos
+// de texto não buscam a cada tecla — pra não martelar o Postgres a cada
+// letra digitada num filtro que pode ter vários campos preenchidos ao
+// mesmo tempo.
+function AdminPedidos() {
+  const [draft, setDraft] = useState<PedidoFiltroDraft>(PEDIDO_FILTRO_VAZIO);
+  const [aplicado, setAplicado] = useState<FiltroPedidosAdmin>({});
+  const filtrosAtivos = Object.keys(aplicado).length > 0;
+
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ["admin-corridas", aplicado],
+    queryFn: () => listarPedidosAdmin(aplicado),
+  });
+  const { data: empresas } = useQuery({
+    queryKey: ["admin-empresas-clientes"],
+    queryFn: () => listarEmpresasClientes(),
+  });
+  const { data: canais } = useQuery({
+    queryKey: ["admin-canais-venda"],
+    queryFn: () => listarCanaisVenda(),
   });
   const { data: fornecedores } = useQuery({
     queryKey: ["admin-fornecedores"],
     queryFn: () => listarFornecedores(),
   });
-  const fornecedoresAtivos = useMemo(
-    () => (fornecedores ?? []).filter((f) => f.ativo),
-    [fornecedores],
-  );
 
-  const filtradas = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    return (data ?? []).filter((p) => {
-      if (filtroStatus !== "todos" && p.status !== filtroStatus) return false;
-      if (!termo) return true;
-      return `${p.passageiro_nome} ${p.cidade_atendimento}`.toLowerCase().includes(termo);
-    });
-  }, [data, busca, filtroStatus]);
-
-  const filtrosAtivos = busca.trim() !== "" || filtroStatus !== "todos";
   function limparFiltros() {
-    setBusca("");
-    setFiltroStatus("todos");
+    setDraft(PEDIDO_FILTRO_VAZIO);
+    setAplicado({});
   }
 
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-11 w-full sm:max-w-md" />
+        <Skeleton className="h-40 w-full" />
         <ListaCarregando />
       </div>
     );
@@ -1966,41 +2087,194 @@ function AdminCorridas() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 flex-col gap-3 sm:flex-row">
-          <div className="relative sm:max-w-xs sm:flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-xl">Pedidos</h2>
+          <p className="text-sm text-muted-foreground">Todas as corridas do despacho.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-11"
+            onClick={() => exportarPedidosCSV(data ?? [])}
+            disabled={!data?.length}
+          >
+            <FileDown className="size-4" /> Exportar CSV
+          </Button>
+          <ImportarPedidosDialog />
+          <NovaCorridaDialog />
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Campo
+            label="Código"
+            value={draft.codigo}
+            onChange={(v) => setDraft((f) => ({ ...f, codigo: v }))}
+          />
+          <Campo
+            label="Passageiro"
+            value={draft.passageiro}
+            onChange={(v) => setDraft((f) => ({ ...f, passageiro: v }))}
+          />
+          <Campo
+            label="Cidade"
+            value={draft.cidade}
+            onChange={(v) => setDraft((f) => ({ ...f, cidade: v }))}
+          />
+          <div>
+            <Label>Direção</Label>
+            <Select
+              value={draft.direcao}
+              onValueChange={(v) =>
+                setDraft((f) => ({ ...f, direcao: v as PedidoFiltroDraft["direcao"] }))
+              }
+            >
+              <SelectTrigger className="mt-2 h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas</SelectItem>
+                <SelectItem value="IN">Chegada (IN)</SelectItem>
+                <SelectItem value="OUT">Saída (OUT)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Status</Label>
+            <Select
+              value={draft.status}
+              onValueChange={(v) =>
+                setDraft((f) => ({ ...f, status: v as PedidoFiltroDraft["status"] }))
+              }
+            >
+              <SelectTrigger className="mt-2 h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os status</SelectItem>
+                {PEDIDO_STATUS_OPTIONS.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {PEDIDO_STATUS_META[s].label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Canal</Label>
+            <Select
+              value={draft.canal}
+              onValueChange={(v) => setDraft((f) => ({ ...f, canal: v }))}
+            >
+              <SelectTrigger className="mt-2 h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                {(canais ?? []).map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Empresa</Label>
+            <Select
+              value={draft.empresa}
+              onValueChange={(v) => setDraft((f) => ({ ...f, empresa: v }))}
+            >
+              <SelectTrigger className="mt-2 h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas</SelectItem>
+                {(empresas ?? []).map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Motorista</Label>
+            <Select
+              value={draft.fornecedor}
+              onValueChange={(v) => setDraft((f) => ({ ...f, fornecedor: v }))}
+            >
+              <SelectTrigger className="mt-2 h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="none">Sem motorista</SelectItem>
+                {(fornecedores ?? []).map((f) => (
+                  <SelectItem key={f.id} value={f.id}>
+                    {f.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Tipo de data</Label>
+            <Select
+              value={draft.tipoData}
+              onValueChange={(v) =>
+                setDraft((f) => ({ ...f, tipoData: v as PedidoFiltroDraft["tipoData"] }))
+              }
+            >
+              <SelectTrigger className="mt-2 h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="atividade">Atividade</SelectItem>
+                <SelectItem value="emissao">Emissão</SelectItem>
+                <SelectItem value="alteracao">Alteração</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>De</Label>
             <Input
-              className="h-11 pl-8"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar por passageiro ou cidade"
+              className="mt-2 h-11"
+              type="date"
+              value={draft.de}
+              onChange={(e) => setDraft((f) => ({ ...f, de: e.target.value }))}
             />
           </div>
-          <Select
-            value={filtroStatus}
-            onValueChange={(v) => setFiltroStatus(v as PedidoStatus | "todos")}
-          >
-            <SelectTrigger className="h-11 sm:w-[220px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos os status</SelectItem>
-              {PEDIDO_STATUS_OPTIONS.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {PEDIDO_STATUS_META[s].label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div>
+            <Label>Até</Label>
+            <Input
+              className="mt-2 h-11"
+              type="date"
+              value={draft.ate}
+              onChange={(e) => setDraft((f) => ({ ...f, ate: e.target.value }))}
+            />
+          </div>
         </div>
-        <div className="flex items-center justify-between gap-3">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
           <p className="text-xs text-muted-foreground">
-            {filtradas.length} de {data?.length ?? 0} corridas
+            {isFetching ? "Atualizando…" : `${data?.length ?? 0} pedido(s)`}
           </p>
           <div className="flex gap-2">
-            <ImportarPedidosDialog />
-            <NovaCorridaDialog />
+            {filtrosAtivos && (
+              <Button size="sm" variant="ghost" onClick={limparFiltros}>
+                Limpar filtros
+              </Button>
+            )}
+            <Button
+              size="sm"
+              className="h-11"
+              onClick={() => setAplicado(paraFiltroAplicado(draft))}
+            >
+              Filtrar
+            </Button>
           </div>
         </div>
       </div>
@@ -2008,14 +2282,12 @@ function AdminCorridas() {
       {!data?.length ? (
         <ListaVazia
           icon={Car}
-          titulo="Nenhuma corrida cadastrada ainda"
-          descricao='Crie a primeira com "Nova corrida" ou traga várias de uma vez com "Importar planilha".'
-        />
-      ) : !filtradas.length ? (
-        <ListaVazia
-          icon={Search}
-          titulo="Nenhuma corrida encontrada"
-          descricao="Tente outro termo de busca ou outro status."
+          titulo="Nenhum pedido encontrado"
+          descricao={
+            filtrosAtivos
+              ? "Tente ajustar ou limpar os filtros."
+              : 'Crie o primeiro com "Nova corrida" ou traga vários de uma vez com "Importar planilha".'
+          }
           acao={
             filtrosAtivos && (
               <Button size="sm" variant="outline" onClick={limparFiltros}>
@@ -2025,125 +2297,64 @@ function AdminCorridas() {
           }
         />
       ) : (
-        <div className="space-y-3">
-          {filtradas.map((p) => (
-            <CorridaCard key={p.id} pedido={p} fornecedoresAtivos={fornecedoresAtivos} />
-          ))}
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>#</TableHead>
+                <TableHead>Código</TableHead>
+                <TableHead>Data</TableHead>
+                <TableHead>Cidade</TableHead>
+                <TableHead>Passageiro</TableHead>
+                <TableHead>Dir.</TableHead>
+                <TableHead>Canal</TableHead>
+                <TableHead>Motorista</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.map((p) => (
+                <TableRow key={p.id}>
+                  <TableCell className="text-xs text-muted-foreground">{p.id}</TableCell>
+                  <TableCell className="text-xs">{p.codigo_reserva_canal ?? "—"}</TableCell>
+                  <TableCell className="whitespace-nowrap text-xs">
+                    {formatarDataHora(p.data_hora_encontro)}
+                  </TableCell>
+                  <TableCell className="text-xs">{p.cidade_atendimento}</TableCell>
+                  <TableCell className="max-w-40 truncate text-xs">{p.passageiro_nome}</TableCell>
+                  <TableCell className="text-xs">{p.direcao}</TableCell>
+                  <TableCell className="text-xs">{p.canal_nome ?? "—"}</TableCell>
+                  <TableCell className="text-xs">
+                    {p.fornecedor_nome ?? <span className="text-muted-foreground">—</span>}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={PEDIDO_STATUS_META[p.status as PedidoStatus].badgeClass}
+                    >
+                      {PEDIDO_STATUS_META[p.status as PedidoStatus].label}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <CorridaDetalheDialog pedidoId={p.id} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>
   );
 }
 
-type CorridaRow = Awaited<ReturnType<typeof listarPedidosAdmin>>[number];
-
-function CorridaCard({
-  pedido: p,
-  fornecedoresAtivos,
-}: {
-  pedido: CorridaRow;
-  fornecedoresAtivos: Fornecedor[];
-}) {
-  const queryClient = useQueryClient();
-  const statusAtual = p.status as PedidoStatus;
-  const opcoesStatus = useMemo(
-    () => [statusAtual, ...transicoesPermitidas(statusAtual, "admin")],
-    [statusAtual],
-  );
-
-  const mudarStatus = useMutation({
-    mutationFn: (novoStatus: PedidoStatus) => transicionarStatusPedido(p.id, novoStatus),
-    onSuccess: () => {
-      toast.success("Status atualizado.");
-      void queryClient.invalidateQueries({ queryKey: ["admin-corridas"] });
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao mudar status."),
-  });
-
-  const mudarMotorista = useMutation({
-    mutationFn: (fornecedorId: string | null) => atribuirMotoristaPedido(p.id, fornecedorId),
-    onSuccess: () => {
-      toast.success("Motorista atualizado.");
-      void queryClient.invalidateQueries({ queryKey: ["admin-corridas"] });
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atribuir motorista."),
-  });
-
-  return (
-    <article className="rounded-lg border border-border bg-card p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-display text-lg break-words">{p.passageiro_nome}</h2>
-            <Badge variant="outline">{p.direcao === "IN" ? "Chegada" : "Saída"}</Badge>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {p.cidade_atendimento} · {formatarDataHora(p.data_hora_encontro)}
-            {p.hotel ? ` · ${p.hotel}` : ""}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {p.canal_nome ?? "sem canal"}
-            {p.empresa_nome ? ` · ${p.empresa_nome}` : ""}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={statusAtual}
-            onValueChange={(v) => mudarStatus.mutate(v as PedidoStatus)}
-            disabled={mudarStatus.isPending}
-          >
-            <SelectTrigger
-              className={cn("h-9 w-[220px]", PEDIDO_STATUS_META[statusAtual].badgeClass)}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {opcoesStatus.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {PEDIDO_STATUS_META[s].label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <CorridaDetalheDialog pedidoId={p.id} />
-        </div>
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
-        <UserCog className="size-4 shrink-0 text-muted-foreground" />
-        <Select
-          value={p.fornecedor_id ?? "none"}
-          onValueChange={(v) => mudarMotorista.mutate(v === "none" ? null : v)}
-          disabled={mudarMotorista.isPending || fornecedoresAtivos.length === 0}
-        >
-          <SelectTrigger className="h-9 w-full sm:w-[260px]">
-            <SelectValue placeholder="Sem motorista atribuído" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Sem motorista atribuído</SelectItem>
-            {fornecedoresAtivos.map((f) => (
-              <SelectItem key={f.id} value={f.id}>
-                {f.nome}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {fornecedoresAtivos.length === 0 && (
-          <p className="text-xs text-muted-foreground">
-            Nenhum motorista ativo — cadastre um na aba{" "}
-            <span className="font-medium text-foreground">Motoristas</span>.
-          </p>
-        )}
-      </div>
-    </article>
-  );
-}
-
-// Ficha completa da corrida — o que os cards da lista não mostram: código de
+// Ficha completa da corrida — o que a tabela não mostra: código de
 // reserva/fornecedor, telefone do passageiro, pontos de embarque/desembarque,
 // voo, observações internas (nunca vistas pelo motorista) e o histórico de
-// status. Existia como server function (pedidoDetalheAdmin) desde a Etapa 6
-// mas não tinha nenhuma tela que a chamasse — só a lista+criar.
+// status. Também é aqui (não mais na linha da tabela) que dá pra mudar
+// status e motorista — consolidado num só lugar em vez de espalhado entre
+// os cards da lista e esta ficha, como era antes da tabela.
 function CorridaDetalheDialog({ pedidoId }: { pedidoId: number }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -2166,6 +2377,43 @@ function CorridaDetalheDialog({ pedidoId }: { pedidoId: number }) {
       void queryClient.invalidateQueries({ queryKey: ["admin-corrida-detalhe", pedidoId] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao salvar observações."),
+  });
+
+  // Status e motorista mudavam direto no card da lista antes da tabela —
+  // consolidado aqui na ficha (única tela que sobrou) pra não perder essa
+  // ação. Invalida ["admin-corridas"] sem o segundo elemento da chave de
+  // propósito: react-query casa por prefixo, então isso invalida a lista
+  // não importa qual filtro esteja aplicado no momento.
+  const { data: fornecedores } = useQuery({
+    queryKey: ["admin-fornecedores"],
+    queryFn: () => listarFornecedores(),
+    enabled: open,
+  });
+  const fornecedoresAtivos = useMemo(
+    () => (fornecedores ?? []).filter((f) => f.ativo),
+    [fornecedores],
+  );
+
+  const mudarStatus = useMutation({
+    mutationFn: (novoStatus: PedidoStatus) => transicionarStatusPedido(pedidoId, novoStatus),
+    onSuccess: () => {
+      toast.success("Status atualizado.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-corridas"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-corrida-detalhe", pedidoId] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-dashboard-despacho"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao mudar status."),
+  });
+
+  const mudarMotorista = useMutation({
+    mutationFn: (fornecedorId: string | null) => atribuirMotoristaPedido(pedidoId, fornecedorId),
+    onSuccess: () => {
+      toast.success("Motorista atualizado.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-corridas"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-corrida-detalhe", pedidoId] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-dashboard-despacho"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atribuir motorista."),
   });
 
   async function baixarVoucher(autoprint: boolean) {
@@ -2199,13 +2447,13 @@ function CorridaDetalheDialog({ pedidoId }: { pedidoId: number }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" size="icon" variant="ghost" className="size-9" title="Ver detalhes">
-          <Info className="size-4" />
+        <Button type="button" size="sm" variant="outline" title="Ver detalhes e editar">
+          <Info className="size-4" /> Abrir
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[85dvh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Corrida #{pedidoId}</DialogTitle>
+          <DialogTitle>Pedido #{pedidoId}</DialogTitle>
         </DialogHeader>
         {isLoading || !p ? (
           <div className="space-y-3">
@@ -2214,6 +2462,62 @@ function CorridaDetalheDialog({ pedidoId }: { pedidoId: number }) {
           </div>
         ) : (
           <div className="space-y-5">
+            <div className="flex flex-wrap gap-3 border-b border-border pb-4">
+              <div className="min-w-[200px] flex-1">
+                <Label className="text-xs">Status</Label>
+                <Select
+                  value={p.status}
+                  onValueChange={(v) => mudarStatus.mutate(v as PedidoStatus)}
+                  disabled={mudarStatus.isPending}
+                >
+                  <SelectTrigger
+                    className={cn(
+                      "mt-1.5 h-11",
+                      PEDIDO_STATUS_META[p.status as PedidoStatus].badgeClass,
+                    )}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[
+                      p.status as PedidoStatus,
+                      ...transicoesPermitidas(p.status as PedidoStatus, "admin"),
+                    ].map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {PEDIDO_STATUS_META[s].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="min-w-[200px] flex-1">
+                <Label className="text-xs">Motorista</Label>
+                <Select
+                  value={p.fornecedor_id ?? "none"}
+                  onValueChange={(v) => mudarMotorista.mutate(v === "none" ? null : v)}
+                  disabled={mudarMotorista.isPending || fornecedoresAtivos.length === 0}
+                >
+                  <SelectTrigger className="mt-1.5 h-11">
+                    <SelectValue placeholder="Sem motorista atribuído" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem motorista atribuído</SelectItem>
+                    {fornecedoresAtivos.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {fornecedoresAtivos.length === 0 && (
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Nenhum motorista ativo — cadastre um na aba{" "}
+                    <span className="font-medium text-foreground">Motoristas</span>.
+                  </p>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
               <InfoCampo label="Código canal" valor={p.codigo_reserva_canal} />
               <InfoCampo label="Código fornecedor" valor={p.codigo_fornecedor_reserva} />
