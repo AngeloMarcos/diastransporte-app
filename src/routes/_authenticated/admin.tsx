@@ -13,6 +13,7 @@ import {
   FileSpreadsheet,
   FileText,
   History,
+  Image as ImageIcon,
   Info,
   KeyRound,
   LayoutDashboard,
@@ -1105,15 +1106,28 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
     <article className="rounded-lg border border-border bg-card p-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <img
-            src={form.foto}
-            alt=""
-            width={48}
-            height={48}
-            loading="lazy"
-            decoding="async"
-            className="size-12 shrink-0 rounded-sm object-cover"
-          />
+          {/* Achado revisando imagens "quebradas" no admin: form.foto começa
+              "" pra toda rota nova (o fluxo documentado é criar sem foto e
+              editar depois) — um <img src=""> sem guarda mostra o ícone de
+              imagem quebrada do navegador na LISTA inteira até alguém subir
+              uma foto. Mesmo padrão de fallback já usado em
+              AdminVeiculosLista (ícone Truck) e no editor de bloco de
+              conteúdo (linha ~4722), só que faltava aqui. */}
+          {form.foto ? (
+            <img
+              src={form.foto}
+              alt=""
+              width={48}
+              height={48}
+              loading="lazy"
+              decoding="async"
+              className="size-12 shrink-0 rounded-sm object-cover"
+            />
+          ) : (
+            <div className="grid size-12 shrink-0 place-items-center rounded-sm bg-muted">
+              <RouteIcon className="size-5 text-muted-foreground" />
+            </div>
+          )}
           <div>
             <h2 className="font-display text-lg">
               {rota.origem} → {rota.destino}
@@ -1892,15 +1906,25 @@ function FotoGaleriaCard({ foto }: { foto: FotoGaleriaRow }) {
 
   return (
     <div className="group relative overflow-hidden rounded-lg border border-border bg-muted">
-      <img
-        src={foto.foto}
-        alt={foto.alt}
-        width={200}
-        height={200}
-        loading="lazy"
-        decoding="async"
-        className="aspect-square w-full object-cover"
-      />
+      {/* NovaFotoGaleriaDialog exige uma foto pra criar o item, então
+          foto.foto vazio não devia acontecer em uso normal — guarda mesmo
+          assim (defensivo, mesmo padrão do resto do arquivo) em vez de
+          confiar só na validação do formulário de criação. */}
+      {foto.foto ? (
+        <img
+          src={foto.foto}
+          alt={foto.alt}
+          width={200}
+          height={200}
+          loading="lazy"
+          decoding="async"
+          className="aspect-square w-full object-cover"
+        />
+      ) : (
+        <div className="grid aspect-square w-full place-items-center">
+          <ImageIcon className="size-6 text-muted-foreground" />
+        </div>
+      )}
       {!foto.ativo && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/70">
           <AtivoBadge ativo={false} />
