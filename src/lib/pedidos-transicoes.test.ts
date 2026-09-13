@@ -29,6 +29,10 @@ describe("transicoesPermitidas", () => {
     expect(transicoesPermitidas("corrida_finalizada", "admin")).toEqual([]);
     expect(transicoesPermitidas("no_show_driver", "admin")).toEqual([]);
     expect(transicoesPermitidas("no_show_pax", "motorista")).toEqual([]);
+    // Faltava este caso: "venda_cancelada" ficou de fora da lista de estados
+    // terminais só pra um cancelamento em cima de outro, um self-loop sem
+    // função real que só aparecia duplicado no dropdown de status do admin.
+    expect(transicoesPermitidas("venda_cancelada", "admin")).toEqual([]);
   });
 
   it("admin pode cancelar em quase qualquer estado não-terminal, motorista nunca", () => {

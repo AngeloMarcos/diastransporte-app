@@ -12,6 +12,7 @@ import { z } from "zod";
 
 import { limitesDoDiaEmMaranhao } from "@/lib/fuso-maranhao";
 import { transicaoValida, type PedidoStatus } from "@/lib/pedidos-transicoes";
+import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
 
 async function contexto() {
   const [{ lerCookieSessao, exigirUsuario, exigirAdmin, exigirMotorista }, { sql }] =
@@ -544,9 +545,27 @@ export const vpsCriarCategoriaVeiculo = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// Achado revisando o toggle ativo/inativo (Categorias/Empresas/Canais, os
+// três com o mesmo defeito): dados.ts manda um `nome: ""` de preenchimento
+// quando a chamada é só pra virar o boolean `ativo` (o handler abaixo nem
+// olha pra nome nesse caso) — mas o schema de "atualizar" reaproveitava o
+// de "criar" (categoriaSchema), que exige nome.min(1). O .parse() do
+// inputValidator rodava ANTES do handler, então TODO toggle de ativo
+// falhava com "String must contain at least 1 character(s)" e nunca
+// chegava a tocar o banco — o botão ativo/inativo destas três telas nunca
+// funcionou desde a fusão. .extend({ nome: z.string() }) solta a exigência
+// de min(1) de categoriaSchema, e o .refine() a reintroduz só pra quando
+// NÃO é um toggle (ativo === undefined), preservando a validação de
+// verdade pra uma edição completa.
 export const vpsAtualizarCategoriaVeiculo = createServerFn({ method: "POST" })
   .inputValidator((data) =>
-    categoriaSchema.extend({ id: z.string().uuid(), ativo: z.boolean().optional() }).parse(data),
+    categoriaSchema
+      .extend({ id: z.string().uuid(), ativo: z.boolean().optional(), nome: z.string() })
+      .refine((d) => d.ativo !== undefined || d.nome.length >= 1, {
+        message: "Informe um nome.",
+        path: ["nome"],
+      })
+      .parse(data),
   )
   .handler(async ({ data }) => {
     const ctx = await contexto();
@@ -604,7 +623,13 @@ export const vpsCriarEmpresaCliente = createServerFn({ method: "POST" })
 
 export const vpsAtualizarEmpresaCliente = createServerFn({ method: "POST" })
   .inputValidator((data) =>
-    empresaSchema.extend({ id: z.string().uuid(), ativo: z.boolean().optional() }).parse(data),
+    empresaSchema
+      .extend({ id: z.string().uuid(), ativo: z.boolean().optional(), nome: z.string() })
+      .refine((d) => d.ativo !== undefined || d.nome.length >= 1, {
+        message: "Informe um nome.",
+        path: ["nome"],
+      })
+      .parse(data),
   )
   .handler(async ({ data }) => {
     const ctx = await contexto();
@@ -650,7 +675,13 @@ export const vpsCriarCanalVenda = createServerFn({ method: "POST" })
 
 export const vpsAtualizarCanalVenda = createServerFn({ method: "POST" })
   .inputValidator((data) =>
-    canalSchema.extend({ id: z.string().uuid(), ativo: z.boolean().optional() }).parse(data),
+    canalSchema
+      .extend({ id: z.string().uuid(), ativo: z.boolean().optional(), nome: z.string() })
+      .refine((d) => d.ativo !== undefined || d.nome.length >= 1, {
+        message: "Informe um nome.",
+        path: ["nome"],
+      })
+      .parse(data),
   )
   .handler(async ({ data }) => {
     const ctx = await contexto();
@@ -711,10 +742,19 @@ export const vpsSalvarNotasFornecedor = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// Achado revisando consistência de senha: todo outro caminho que CRIA uma
+// senha no app (cadastro na vitrine, "esqueci minha senha", redefinição
+// pelo admin — sessao.functions.ts, dados.functions.ts) valida com
+// senhaForte (letras + números, não só tamanho), menos estes dois — o
+// z.string().min(8) sozinho aceitava "12345678". O client (admin.tsx)
+// também só conferia o tamanho, então nada barrava uma senha fraca de
+// verdade ponta a ponta pra login de motorista.
+const senhaMotoristaSchema = z.string().max(72).refine(senhaForte, SENHA_REGRA_TEXTO);
+
 const criarMotoristaSchema = z.object({
   nome: z.string().min(2),
   email: z.string().email(),
-  senha: z.string().min(8),
+  senha: senhaMotoristaSchema,
   telefone: z.string().optional().default(""),
   cidade_atuacao: z.string().min(1),
   regiao_atuacao: z.string().optional().default(""),
@@ -781,7 +821,7 @@ export const vpsCriarMotorista = createServerFn({ method: "POST" })
 const reativarMotoristaSchema = z.object({
   fornecedorId: z.string().uuid(),
   email: z.string().email(),
-  senha: z.string().min(8),
+  senha: senhaMotoristaSchema,
 });
 
 // Achado revisando UX: motorista desativado (vpsRemoverMotorista, quando já

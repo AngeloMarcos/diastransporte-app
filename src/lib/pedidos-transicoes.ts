@@ -25,7 +25,18 @@ export function transicoesPermitidas(
 ): PedidoStatus[] {
   const out: PedidoStatus[] = [];
   const isAdmin = role === "admin";
-  if (isAdmin && !["corrida_finalizada", "no_show_driver", "no_show_pax"].includes(atual))
+  // Achado revisando a máquina de estado: faltava "venda_cancelada" nesta
+  // lista de exclusão — um pedido já cancelado ainda "permitia" a transição
+  // venda_cancelada → venda_cancelada (a única sobrando, já que nenhum
+  // outro `if` abaixo bate com esse estado). transicaoValida(atual, atual,
+  // ...) então voltava true pra um estado que devia ser terminal como os
+  // outros três, e o dropdown de status (CorridaDetalheDialog) renderizava
+  // "Venda cancelada" duas vezes (valor atual + esta transição pra si
+  // mesma), duas <SelectItem> com a mesma key.
+  if (
+    isAdmin &&
+    !["corrida_finalizada", "no_show_driver", "no_show_pax", "venda_cancelada"].includes(atual)
+  )
     out.push("venda_cancelada");
   if (isAdmin && atual === "pendente_liberacao") out.push("liberada_rede");
   if (isAdmin && atual === "liberada_rede")

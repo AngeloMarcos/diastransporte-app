@@ -3584,7 +3584,7 @@ function ReativarMotoristaDialog({ fornecedor: f }: { fornecedor: Fornecedor }) 
   const reativar = useMutation({
     mutationFn: async () => {
       if (!email.trim()) throw new Error("Informe o e-mail de login.");
-      if (senha.length < 8) throw new Error("A senha precisa ter no mínimo 8 caracteres.");
+      if (!senhaForte(senha)) throw new Error(SENHA_REGRA_TEXTO);
       await reativarMotorista(f.id, email.trim(), senha);
     },
     onSuccess: () => {
@@ -3852,7 +3852,7 @@ function NovoMotoristaDialog() {
       if (!form.nome.trim() || !form.email.trim() || !form.cidade_atuacao.trim()) {
         throw new Error("Preencha nome, e-mail e cidade de atuação.");
       }
-      if (form.senha.length < 8) throw new Error("A senha precisa ter no mínimo 8 caracteres.");
+      if (!senhaForte(form.senha)) throw new Error(SENHA_REGRA_TEXTO);
       await criarNovoMotorista({
         ...form,
         categoria_veiculo_id: form.categoria_veiculo_id || null,
