@@ -109,6 +109,13 @@ export const vpsSalvarRota = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const ctx = await contexto();
     await ctx.admin();
+    // Achado revisando o pipeline de imagens: cada troca de foto gravava um
+    // arquivo novo em /api/uploads/ e nunca apagava o antigo — o disco só
+    // crescia. Lê o antes, grava o depois, apaga (best-effort, fora do
+    // caminho crítico) o que saiu de uso. Ver uploads.server.ts::removerUploadSeForUm.
+    const [antes] = await ctx.sql<{ foto: string; galeria: string[] }[]>`
+      SELECT foto, galeria FROM public.rotas WHERE id = ${data.id}
+    `;
     await ctx.sql`
       UPDATE public.rotas SET
         origem = ${data.origem},
@@ -127,6 +134,13 @@ export const vpsSalvarRota = createServerFn({ method: "POST" })
         ativo = ${data.ativo}
       WHERE id = ${data.id}
     `;
+    if (antes) {
+      const novos = new Set([data.foto, ...data.galeria]);
+      const removidos = [antes.foto, ...antes.galeria].filter((u) => !novos.has(u));
+      void import("./uploads.server").then(({ removerUploadSeForUm }) => {
+        for (const u of removidos) void removerUploadSeForUm(u);
+      });
+    }
     return { ok: true };
   });
 
@@ -135,7 +149,14 @@ export const vpsRemoverRota = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const ctx = await contexto();
     await ctx.admin();
-    await ctx.sql`DELETE FROM public.rotas WHERE id = ${data.id}`;
+    const [removida] = await ctx.sql<{ foto: string; galeria: string[] }[]>`
+      DELETE FROM public.rotas WHERE id = ${data.id} RETURNING foto, galeria
+    `;
+    if (removida) {
+      void import("./uploads.server").then(({ removerUploadSeForUm }) => {
+        for (const u of [removida.foto, ...removida.galeria]) void removerUploadSeForUm(u);
+      });
+    }
     return { ok: true };
   });
 
@@ -425,12 +446,21 @@ export const vpsSalvarBloco = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const ctx = await contexto();
     await ctx.admin();
+    // Ver comentário em vpsSalvarRota — mesmo achado de upload órfão.
+    const [antes] = await ctx.sql<{ imagem: string }[]>`
+      SELECT imagem FROM public.conteudo_site WHERE id = ${data.id}
+    `;
     await ctx.sql`
       UPDATE public.conteudo_site
          SET titulo = ${data.titulo}, texto = ${data.texto},
              imagem = ${data.imagem}, ordem = ${data.ordem}
        WHERE id = ${data.id}
     `;
+    if (antes && antes.imagem !== data.imagem) {
+      void import("./uploads.server").then(({ removerUploadSeForUm }) =>
+        removerUploadSeForUm(antes.imagem),
+      );
+    }
     return { ok: true };
   });
 
@@ -439,7 +469,14 @@ export const vpsRemoverBloco = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const ctx = await contexto();
     await ctx.admin();
-    await ctx.sql`DELETE FROM public.conteudo_site WHERE id = ${data.id}`;
+    const [removido] = await ctx.sql<{ imagem: string }[]>`
+      DELETE FROM public.conteudo_site WHERE id = ${data.id} RETURNING imagem
+    `;
+    if (removido) {
+      void import("./uploads.server").then(({ removerUploadSeForUm }) =>
+        removerUploadSeForUm(removido.imagem),
+      );
+    }
     return { ok: true };
   });
 
@@ -498,6 +535,10 @@ export const vpsSalvarVeiculoFrota = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const ctx = await contexto();
     await ctx.admin();
+    // Ver comentário em vpsSalvarRota — mesmo achado de upload órfão.
+    const [antes] = await ctx.sql<{ foto: string }[]>`
+      SELECT foto FROM public.frota_veiculos WHERE id = ${data.id}
+    `;
     await ctx.sql`
       UPDATE public.frota_veiculos
          SET nome = ${data.nome}, modelo = ${data.modelo}, passageiros = ${data.passageiros},
@@ -505,6 +546,11 @@ export const vpsSalvarVeiculoFrota = createServerFn({ method: "POST" })
              ordem = ${data.ordem}, ativo = ${data.ativo}
        WHERE id = ${data.id}
     `;
+    if (antes && antes.foto !== data.foto) {
+      void import("./uploads.server").then(({ removerUploadSeForUm }) =>
+        removerUploadSeForUm(antes.foto),
+      );
+    }
     return { ok: true };
   });
 
@@ -513,7 +559,14 @@ export const vpsRemoverVeiculoFrota = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const ctx = await contexto();
     await ctx.admin();
-    await ctx.sql`DELETE FROM public.frota_veiculos WHERE id = ${data.id}`;
+    const [removido] = await ctx.sql<{ foto: string }[]>`
+      DELETE FROM public.frota_veiculos WHERE id = ${data.id} RETURNING foto
+    `;
+    if (removido) {
+      void import("./uploads.server").then(({ removerUploadSeForUm }) =>
+        removerUploadSeForUm(removido.foto),
+      );
+    }
     return { ok: true };
   });
 
@@ -561,11 +614,20 @@ export const vpsSalvarFotoGaleria = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const ctx = await contexto();
     await ctx.admin();
+    // Ver comentário em vpsSalvarRota — mesmo achado de upload órfão.
+    const [antes] = await ctx.sql<{ foto: string }[]>`
+      SELECT foto FROM public.frota_galeria WHERE id = ${data.id}
+    `;
     await ctx.sql`
       UPDATE public.frota_galeria
          SET foto = ${data.foto}, alt = ${data.alt}, ordem = ${data.ordem}, ativo = ${data.ativo}
        WHERE id = ${data.id}
     `;
+    if (antes && antes.foto !== data.foto) {
+      void import("./uploads.server").then(({ removerUploadSeForUm }) =>
+        removerUploadSeForUm(antes.foto),
+      );
+    }
     return { ok: true };
   });
 
@@ -574,7 +636,14 @@ export const vpsRemoverFotoGaleria = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const ctx = await contexto();
     await ctx.admin();
-    await ctx.sql`DELETE FROM public.frota_galeria WHERE id = ${data.id}`;
+    const [removida] = await ctx.sql<{ foto: string }[]>`
+      DELETE FROM public.frota_galeria WHERE id = ${data.id} RETURNING foto
+    `;
+    if (removida) {
+      void import("./uploads.server").then(({ removerUploadSeForUm }) =>
+        removerUploadSeForUm(removida.foto),
+      );
+    }
     return { ok: true };
   });
 

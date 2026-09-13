@@ -1,0 +1,8 @@
+# Achado revisando o backup de infra: infra/backup-postgres.sh foi salvo
+# com CRLF (comum neste repo em checkout Windows, ver "Windows CRLF gotcha"
+# no CLAUDE.md) e quebrou de verdade ao rodar na VPS — "env: 'bash\r': No
+# such file or directory". Diferente de .ts/.tsx (onde CRLF só irrita o
+# eslint), um shebang com \r não executa em Linux de jeito nenhum. Escopo
+# mínimo de propósito: só força LF em shell scripts, não mexe no resto do
+# repo nem no comportamento já documentado pros demais arquivos.
+*.sh text eol=lf
