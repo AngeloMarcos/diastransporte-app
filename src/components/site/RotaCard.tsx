@@ -16,12 +16,20 @@ export function RotaCard({ rota }: { rota: Rota }) {
           height={600}
           className="absolute inset-0 size-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
         />
-        <div className="absolute left-3 top-3 flex gap-2">
-          <span className="rounded-sm bg-background/85 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest">
+        {/* Achado revisando um print de referência trazido pelo usuário:
+            selos empilhados sobre a foto (direção + destaque), em cores
+            sólidas e bem contrastadas — mantendo o tema escuro, mas com
+            mais peso visual que o antigo bg-background/85 (quase invisível
+            contra fotos claras). Sem inventar rótulo de "compartilhado/
+            privado": aqui todo transfer é particular, não faz sentido
+            distinguir isso — os dois selos usados já são dado real
+            (ida_e_volta e destaque). */}
+        <div className="absolute left-3 top-3 flex flex-col items-start gap-1.5">
+          <span className="rounded-sm bg-foreground px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-background shadow-sm">
             {rota.ida_e_volta ? "Ida e volta" : "Somente ida"}
           </span>
           {rota.destaque && (
-            <span className="rounded-sm bg-primary px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-primary-foreground">
+            <span className="rounded-sm bg-primary px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-primary-foreground shadow-sm">
               {rota.destaque}
             </span>
           )}

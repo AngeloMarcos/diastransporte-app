@@ -13,6 +13,7 @@ import { type Rota } from "@/data/rotas";
 import { listRotas } from "@/lib/rotas.functions";
 import { whatsappLink } from "@/lib/whatsapp";
 import { origemAtual } from "@/lib/origem-atual.functions";
+import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.jpeg";
 
 export const Route = createFileRoute("/transfers/")({
@@ -125,43 +126,60 @@ function Transfers() {
           />
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-          <p className="text-sm text-muted-foreground">{lista.length} trechos disponíveis</p>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                ["todos", "Todos"],
-                ["pequeno", "Carro pequeno"],
-                ["grande", "Carro grande"],
-              ] as const
-            ).map(([v, l]) => (
-              <Button
-                key={v}
-                size="sm"
-                variant={filtro === v ? "default" : "secondary"}
-                onClick={() => setFiltro(v)}
-              >
-                {l}
-              </Button>
-            ))}
-            <span className="mx-1 hidden w-px bg-border sm:block" />
-            {(
-              [
-                ["populares", "Mais pedidos"],
-                ["menor", "Menor valor"],
-                ["maior", "Maior valor"],
-              ] as const
-            ).map(([v, l]) => (
-              <Button
-                key={v}
-                size="sm"
-                variant={ordem === v ? "default" : "secondary"}
-                onClick={() => setOrdem(v)}
-              >
-                {l}
-              </Button>
-            ))}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(
+            [
+              ["todos", "Todos"],
+              ["pequeno", "Carro pequeno"],
+              ["grande", "Carro grande"],
+            ] as const
+          ).map(([v, l]) => (
+            <Button
+              key={v}
+              size="sm"
+              variant={filtro === v ? "default" : "secondary"}
+              onClick={() => setFiltro(v)}
+            >
+              {l}
+            </Button>
+          ))}
+        </div>
+
+        {/* Achado revisando um print de referência trazido pelo usuário:
+            "Ordenar por" já existia (era só mais três <Button> soltos
+            misturados com o filtro de veículo acima) — virou um controle
+            segmentado próprio, mesmo idioma visual do TabsList do admin
+            (pílula com fundo neutro, opção ativa em destaque), pra ficar
+            no mesmo peso do print sem inventar tema claro nem funcionalidade
+            nova (a lógica de ordenação já existia, só a UI mudou). */}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Ordenar por:</span>
+            <div className="inline-flex gap-1 rounded-full bg-secondary/60 p-1">
+              {(
+                [
+                  ["populares", "Mais pedidos"],
+                  ["menor", "Menor valor"],
+                  ["maior", "Maior valor"],
+                ] as const
+              ).map(([v, l]) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setOrdem(v)}
+                  className={cn(
+                    "min-h-9 rounded-full px-3 text-xs font-semibold transition-colors",
+                    ordem === v
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
           </div>
+          <p className="text-sm text-muted-foreground">{lista.length} trechos disponíveis</p>
         </div>
 
         {lista.length ? (
