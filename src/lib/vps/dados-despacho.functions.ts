@@ -10,6 +10,12 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 
+import {
+  diferencaCampos,
+  semMudancas,
+  type AtorAuditoria,
+  type EventoAuditoria,
+} from "@/lib/auditoria";
 import { limitesDoDiaEmMaranhao } from "@/lib/fuso-maranhao";
 import { transicaoValida, type PedidoStatus } from "@/lib/pedidos-transicoes";
 import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
@@ -23,7 +29,54 @@ async function contexto() {
     usuario: () => exigirUsuario(token),
     admin: () => exigirAdmin(token),
     motorista: () => exigirMotorista(token),
+    // Trilha de auditoria (migration 0012) — chamar DEPOIS da escrita, com o
+    // admin devolvido por ctx.admin(). Best-effort, ver auditoria.server.ts.
+    auditar: async (ator: AtorAuditoria, ev: EventoAuditoria) => {
+      const { gravarAuditoria } = await import("./auditoria.server");
+      await gravarAuditoria(ator, ev);
+    },
   };
+}
+
+/** Trilha de auditoria de um cadastro de apoio (categoria/empresa/canal):
+ * "ativar/desativar" quando a chamada foi só o toggle, senão o diff dos
+ * campos editados. Sem mudança real → sem evento. */
+async function auditarAtualizacaoCadastro(
+  // Tipo inline (não um alias de topo): um `type X = ...typeof contexto` solto
+  // mantém contexto() vivo no bundle do cliente e o import-protection do
+  // TanStack barra o build — mesmo padrão de fornecedorDoMotorista abaixo.
+  ctx: Awaited<ReturnType<typeof contexto>>,
+  admin: AtorAuditoria,
+  entidade: string,
+  id: string,
+  antes: Record<string, unknown> | undefined,
+  depois: Record<string, unknown>,
+  campos: readonly string[],
+  ativo: boolean | undefined,
+) {
+  if (!antes) return;
+  const nome = String(antes["nome"] ?? id);
+  if (ativo !== undefined) {
+    if (antes["ativo"] === ativo) return;
+    await ctx.auditar(admin, {
+      acao: ativo ? "ativar" : "desativar",
+      entidade,
+      entidadeId: id,
+      resumo: `${ativo ? "Ativou" : "Desativou"} ${entidade}: ${nome}`,
+      antes: { ativo: !ativo },
+      depois: { ativo },
+    });
+    return;
+  }
+  const diff = diferencaCampos(antes, depois, campos);
+  if (semMudancas(diff)) return;
+  await ctx.auditar(admin, {
+    acao: "editar",
+    entidade,
+    entidadeId: id,
+    resumo: `${entidade} ${nome}: alterou ${Object.keys(diff.antes).join(", ")}`,
+    ...diff,
+  });
 }
 
 // ------------------------------------------------------------------ pedidos
@@ -258,8 +311,8 @@ export const vpsCriarPedido = createServerFn({ method: "POST" })
   .inputValidator((data) => novoPedidoSchema.parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
-    return ctx.sql.begin(async (sql) => {
+    const admin = await ctx.admin();
+    const criado = await ctx.sql.begin(async (sql) => {
       const [pedido] = await sql<{ id: number }[]>`
         INSERT INTO public.pedidos
           (codigo_reserva_canal, empresa_cliente_id, canal_venda_id, cidade_atendimento, hotel,
@@ -284,6 +337,13 @@ export const vpsCriarPedido = createServerFn({ method: "POST" })
       }
       return pedido;
     });
+    await ctx.auditar(admin, {
+      acao: "criar",
+      entidade: "pedido",
+      entidadeId: criado.id,
+      resumo: `Pedido #${String(criado.id)} criado manualmente: ${data.passageiro_nome} (${data.cidade_atendimento})`,
+    });
+    return criado;
   });
 
 // Achado revisando UX (pedido do usuário: "melhore a edição de corrida...
@@ -297,6 +357,23 @@ export const vpsCriarPedido = createServerFn({ method: "POST" })
 // acrescenta id e codigo_fornecedor_reserva, que a criação manual não
 // preenche mas a edição precisa suportar pra pedidos vindos de
 // importação) — mesma validação de tamanho/formato dos dois caminhos.
+const CAMPOS_PEDIDO_AUDITADOS = [
+  "codigo_reserva_canal",
+  "codigo_fornecedor_reserva",
+  "empresa_cliente_id",
+  "canal_venda_id",
+  "cidade_atendimento",
+  "hotel",
+  "data_hora_encontro",
+  "direcao",
+  "passageiro_nome",
+  "passageiro_telefone",
+  "ponto_partida",
+  "ponto_chegada",
+  "numero_voo",
+  "categoria_veiculo_id",
+] as const;
+
 const edicaoPedidoSchema = novoPedidoSchema.omit({ observacoes_internas: true }).extend({
   id: z.number().int(),
   codigo_fornecedor_reserva: z.string().nullable().default(null),
@@ -306,7 +383,10 @@ export const vpsAtualizarPedido = createServerFn({ method: "POST" })
   .inputValidator((data) => edicaoPedidoSchema.parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
+    const admin = await ctx.admin();
+    const [antes] = await ctx.sql<Record<string, unknown>[]>`
+      SELECT ${ctx.sql.unsafe(CAMPOS_PEDIDO_AUDITADOS.join(", "))} FROM public.pedidos WHERE id = ${data.id}
+    `;
     // status e fornecedor_id ficam de fora de propósito — são gerenciados
     // pelas mutações dedicadas (vpsTransicionarStatusPedido/
     // vpsAtribuirMotoristaPedido), que registram pedidos_historico; editar
@@ -331,6 +411,18 @@ export const vpsAtualizarPedido = createServerFn({ method: "POST" })
       RETURNING id
     `;
     if (!atualizado) throw new Error(`Pedido ${String(data.id)} não encontrado.`);
+    if (antes) {
+      const diff = diferencaCampos(antes, data, CAMPOS_PEDIDO_AUDITADOS);
+      if (!semMudancas(diff)) {
+        await ctx.auditar(admin, {
+          acao: "editar",
+          entidade: "pedido",
+          entidadeId: data.id,
+          resumo: `Pedido #${String(data.id)}: alterou ${Object.keys(diff.antes).join(", ")}`,
+          ...diff,
+        });
+      }
+    }
     return { ok: true };
   });
 
@@ -378,11 +470,13 @@ export const vpsAtribuirMotoristaPedido = createServerFn({ method: "POST" })
     const ctx = await contexto();
     const admin = await ctx.admin();
 
-    return ctx.sql.begin(async (sql) => {
-      const [antes] = await sql<{ status: PedidoStatus }[]>`
-        SELECT status FROM public.pedidos WHERE id = ${data.pedidoId} FOR UPDATE
+    let fornecedorAntes: string | null = null;
+    const resultado = await ctx.sql.begin(async (sql) => {
+      const [antes] = await sql<{ status: PedidoStatus; fornecedor_id: string | null }[]>`
+        SELECT status, fornecedor_id FROM public.pedidos WHERE id = ${data.pedidoId} FOR UPDATE
       `;
       if (!antes) throw new Error(`Corrida ${String(data.pedidoId)} não encontrada.`);
+      fornecedorAntes = antes.fornecedor_id;
 
       // Achado revisando autorização: sem esta checagem, dava pra atribuir
       // um fornecedor desativado (ex.: removido via vpsRemoverMotorista,
@@ -421,6 +515,19 @@ export const vpsAtribuirMotoristaPedido = createServerFn({ method: "POST" })
       }
       return pedido;
     });
+    if (fornecedorAntes !== data.fornecedorId) {
+      await ctx.auditar(admin, {
+        acao: data.fornecedorId ? "atribuir_motorista" : "remover_motorista",
+        entidade: "pedido",
+        entidadeId: data.pedidoId,
+        resumo: data.fornecedorId
+          ? `Pedido #${String(data.pedidoId)}: motorista atribuído`
+          : `Pedido #${String(data.pedidoId)}: motorista removido`,
+        antes: { fornecedor_id: fornecedorAntes },
+        depois: { fornecedor_id: data.fornecedorId },
+      });
+    }
+    return resultado;
   });
 
 // --------------------------------------------------- painel do motorista
@@ -585,11 +692,17 @@ export const vpsCriarCategoriaVeiculo = createServerFn({ method: "POST" })
   .inputValidator((data) => categoriaSchema.parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
-    await ctx.sql`
+    const admin = await ctx.admin();
+    const [criada] = await ctx.sql<{ id: string }[]>`
       INSERT INTO public.categorias_veiculo (nome, capacidade_passageiros)
-      VALUES (${data.nome}, ${data.capacidade_passageiros})
+      VALUES (${data.nome}, ${data.capacidade_passageiros}) RETURNING id
     `;
+    await ctx.auditar(admin, {
+      acao: "criar",
+      entidade: "categoria",
+      entidadeId: criada?.id,
+      resumo: `Categoria de veículo criada: ${data.nome}`,
+    });
     return { ok: true };
   });
 
@@ -617,7 +730,10 @@ export const vpsAtualizarCategoriaVeiculo = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
+    const admin = await ctx.admin();
+    const [antes] = await ctx.sql<Record<string, unknown>[]>`
+      SELECT nome, capacidade_passageiros, ativo FROM public.categorias_veiculo WHERE id = ${data.id}
+    `;
     if (data.ativo !== undefined) {
       await ctx.sql`UPDATE public.categorias_veiculo SET ativo = ${data.ativo} WHERE id = ${data.id}`;
     } else {
@@ -627,6 +743,16 @@ export const vpsAtualizarCategoriaVeiculo = createServerFn({ method: "POST" })
          WHERE id = ${data.id}
       `;
     }
+    await auditarAtualizacaoCadastro(
+      ctx,
+      admin,
+      "categoria",
+      data.id,
+      antes,
+      data,
+      ["nome", "capacidade_passageiros"],
+      data.ativo,
+    );
     return { ok: true };
   });
 
@@ -661,11 +787,18 @@ export const vpsCriarEmpresaCliente = createServerFn({ method: "POST" })
   .inputValidator((data) => empresaSchema.parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
-    await ctx.sql`
+    const admin = await ctx.admin();
+    const [criada] = await ctx.sql<{ id: string }[]>`
       INSERT INTO public.empresas_clientes (nome, documento, email_contato, telefone_contato)
       VALUES (${data.nome}, ${data.documento}, ${data.email_contato}, ${data.telefone_contato})
+      RETURNING id
     `;
+    await ctx.auditar(admin, {
+      acao: "criar",
+      entidade: "empresa",
+      entidadeId: criada?.id,
+      resumo: `Empresa cliente criada: ${data.nome}`,
+    });
     return { ok: true };
   });
 
@@ -681,7 +814,11 @@ export const vpsAtualizarEmpresaCliente = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
+    const admin = await ctx.admin();
+    const [antes] = await ctx.sql<Record<string, unknown>[]>`
+      SELECT nome, documento, email_contato, telefone_contato, ativo
+        FROM public.empresas_clientes WHERE id = ${data.id}
+    `;
     if (data.ativo !== undefined) {
       await ctx.sql`UPDATE public.empresas_clientes SET ativo = ${data.ativo} WHERE id = ${data.id}`;
     } else {
@@ -692,6 +829,16 @@ export const vpsAtualizarEmpresaCliente = createServerFn({ method: "POST" })
          WHERE id = ${data.id}
       `;
     }
+    await auditarAtualizacaoCadastro(
+      ctx,
+      admin,
+      "empresa",
+      data.id,
+      antes,
+      data,
+      ["nome", "documento", "email_contato", "telefone_contato"],
+      data.ativo,
+    );
     return { ok: true };
   });
 
@@ -716,8 +863,16 @@ export const vpsCriarCanalVenda = createServerFn({ method: "POST" })
   .inputValidator((data) => canalSchema.parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
-    await ctx.sql`INSERT INTO public.canais_venda (nome, tipo) VALUES (${data.nome}, ${data.tipo})`;
+    const admin = await ctx.admin();
+    const [criado] = await ctx.sql<{ id: string }[]>`
+      INSERT INTO public.canais_venda (nome, tipo) VALUES (${data.nome}, ${data.tipo}) RETURNING id
+    `;
+    await ctx.auditar(admin, {
+      acao: "criar",
+      entidade: "canal",
+      entidadeId: criado?.id,
+      resumo: `Canal de venda criado: ${data.nome}`,
+    });
     return { ok: true };
   });
 
@@ -733,12 +888,25 @@ export const vpsAtualizarCanalVenda = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
+    const admin = await ctx.admin();
+    const [antes] = await ctx.sql<Record<string, unknown>[]>`
+      SELECT nome, tipo, ativo FROM public.canais_venda WHERE id = ${data.id}
+    `;
     if (data.ativo !== undefined) {
       await ctx.sql`UPDATE public.canais_venda SET ativo = ${data.ativo} WHERE id = ${data.id}`;
     } else {
       await ctx.sql`UPDATE public.canais_venda SET nome = ${data.nome}, tipo = ${data.tipo} WHERE id = ${data.id}`;
     }
+    await auditarAtualizacaoCadastro(
+      ctx,
+      admin,
+      "canal",
+      data.id,
+      antes,
+      data,
+      ["nome", "tipo"],
+      data.ativo,
+    );
     return { ok: true };
   });
 
@@ -814,12 +982,12 @@ export const vpsCriarMotorista = createServerFn({ method: "POST" })
   .inputValidator((data) => criarMotoristaSchema.parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
+    const admin = await ctx.admin();
     const { hashSenha } = await import("./auth.server");
     const senhaHash = await hashSenha(data.senha);
 
     try {
-      return await ctx.sql.begin(async (sql) => {
+      const criado = await ctx.sql.begin(async (sql) => {
         // Checagem prévia só pra dar o erro amigável no caso comum
         // (sequencial) sem esperar o banco reclamar — a garantia de
         // verdade é o índice único em usuarios(lower(email)), e duas
@@ -858,6 +1026,13 @@ export const vpsCriarMotorista = createServerFn({ method: "POST" })
 
         return { userId: usuario.id, fornecedor };
       });
+      await ctx.auditar(admin, {
+        acao: "criar",
+        entidade: "motorista",
+        entidadeId: criado.fornecedor.id,
+        resumo: `Motorista criado: ${data.nome} (${data.email})`,
+      });
+      return criado;
     } catch (erro) {
       if (erro && typeof erro === "object" && "code" in erro && erro.code === "23505") {
         throw new Error("Já existe uma conta com este e-mail.");
@@ -882,12 +1057,12 @@ export const vpsReativarMotorista = createServerFn({ method: "POST" })
   .inputValidator((data) => reativarMotoristaSchema.parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
+    const admin = await ctx.admin();
     const { hashSenha } = await import("./auth.server");
     const senhaHash = await hashSenha(data.senha);
 
     try {
-      return await ctx.sql.begin(async (sql) => {
+      const reativado = await ctx.sql.begin(async (sql) => {
         const [fornecedor] = await sql<{ id: string; nome: string; ativo: boolean }[]>`
           SELECT id, nome, ativo FROM public.fornecedores WHERE id = ${data.fornecedorId} FOR UPDATE
         `;
@@ -914,6 +1089,13 @@ export const vpsReativarMotorista = createServerFn({ method: "POST" })
         if (!atualizado) throw new Error("Não foi possível reativar o motorista.");
         return atualizado;
       });
+      await ctx.auditar(admin, {
+        acao: "reativar",
+        entidade: "motorista",
+        entidadeId: reativado.id,
+        resumo: `Motorista reativado: ${reativado.nome} (${data.email})`,
+      });
+      return reativado;
     } catch (erro) {
       if (erro && typeof erro === "object" && "code" in erro && erro.code === "23505") {
         throw new Error("Já existe uma conta com este e-mail.");
@@ -926,13 +1108,15 @@ export const vpsRemoverMotorista = createServerFn({ method: "POST" })
   .inputValidator((data) => z.object({ fornecedorId: z.string().uuid() }).parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
+    const admin = await ctx.admin();
 
-    return ctx.sql.begin(async (sql) => {
-      const [fornecedor] = await sql<{ id: string; user_id: string | null }[]>`
-        SELECT id, user_id FROM public.fornecedores WHERE id = ${data.fornecedorId}
+    let nomeMotorista = "";
+    const resultado = await ctx.sql.begin(async (sql) => {
+      const [fornecedor] = await sql<{ id: string; user_id: string | null; nome: string }[]>`
+        SELECT id, user_id, nome FROM public.fornecedores WHERE id = ${data.fornecedorId}
       `;
       if (!fornecedor) throw new Error("Motorista não encontrado.");
+      nomeMotorista = fornecedor.nome;
 
       const [total] = await sql<{ total: string }[]>`
         SELECT count(*)::text AS total FROM public.pedidos WHERE fornecedor_id = ${fornecedor.id}
@@ -963,6 +1147,15 @@ export const vpsRemoverMotorista = createServerFn({ method: "POST" })
         await sql`DELETE FROM public.usuarios WHERE id = ${fornecedor.user_id}`;
       return { desativado: false, removido: true };
     });
+    await ctx.auditar(admin, {
+      acao: resultado.removido ? "remover" : "desativar",
+      entidade: "motorista",
+      entidadeId: data.fornecedorId,
+      resumo: resultado.removido
+        ? `Motorista removido: ${nomeMotorista}`
+        : `Motorista desativado (tem histórico de corridas): ${nomeMotorista}`,
+    });
+    return resultado;
   });
 
 // -------------------------------------------------- importação por planilha
@@ -1008,7 +1201,7 @@ export const vpsImportarPedidos = createServerFn({ method: "POST" })
   .inputValidator((data) => pedidosImportSchema.parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
+    const admin = await ctx.admin();
 
     const codigos = data.rows
       .map((r) => r.codigo_reserva_canal)
@@ -1076,5 +1269,11 @@ export const vpsImportarPedidos = createServerFn({ method: "POST" })
       }
     });
 
+    await ctx.auditar(admin, {
+      acao: "importar",
+      entidade: "pedido",
+      resumo: `Importação de planilha: ${String(inseridos)} pedidos criados, ${String(ignorados + ignoradosPorConflito)} ignorados (duplicados)`,
+      depois: { inseridos, ignorados: ignorados + ignoradosPorConflito, linhas: data.rows.length },
+    });
     return { inseridos, ignorados: ignorados + ignoradosPorConflito };
   });

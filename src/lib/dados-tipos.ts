@@ -81,3 +81,21 @@ export type FotoGaleriaRow = {
   ordem: number;
   ativo: boolean;
 };
+
+// Linha da trilha de auditoria (public.auditoria, migration 0012) como a aba
+// "Auditoria" do admin a consome. antes/depois guardam só os campos que mudaram.
+// Valores que a trilha guarda por campo (escalares e lista de textos, ex.: galeria)
+// — tipo fechado, e não unknown, pra atravessar a serialização das server functions.
+export type ValorAuditoria = string | number | boolean | null | string[];
+
+export type AuditoriaRow = {
+  id: number;
+  quando: string;
+  usuario_email: string;
+  acao: string;
+  entidade: string;
+  entidade_id: string | null;
+  resumo: string;
+  antes: Record<string, ValorAuditoria> | null;
+  depois: Record<string, ValorAuditoria> | null;
+};

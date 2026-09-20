@@ -5,6 +5,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type {
   AgendamentoRow,
+  AuditoriaRow,
   ConteudoBloco,
   FotoGaleriaRow,
   NovaReserva,
@@ -40,6 +41,7 @@ import {
   vpsListFrotaVeiculosAdmin,
   vpsListRotasAdmin,
   vpsListUsuarios,
+  vpsListarAuditoria,
   vpsMinhasCorridas,
   vpsMinhasViagens,
   vpsRedefinirSenha,
@@ -754,6 +756,20 @@ export async function importarPedidos(
 ): Promise<{ inseridos: number; ignorados: number }> {
   if (MODO_VPS) return vpsImportarPedidos({ data: { rows } });
   throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+// -------------------------------------------------------------- auditoria
+export type FiltroAuditoria = {
+  entidade?: string;
+  busca?: string;
+  limite?: number;
+};
+
+/** Trilha de auditoria das ações do admin (quem mudou o quê e quando).
+ * VPS-only: a tabela nasce com a migration 0012 do Postgres da VPS. */
+export async function listarAuditoria(filtro: FiltroAuditoria = {}): Promise<AuditoriaRow[]> {
+  if (MODO_VPS) return vpsListarAuditoria({ data: filtro });
+  throw new Error("Auditoria ainda não disponível neste ambiente.");
 }
 
 // ------------------------------------------------------ usuários e acessos

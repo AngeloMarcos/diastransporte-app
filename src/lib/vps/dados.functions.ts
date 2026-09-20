@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import type {
   AgendamentoRow,
+  AuditoriaRow,
   ConteudoBloco,
   FotoGaleriaRow,
   NovaReserva,
@@ -15,7 +16,13 @@ import type {
   VeiculoFrotaRow,
 } from "@/lib/dados-tipos";
 import type { RotaRow } from "@/lib/rotasMap";
-import { registrarAuditoria } from "@/lib/auditoria";
+import {
+  diferencaCampos,
+  registrarAuditoria,
+  semMudancas,
+  type AtorAuditoria,
+  type EventoAuditoria,
+} from "@/lib/auditoria";
 import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
 import { transicaoValidaAgendamento, type StatusAgendamento } from "@/lib/status";
 
@@ -28,6 +35,12 @@ async function contexto() {
     usuario: () => exigirUsuario(token),
     admin: () => exigirAdmin(token),
     motorista: () => exigirMotorista(token),
+    // Trilha de auditoria (migration 0012) — chamar DEPOIS da escrita, com o
+    // admin devolvido por ctx.admin(). Best-effort, ver auditoria.server.ts.
+    auditar: async (ator: AtorAuditoria, ev: EventoAuditoria) => {
+      const { gravarAuditoria } = await import("./auditoria.server");
+      await gravarAuditoria(ator, ev);
+    },
   };
 }
 
@@ -77,14 +90,41 @@ export const vpsCriarRota = createServerFn({ method: "POST" })
   .inputValidator((data) => novaRota.parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
-    await ctx.sql`
+    const admin = await ctx.admin();
+    const [criada] = await ctx.sql<{ id: string }[]>`
       INSERT INTO public.rotas (slug, origem, destino, duracao, distancia, preco_pequeno, resumo, ativo)
       VALUES (${data.slug}, ${data.origem}, ${data.destino}, ${data.duracao}, ${data.distancia},
               ${data.preco_pequeno}, ${data.resumo}, false)
+      RETURNING id
     `;
+    await ctx.auditar(admin, {
+      acao: "criar",
+      entidade: "rota",
+      entidadeId: criada?.id,
+      resumo: `Rota criada: ${data.origem} → ${data.destino}`,
+      depois: { slug: data.slug, preco_pequeno: data.preco_pequeno },
+    });
     return { ok: true };
   });
+
+// Campos da rota que entram na comparação da trilha de auditoria (todos os
+// editáveis pelo admin — inclui os quatro preços, o que mais importa auditar).
+const CAMPOS_ROTA_AUDITADOS = [
+  "origem",
+  "destino",
+  "duracao",
+  "distancia",
+  "preco_pequeno",
+  "preco_grande",
+  "preco_pequeno_noite",
+  "preco_grande_noite",
+  "destaque",
+  "resumo",
+  "descricao",
+  "foto",
+  "galeria",
+  "ativo",
+] as const;
 
 const rotaEditada = z.object({
   id: z.string().uuid(),
@@ -108,13 +148,14 @@ export const vpsSalvarRota = createServerFn({ method: "POST" })
   .inputValidator((data) => rotaEditada.parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
+    const admin = await ctx.admin();
     // Achado revisando o pipeline de imagens: cada troca de foto gravava um
     // arquivo novo em /api/uploads/ e nunca apagava o antigo — o disco só
     // crescia. Lê o antes, grava o depois, apaga (best-effort, fora do
     // caminho crítico) o que saiu de uso. Ver uploads.server.ts::removerUploadSeForUm.
-    const [antes] = await ctx.sql<{ foto: string; galeria: string[] }[]>`
-      SELECT foto, galeria FROM public.rotas WHERE id = ${data.id}
+    // (o antes também alimenta a trilha de auditoria: preço mudou de quanto pra quanto)
+    const [antes] = await ctx.sql<Record<string, unknown>[]>`
+      SELECT ${ctx.sql.unsafe(CAMPOS_ROTA_AUDITADOS.join(", "))} FROM public.rotas WHERE id = ${data.id}
     `;
     await ctx.sql`
       UPDATE public.rotas SET
@@ -136,10 +177,22 @@ export const vpsSalvarRota = createServerFn({ method: "POST" })
     `;
     if (antes) {
       const novos = new Set([data.foto, ...data.galeria]);
-      const removidos = [antes.foto, ...antes.galeria].filter((u) => !novos.has(u));
+      const fotoAntes = antes["foto"] as string;
+      const galeriaAntes = antes["galeria"] as string[];
+      const removidos = [fotoAntes, ...galeriaAntes].filter((u) => !novos.has(u));
       void import("./uploads.server").then(({ removerUploadSeForUm }) => {
         for (const u of removidos) void removerUploadSeForUm(u);
       });
+      const diff = diferencaCampos(antes, data, CAMPOS_ROTA_AUDITADOS);
+      if (!semMudancas(diff)) {
+        await ctx.auditar(admin, {
+          acao: "editar",
+          entidade: "rota",
+          entidadeId: data.id,
+          resumo: `Rota ${data.origem} → ${data.destino}: alterou ${Object.keys(diff.antes).join(", ")}`,
+          ...diff,
+        });
+      }
     }
     return { ok: true };
   });
@@ -148,11 +201,21 @@ export const vpsRemoverRota = createServerFn({ method: "POST" })
   .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
-    const [removida] = await ctx.sql<{ foto: string; galeria: string[] }[]>`
-      DELETE FROM public.rotas WHERE id = ${data.id} RETURNING foto, galeria
+    const admin = await ctx.admin();
+    const [removida] = await ctx.sql<
+      { foto: string; galeria: string[]; origem: string; destino: string; preco_pequeno: number }[]
+    >`
+      DELETE FROM public.rotas WHERE id = ${data.id}
+      RETURNING foto, galeria, origem, destino, preco_pequeno
     `;
     if (removida) {
+      await ctx.auditar(admin, {
+        acao: "remover",
+        entidade: "rota",
+        entidadeId: data.id,
+        resumo: `Rota removida: ${removida.origem} → ${removida.destino}`,
+        antes: { preco_pequeno: removida.preco_pequeno },
+      });
       void import("./uploads.server").then(({ removerUploadSeForUm }) => {
         for (const u of [removida.foto, ...removida.galeria]) void removerUploadSeForUm(u);
       });
@@ -343,13 +406,14 @@ export const vpsAtualizarStatus = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
+    const admin = await ctx.admin();
     // Achado revisando integridade do schema: esta função aceitava
     // qualquer status vindo do admin sem validar a transição — dava pra
     // "desconcluir" uma viagem de volta pra pendente ou pular direto pra
     // cancelado sem querer. Mesmo padrão de vpsTransicionarStatusPedido
     // (ver transicaoValidaAgendamento em @/lib/status), com FOR UPDATE pra
     // evitar duas mudanças de status concorrentes lendo o mesmo "antes".
+    let statusAnterior: StatusAgendamento | null = null;
     await ctx.sql.begin(async (sql) => {
       const [antes] = await sql<{ status: StatusAgendamento }[]>`
         SELECT status FROM public.agendamentos WHERE id = ${data.id} FOR UPDATE
@@ -359,6 +423,15 @@ export const vpsAtualizarStatus = createServerFn({ method: "POST" })
         throw new Error(`Transição inválida: ${antes.status} → ${data.status}`);
       }
       await sql`UPDATE public.agendamentos SET status = ${data.status} WHERE id = ${data.id}`;
+      statusAnterior = antes.status;
+    });
+    await ctx.auditar(admin, {
+      acao: "status",
+      entidade: "agendamento",
+      entidadeId: data.id,
+      resumo: `Agendamento: ${statusAnterior ?? "?"} → ${data.status}`,
+      antes: { status: statusAnterior },
+      depois: { status: data.status },
     });
     return { ok: true };
   });
@@ -369,7 +442,7 @@ export const vpsAtribuirMotorista = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
+    const admin = await ctx.admin();
     // Achado revisando autorização: sem esta checagem, qualquer uuid válido
     // era aceito como motoristaId (um typo, um id de cliente comum) — a
     // pessoa passaria a ver/concluir a corrida via vpsMinhasCorridas/
@@ -383,6 +456,15 @@ export const vpsAtribuirMotorista = createServerFn({ method: "POST" })
     await ctx.sql`
       UPDATE public.agendamentos SET motorista_id = ${data.motoristaId} WHERE id = ${data.id}
     `;
+    await ctx.auditar(admin, {
+      acao: data.motoristaId ? "atribuir_motorista" : "remover_motorista",
+      entidade: "agendamento",
+      entidadeId: data.id,
+      resumo: data.motoristaId
+        ? "Motorista atribuído ao agendamento"
+        : "Motorista removido do agendamento",
+      depois: { motorista_id: data.motoristaId },
+    });
     return { ok: true };
   });
 
@@ -390,8 +472,22 @@ export const vpsRemoverAgendamento = createServerFn({ method: "POST" })
   .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
-    await ctx.sql`DELETE FROM public.agendamentos WHERE id = ${data.id}`;
+    const admin = await ctx.admin();
+    const [removido] = await ctx.sql<
+      { trecho: string; status: string; contato_nome: string | null; data_viagem: string | null }[]
+    >`
+      DELETE FROM public.agendamentos WHERE id = ${data.id}
+      RETURNING trecho, status, contato_nome, data_viagem
+    `;
+    if (removido) {
+      await ctx.auditar(admin, {
+        acao: "remover",
+        entidade: "agendamento",
+        entidadeId: data.id,
+        resumo: `Agendamento removido: ${removido.trecho} (${removido.contato_nome ?? "sem nome"})`,
+        antes: { ...removido },
+      });
+    }
     return { ok: true };
   });
 
@@ -426,10 +522,16 @@ export const vpsCriarBloco = createServerFn({ method: "POST" })
   .inputValidator((data) => z.object({ chave: z.string().min(1).max(120) }).parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
-    await ctx.sql`
-      INSERT INTO public.conteudo_site (chave, secao) VALUES (${data.chave}, 'geral')
+    const admin = await ctx.admin();
+    const [criado] = await ctx.sql<{ id: string }[]>`
+      INSERT INTO public.conteudo_site (chave, secao) VALUES (${data.chave}, 'geral') RETURNING id
     `;
+    await ctx.auditar(admin, {
+      acao: "criar",
+      entidade: "conteudo",
+      entidadeId: criado?.id,
+      resumo: `Bloco de conteúdo criado: ${data.chave}`,
+    });
     return { ok: true };
   });
 
@@ -445,10 +547,12 @@ export const vpsSalvarBloco = createServerFn({ method: "POST" })
   .inputValidator((data) => blocoEditado.parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
+    const admin = await ctx.admin();
     // Ver comentário em vpsSalvarRota — mesmo achado de upload órfão.
-    const [antes] = await ctx.sql<{ imagem: string }[]>`
-      SELECT imagem FROM public.conteudo_site WHERE id = ${data.id}
+    const [antes] = await ctx.sql<
+      { chave: string; titulo: string; texto: string; imagem: string; ordem: number }[]
+    >`
+      SELECT chave, titulo, texto, imagem, ordem FROM public.conteudo_site WHERE id = ${data.id}
     `;
     await ctx.sql`
       UPDATE public.conteudo_site
@@ -461,6 +565,18 @@ export const vpsSalvarBloco = createServerFn({ method: "POST" })
         removerUploadSeForUm(antes.imagem),
       );
     }
+    if (antes) {
+      const diff = diferencaCampos(antes, data, ["titulo", "texto", "imagem", "ordem"]);
+      if (!semMudancas(diff)) {
+        await ctx.auditar(admin, {
+          acao: "editar",
+          entidade: "conteudo",
+          entidadeId: data.id,
+          resumo: `Bloco "${antes.chave}": alterou ${Object.keys(diff.antes).join(", ")}`,
+          ...diff,
+        });
+      }
+    }
     return { ok: true };
   });
 
@@ -468,11 +584,17 @@ export const vpsRemoverBloco = createServerFn({ method: "POST" })
   .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
-    const [removido] = await ctx.sql<{ imagem: string }[]>`
-      DELETE FROM public.conteudo_site WHERE id = ${data.id} RETURNING imagem
+    const admin = await ctx.admin();
+    const [removido] = await ctx.sql<{ imagem: string; chave: string }[]>`
+      DELETE FROM public.conteudo_site WHERE id = ${data.id} RETURNING imagem, chave
     `;
     if (removido) {
+      await ctx.auditar(admin, {
+        acao: "remover",
+        entidade: "conteudo",
+        entidadeId: data.id,
+        resumo: `Bloco de conteúdo removido: ${removido.chave}`,
+      });
       void import("./uploads.server").then(({ removerUploadSeForUm }) =>
         removerUploadSeForUm(removido.imagem),
       );
@@ -519,12 +641,19 @@ export const vpsCriarVeiculoFrota = createServerFn({ method: "POST" })
   .inputValidator((data) => veiculoInput.parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
-    await ctx.sql`
+    const admin = await ctx.admin();
+    const [criado] = await ctx.sql<{ id: string }[]>`
       INSERT INTO public.frota_veiculos (nome, modelo, passageiros, bagagem, foto, itens, ordem)
       VALUES (${data.nome}, ${data.modelo}, ${data.passageiros}, ${data.bagagem}, ${data.foto},
               ${data.itens}, ${data.ordem})
+      RETURNING id
     `;
+    await ctx.auditar(admin, {
+      acao: "criar",
+      entidade: "frota",
+      entidadeId: criado?.id,
+      resumo: `Veículo criado: ${data.nome}`,
+    });
     return { ok: true };
   });
 
@@ -534,10 +663,11 @@ export const vpsSalvarVeiculoFrota = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
+    const admin = await ctx.admin();
     // Ver comentário em vpsSalvarRota — mesmo achado de upload órfão.
-    const [antes] = await ctx.sql<{ foto: string }[]>`
-      SELECT foto FROM public.frota_veiculos WHERE id = ${data.id}
+    const [antes] = await ctx.sql<Record<string, unknown>[]>`
+      SELECT nome, modelo, passageiros, bagagem, foto, itens, ordem, ativo
+        FROM public.frota_veiculos WHERE id = ${data.id}
     `;
     await ctx.sql`
       UPDATE public.frota_veiculos
@@ -546,10 +676,31 @@ export const vpsSalvarVeiculoFrota = createServerFn({ method: "POST" })
              ordem = ${data.ordem}, ativo = ${data.ativo}
        WHERE id = ${data.id}
     `;
-    if (antes && antes.foto !== data.foto) {
+    if (antes && antes["foto"] !== data.foto) {
       void import("./uploads.server").then(({ removerUploadSeForUm }) =>
-        removerUploadSeForUm(antes.foto),
+        removerUploadSeForUm(antes["foto"] as string),
       );
+    }
+    if (antes) {
+      const diff = diferencaCampos(antes, data, [
+        "nome",
+        "modelo",
+        "passageiros",
+        "bagagem",
+        "foto",
+        "itens",
+        "ordem",
+        "ativo",
+      ]);
+      if (!semMudancas(diff)) {
+        await ctx.auditar(admin, {
+          acao: "editar",
+          entidade: "frota",
+          entidadeId: data.id,
+          resumo: `Veículo ${data.nome}: alterou ${Object.keys(diff.antes).join(", ")}`,
+          ...diff,
+        });
+      }
     }
     return { ok: true };
   });
@@ -558,11 +709,17 @@ export const vpsRemoverVeiculoFrota = createServerFn({ method: "POST" })
   .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
-    const [removido] = await ctx.sql<{ foto: string }[]>`
-      DELETE FROM public.frota_veiculos WHERE id = ${data.id} RETURNING foto
+    const admin = await ctx.admin();
+    const [removido] = await ctx.sql<{ foto: string; nome: string }[]>`
+      DELETE FROM public.frota_veiculos WHERE id = ${data.id} RETURNING foto, nome
     `;
     if (removido) {
+      await ctx.auditar(admin, {
+        acao: "remover",
+        entidade: "frota",
+        entidadeId: data.id,
+        resumo: `Veículo removido: ${removido.nome}`,
+      });
       void import("./uploads.server").then(({ removerUploadSeForUm }) =>
         removerUploadSeForUm(removido.foto),
       );
@@ -600,10 +757,17 @@ export const vpsCriarFotoGaleria = createServerFn({ method: "POST" })
   .inputValidator((data) => fotoGaleriaInput.parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
-    await ctx.sql`
-      INSERT INTO public.frota_galeria (foto, alt, ordem) VALUES (${data.foto}, ${data.alt}, ${data.ordem})
+    const admin = await ctx.admin();
+    const [criada] = await ctx.sql<{ id: string }[]>`
+      INSERT INTO public.frota_galeria (foto, alt, ordem)
+      VALUES (${data.foto}, ${data.alt}, ${data.ordem}) RETURNING id
     `;
+    await ctx.auditar(admin, {
+      acao: "criar",
+      entidade: "galeria",
+      entidadeId: criada?.id,
+      resumo: "Foto adicionada à galeria da frota",
+    });
     return { ok: true };
   });
 
@@ -613,20 +777,32 @@ export const vpsSalvarFotoGaleria = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
+    const admin = await ctx.admin();
     // Ver comentário em vpsSalvarRota — mesmo achado de upload órfão.
-    const [antes] = await ctx.sql<{ foto: string }[]>`
-      SELECT foto FROM public.frota_galeria WHERE id = ${data.id}
+    const [antes] = await ctx.sql<Record<string, unknown>[]>`
+      SELECT foto, alt, ordem, ativo FROM public.frota_galeria WHERE id = ${data.id}
     `;
     await ctx.sql`
       UPDATE public.frota_galeria
          SET foto = ${data.foto}, alt = ${data.alt}, ordem = ${data.ordem}, ativo = ${data.ativo}
        WHERE id = ${data.id}
     `;
-    if (antes && antes.foto !== data.foto) {
+    if (antes && antes["foto"] !== data.foto) {
       void import("./uploads.server").then(({ removerUploadSeForUm }) =>
-        removerUploadSeForUm(antes.foto),
+        removerUploadSeForUm(antes["foto"] as string),
       );
+    }
+    if (antes) {
+      const diff = diferencaCampos(antes, data, ["foto", "alt", "ordem", "ativo"]);
+      if (!semMudancas(diff)) {
+        await ctx.auditar(admin, {
+          acao: "editar",
+          entidade: "galeria",
+          entidadeId: data.id,
+          resumo: `Foto da galeria: alterou ${Object.keys(diff.antes).join(", ")}`,
+          ...diff,
+        });
+      }
     }
     return { ok: true };
   });
@@ -635,11 +811,17 @@ export const vpsRemoverFotoGaleria = createServerFn({ method: "POST" })
   .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ data }) => {
     const ctx = await contexto();
-    await ctx.admin();
+    const admin = await ctx.admin();
     const [removida] = await ctx.sql<{ foto: string }[]>`
       DELETE FROM public.frota_galeria WHERE id = ${data.id} RETURNING foto
     `;
     if (removida) {
+      await ctx.auditar(admin, {
+        acao: "remover",
+        entidade: "galeria",
+        entidadeId: data.id,
+        resumo: "Foto removida da galeria da frota",
+      });
       void import("./uploads.server").then(({ removerUploadSeForUm }) =>
         removerUploadSeForUm(removida.foto),
       );
@@ -696,12 +878,22 @@ export const vpsDefinirAdmin = createServerFn({ method: "POST" })
     if (atual.id === data.userId && !data.admin) {
       throw new Error("Você não pode remover seu próprio acesso de administrador.");
     }
-    await ctx.sql`UPDATE public.usuarios SET admin = ${data.admin} WHERE id = ${data.userId}`;
+    const [alvo] = await ctx.sql<{ email: string }[]>`
+      UPDATE public.usuarios SET admin = ${data.admin} WHERE id = ${data.userId} RETURNING email
+    `;
     registrarAuditoria({
       acao: data.admin ? "promover_admin" : "remover_admin",
       atorId: atual.id,
       atorEmail: atual.email,
       alvoId: data.userId,
+    });
+    await ctx.auditar(atual, {
+      acao: data.admin ? "promover_admin" : "remover_admin",
+      entidade: "usuario",
+      entidadeId: data.userId,
+      resumo: `${data.admin ? "Promoveu a administrador" : "Removeu de administrador"}: ${alvo?.email ?? data.userId}`,
+      antes: { admin: !data.admin },
+      depois: { admin: data.admin },
     });
     return { ok: true };
   });
@@ -719,8 +911,12 @@ export const vpsDefinirMotorista = createServerFn({ method: "POST" })
     if (atual.id === data.userId && !data.motorista) {
       throw new Error("Você não pode remover seu próprio acesso de motorista.");
     }
+    let emailAlvo: string | undefined;
     await ctx.sql.begin(async (sql) => {
-      await sql`UPDATE public.usuarios SET motorista = ${data.motorista} WHERE id = ${data.userId}`;
+      const [alvo] = await sql<{ email: string }[]>`
+        UPDATE public.usuarios SET motorista = ${data.motorista} WHERE id = ${data.userId} RETURNING email
+      `;
+      emailAlvo = alvo?.email;
       // Achado revisando integridade do schema: nada garantia que
       // fornecedores.user_id só apontasse pra usuários com motorista=true —
       // remover o papel aqui deixava um cadastro de fornecedor "órfão",
@@ -740,6 +936,14 @@ export const vpsDefinirMotorista = createServerFn({ method: "POST" })
       atorEmail: atual.email,
       alvoId: data.userId,
     });
+    await ctx.auditar(atual, {
+      acao: data.motorista ? "promover_motorista" : "remover_motorista",
+      entidade: "usuario",
+      entidadeId: data.userId,
+      resumo: `${data.motorista ? "Deu acesso de motorista a" : "Tirou acesso de motorista de"}: ${emailAlvo ?? data.userId}`,
+      antes: { motorista: !data.motorista },
+      depois: { motorista: data.motorista },
+    });
     return { ok: true };
   });
 
@@ -757,7 +961,9 @@ export const vpsRedefinirSenha = createServerFn({ method: "POST" })
     const admin = await ctx.admin();
     const { hashSenha } = await import("./auth.server");
     const hash = await hashSenha(data.senha);
-    await ctx.sql`UPDATE public.usuarios SET senha_hash = ${hash} WHERE id = ${data.userId}`;
+    const [alvo] = await ctx.sql<{ email: string }[]>`
+      UPDATE public.usuarios SET senha_hash = ${hash} WHERE id = ${data.userId} RETURNING email
+    `;
     // Sessões antigas caem: quem teve a senha trocada precisa entrar de novo.
     await ctx.sql`DELETE FROM public.sessoes WHERE user_id = ${data.userId}`;
     registrarAuditoria({
@@ -766,5 +972,40 @@ export const vpsRedefinirSenha = createServerFn({ method: "POST" })
       atorEmail: admin.email,
       alvoId: data.userId,
     });
+    // Nunca a senha nem o hash — só o fato de ter sido redefinida.
+    await ctx.auditar(admin, {
+      acao: "redefinir_senha",
+      entidade: "usuario",
+      entidadeId: data.userId,
+      resumo: `Redefiniu a senha de: ${alvo?.email ?? data.userId}`,
+    });
     return { ok: true };
+  });
+
+// ---------------------------------------------------------------- auditoria
+const filtroAuditoria = z.object({
+  entidade: z.string().max(60).optional(),
+  busca: z.string().max(100).optional(),
+  limite: z.number().int().min(1).max(500).default(200),
+});
+
+export const vpsListarAuditoria = createServerFn({ method: "GET" })
+  .inputValidator((data) => filtroAuditoria.parse(data ?? {}))
+  .handler(async ({ data }): Promise<AuditoriaRow[]> => {
+    const ctx = await contexto();
+    await ctx.admin();
+    const sql = ctx.sql;
+    let cond = sql`TRUE`;
+    if (data.entidade) cond = sql`${cond} AND entidade = ${data.entidade}`;
+    if (data.busca) {
+      const termo = "%" + data.busca + "%";
+      cond = sql`${cond} AND (resumo ILIKE ${termo} OR usuario_email ILIKE ${termo})`;
+    }
+    return sql<AuditoriaRow[]>`
+      SELECT id, quando, usuario_email, acao, entidade, entidade_id, resumo, antes, depois
+        FROM public.auditoria
+       WHERE ${cond}
+       ORDER BY quando DESC, id DESC
+       LIMIT ${data.limite}
+    `.then((linhas) => [...linhas]);
   });

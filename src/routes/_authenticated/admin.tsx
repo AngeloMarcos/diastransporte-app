@@ -26,6 +26,7 @@ import {
   Radio,
   Route as RouteIcon,
   Save,
+  ScrollText,
   Search,
   ShieldAlert,
   StickyNote,
@@ -121,6 +122,7 @@ import {
   listarFrotaVeiculosAdmin,
   listarPedidosAdmin,
   listarRotasAdmin,
+  listarAuditoria,
   listarUsuarios,
   pedidoDetalheAdmin,
   reativarMotorista,
@@ -162,7 +164,12 @@ import {
 } from "@/lib/status";
 import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
 import { ROTA_COLUMNS, type RotaRow } from "@/lib/rotasMap";
-import type { FotoGaleriaRow, VeiculoFrotaRow } from "@/lib/dados-tipos";
+import type {
+  AuditoriaRow,
+  FotoGaleriaRow,
+  ValorAuditoria,
+  VeiculoFrotaRow,
+} from "@/lib/dados-tipos";
 import { transicoesPermitidas, type PedidoStatus } from "@/lib/pedidos-transicoes";
 import { PEDIDO_STATUS_META, PEDIDO_STATUS_OPTIONS, formatarDataHora } from "@/lib/pedidos-status";
 import {
@@ -252,6 +259,9 @@ const abas = [
   { id: "agendamentos", label: "Agendamentos", icon: CalendarCheck },
   { id: "conteudo", label: "Conteúdo do site", icon: FileText },
   { id: "usuarios", label: "Usuários e acessos", icon: Users },
+  // Trilha de auditoria (migration 0012) — a tabela só existe no Postgres da
+  // VPS, então a aba some fora de MODO_VPS em vez de aparecer e dar erro.
+  { id: "auditoria", label: "Auditoria", icon: ScrollText, soVps: true },
   // Despacho (portado do car-fleet-co, Etapa 6/7 do roteiro da fusão) —
   // mesmo motivo de "frota" acima: VPS-only, aba escondida fora de MODO_VPS.
   { id: "corridas", label: "Pedidos", icon: Car, soVps: true },
@@ -490,6 +500,11 @@ function AdminPage() {
             <TabsContent value="usuarios" className="mt-0">
               <AdminUsuarios />
             </TabsContent>
+            {MODO_VPS && (
+              <TabsContent value="auditoria" className="mt-0">
+                <AdminAuditoria />
+              </TabsContent>
+            )}
           </div>
         </Tabs>
       </main>
@@ -5207,6 +5222,205 @@ function ConteudoEditor({ item }: { item: ConteudoItem }) {
         />
       </div>
     </article>
+  );
+}
+
+// ------------------------------------------------------------- auditoria
+// Trilha de "quem mudou o quê e quando" (tabela public.auditoria). Antes
+// disto a única marca era uma linha de console.log nos logs do container
+// (src/lib/auditoria.ts, commit "interino") — sumia com a rotação do log e
+// ninguém do lado do negócio conseguia consultar. Só leitura: a tabela é
+// append-only no banco (a role da aplicação nem tem UPDATE/DELETE nela).
+const ENTIDADES_AUDITORIA = [
+  ["rota", "Rotas e preços"],
+  ["agendamento", "Agendamentos"],
+  ["pedido", "Pedidos"],
+  ["conteudo", "Conteúdo do site"],
+  ["frota", "Frota"],
+  ["galeria", "Galeria"],
+  ["usuario", "Usuários"],
+  ["motorista", "Motoristas"],
+  ["categoria", "Categorias"],
+  ["empresa", "Empresas"],
+  ["canal", "Canais de venda"],
+] as const;
+
+const ROTULO_ENTIDADE: Record<string, string> = Object.fromEntries(ENTIDADES_AUDITORIA);
+
+const ROTULO_ACAO: Record<string, string> = {
+  criar: "Criou",
+  editar: "Editou",
+  remover: "Removeu",
+  status: "Mudou status",
+  ativar: "Ativou",
+  desativar: "Desativou",
+  reativar: "Reativou",
+  importar: "Importou",
+  atribuir_motorista: "Atribuiu motorista",
+  remover_motorista: "Removeu motorista",
+  promover_admin: "Promoveu admin",
+  remover_admin: "Removeu admin",
+  promover_motorista: "Deu acesso motorista",
+  redefinir_senha: "Redefiniu senha",
+};
+
+function formatarValorAuditoria(v: ValorAuditoria | undefined): string {
+  if (v === undefined || v === null || v === "") return "—";
+  if (Array.isArray(v)) return `${String(v.length)} item(ns)`;
+  if (typeof v === "boolean") return v ? "sim" : "não";
+  return String(v);
+}
+
+function classeAcaoAuditoria(acao: string): string {
+  if (acao === "remover" || acao === "desativar" || acao === "remover_admin")
+    return "border-red-500/30 bg-red-500/10 text-red-400";
+  if (acao === "criar" || acao === "ativar" || acao === "reativar")
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-400";
+  return "border-border bg-muted text-muted-foreground";
+}
+
+function AuditoriaLinha({ e }: { e: AuditoriaRow }) {
+  const campos = Array.from(
+    new Set([...Object.keys(e.antes ?? {}), ...Object.keys(e.depois ?? {})]),
+  );
+  return (
+    <TableRow>
+      <TableCell className="whitespace-nowrap text-xs">{formatarDataHora(e.quando)}</TableCell>
+      <TableCell className="max-w-48 truncate text-xs">{e.usuario_email || "—"}</TableCell>
+      <TableCell>
+        <Badge variant="outline" className={classeAcaoAuditoria(e.acao)}>
+          {ROTULO_ACAO[e.acao] ?? e.acao}
+        </Badge>
+      </TableCell>
+      <TableCell className="text-xs">{ROTULO_ENTIDADE[e.entidade] ?? e.entidade}</TableCell>
+      <TableCell className="min-w-64 text-xs">
+        <p className="break-words">{e.resumo}</p>
+        {campos.length > 0 && (
+          <details className="mt-1">
+            <summary className="cursor-pointer text-muted-foreground">Ver alterações</summary>
+            <ul className="mt-1 space-y-0.5">
+              {campos.map((c) => (
+                <li key={c} className="break-words">
+                  <span className="text-muted-foreground">{c}:</span>{" "}
+                  {formatarValorAuditoria(e.antes?.[c])} →{" "}
+                  <span className="text-foreground">{formatarValorAuditoria(e.depois?.[c])}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function AdminAuditoria() {
+  const [entidade, setEntidade] = useState("todas");
+  const [busca, setBusca] = useState("");
+  const [buscaAplicada, setBuscaAplicada] = useState("");
+
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
+    queryKey: ["admin-auditoria", entidade, buscaAplicada],
+    queryFn: () =>
+      listarAuditoria({
+        ...(entidade !== "todas" && { entidade }),
+        ...(buscaAplicada && { busca: buscaAplicada }),
+      }),
+    refetchOnWindowFocus: true,
+  });
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="font-display text-xl">Auditoria</h2>
+        <p className="text-sm text-muted-foreground">
+          Quem mudou o quê e quando no painel. Só leitura — o histórico não pode ser editado nem
+          apagado.
+        </p>
+      </div>
+
+      <form
+        className="flex flex-col gap-3 sm:flex-row"
+        onSubmit={(ev) => {
+          ev.preventDefault();
+          setBuscaAplicada(busca.trim());
+        }}
+      >
+        <Select value={entidade} onValueChange={setEntidade}>
+          <SelectTrigger className="h-11 sm:w-56">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todas as áreas</SelectItem>
+            {ENTIDADES_AUDITORIA.map(([v, l]) => (
+              <SelectItem key={v} value={v}>
+                {l}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="relative sm:max-w-sm sm:flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 pl-8"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por descrição ou e-mail"
+          />
+        </div>
+        <Button type="submit" className="h-11">
+          Buscar
+        </Button>
+      </form>
+
+      {isLoading ? (
+        <ListaCarregando />
+      ) : isError ? (
+        <Alert variant="destructive">
+          <AlertTriangle className="size-4" />
+          <AlertTitle>Não foi possível carregar a auditoria</AlertTitle>
+          <AlertDescription>
+            <Button size="sm" variant="outline" className="mt-2" onClick={() => void refetch()}>
+              Tentar de novo
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : !data?.length ? (
+        <ListaVazia
+          icon={ScrollText}
+          titulo="Nenhum registro"
+          descricao={
+            entidade !== "todas" || buscaAplicada
+              ? "Nenhum evento bate com esse filtro."
+              : "As próximas alterações feitas no painel aparecem aqui."
+          }
+        />
+      ) : (
+        <>
+          <p className="text-xs text-muted-foreground">
+            {isFetching ? "Atualizando…" : `${String(data.length)} evento(s) mais recentes`}
+          </p>
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Quando</TableHead>
+                  <TableHead>Quem</TableHead>
+                  <TableHead>Ação</TableHead>
+                  <TableHead>Área</TableHead>
+                  <TableHead>O que mudou</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.map((e) => (
+                  <AuditoriaLinha key={e.id} e={e} />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
