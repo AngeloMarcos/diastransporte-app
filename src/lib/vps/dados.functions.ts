@@ -25,6 +25,12 @@ import {
 } from "@/lib/auditoria";
 import { hojeEmMaranhao } from "@/lib/fuso-maranhao";
 import { HORA_REGEX } from "@/lib/periodo";
+import {
+  faltandoParaPublicarRota,
+  faltandoParaPublicarVeiculo,
+  textoMalas,
+  textoPassageiros,
+} from "@/lib/publicacao";
 import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
 import { transicaoValidaAgendamento, type StatusAgendamento } from "@/lib/status";
 
@@ -112,6 +118,9 @@ export const vpsCriarRota = createServerFn({ method: "POST" })
 // Campos da rota que entram na comparação da trilha de auditoria (todos os
 // editáveis pelo admin — inclui os quatro preços, o que mais importa auditar).
 const CAMPOS_ROTA_AUDITADOS = [
+  "ida_e_volta",
+  "embarque",
+  "popularidade",
   "origem",
   "destino",
   "duracao",
@@ -128,23 +137,40 @@ const CAMPOS_ROTA_AUDITADOS = [
   "ativo",
 ] as const;
 
-const rotaEditada = z.object({
-  id: z.string().uuid(),
-  origem: z.string().min(1).max(120),
-  destino: z.string().min(1).max(120),
-  duracao: z.string().max(60),
-  distancia: z.string().max(60),
-  preco_pequeno: z.number().int().min(0),
-  preco_grande: z.number().int().min(0).nullable(),
-  preco_pequeno_noite: z.number().int().min(0).nullable(),
-  preco_grande_noite: z.number().int().min(0).nullable(),
-  destaque: z.string().max(120).nullable(),
-  resumo: z.string().max(2000),
-  descricao: z.string().max(8000),
-  foto: z.string().max(2000),
-  galeria: z.array(z.string().max(2000)).max(30),
-  ativo: z.boolean(),
-});
+const rotaEditada = z
+  .object({
+    id: z.string().uuid(),
+    // Sprint 3 (auditoria, A6): o admin não conseguia editar estes três.
+    ida_e_volta: z.boolean(),
+    embarque: z.array(z.string().trim().min(1).max(200)).max(30),
+    popularidade: z.number().int().min(0).max(9999),
+    origem: z.string().min(1).max(120),
+    destino: z.string().min(1).max(120),
+    duracao: z.string().max(60),
+    distancia: z.string().max(60),
+    preco_pequeno: z.number().int().min(0),
+    preco_grande: z.number().int().min(0).nullable(),
+    preco_pequeno_noite: z.number().int().min(0).nullable(),
+    preco_grande_noite: z.number().int().min(0).nullable(),
+    destaque: z.string().max(120).nullable(),
+    resumo: z.string().max(2000),
+    descricao: z.string().max(8000),
+    foto: z.string().max(2000),
+    galeria: z.array(z.string().max(2000)).max(30),
+    ativo: z.boolean(),
+  })
+  .superRefine((d, ctx) => {
+    // Rota VISÍVEL precisa de foto, resumo e preço — senão vai pro ar como
+    // card com imagem vazia. Rascunho (ativo = false) pode estar pela metade.
+    if (!d.ativo) return;
+    const falta = faltandoParaPublicarRota(d);
+    if (falta.length) {
+      ctx.addIssue({
+        code: "custom",
+        message: `Para deixar a rota visível falta: ${falta.join(", ")}.`,
+      });
+    }
+  });
 
 export const vpsSalvarRota = createServerFn({ method: "POST" })
   .inputValidator((data) => rotaEditada.parse(data))
@@ -161,6 +187,9 @@ export const vpsSalvarRota = createServerFn({ method: "POST" })
     `;
     await ctx.sql`
       UPDATE public.rotas SET
+        ida_e_volta = ${data.ida_e_volta},
+        embarque = ${data.embarque},
+        popularidade = ${data.popularidade},
         origem = ${data.origem},
         destino = ${data.destino},
         duracao = ${data.duracao},
@@ -613,7 +642,8 @@ export const vpsRemoverBloco = createServerFn({ method: "POST" })
   });
 
 // ---------------------------------------------------------------- frota
-const COLUNAS_VEICULO = "id, nome, modelo, passageiros, bagagem, foto, itens, ordem, ativo";
+const COLUNAS_VEICULO =
+  "id, nome, modelo, passageiros, bagagem, categoria, capacidade_passageiros, malas, placa, foto, itens, ordem, ativo";
 
 export const vpsListFrotaVeiculosAdmin = createServerFn({ method: "GET" }).handler(
   async (): Promise<VeiculoFrotaRow[]> => {
@@ -640,8 +670,12 @@ export const vpsListFrotaVeiculosPublicos = createServerFn({ method: "GET" }).ha
 const veiculoInput = z.object({
   nome: z.string().min(1).max(120),
   modelo: z.string().max(200).default(""),
-  passageiros: z.string().max(60).default(""),
-  bagagem: z.string().max(120).default(""),
+  // Sprint 3: número e categoria no lugar do texto livre. O texto que o site
+  // exibe ("Até 4 passageiros") é composto aqui no servidor a partir deles.
+  categoria: z.enum(["pequeno", "grande"]).nullable().default(null),
+  capacidade_passageiros: z.number().int().min(1).max(20).nullable().default(null),
+  malas: z.number().int().min(0).max(30).nullable().default(null),
+  placa: z.string().trim().max(12).nullable().default(null),
   foto: z.string().max(2000).default(""),
   itens: z.array(z.string().max(200)).max(20).default([]),
   ordem: z.number().int().min(0).max(9999).default(0),
@@ -652,10 +686,19 @@ export const vpsCriarVeiculoFrota = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const ctx = await contexto();
     const admin = await ctx.admin();
+    // Entra OCULTO (ativo = false): antes o padrão da coluna era visível, e
+    // um veículo recém-criado sem foto virava o quadrado preto no site
+    // (auditoria do site, item 4). Só fica visível ao salvar com tudo
+    // preenchido (ver vpsSalvarVeiculoFrota).
     const [criado] = await ctx.sql<{ id: string }[]>`
-      INSERT INTO public.frota_veiculos (nome, modelo, passageiros, bagagem, foto, itens, ordem)
-      VALUES (${data.nome}, ${data.modelo}, ${data.passageiros}, ${data.bagagem}, ${data.foto},
-              ${data.itens}, ${data.ordem})
+      INSERT INTO public.frota_veiculos
+        (nome, modelo, passageiros, bagagem, categoria, capacidade_passageiros, malas, placa,
+         foto, itens, ordem, ativo)
+      VALUES (${data.nome}, ${data.modelo},
+              ${data.capacidade_passageiros ? textoPassageiros(data.capacidade_passageiros) : ""},
+              ${data.malas !== null ? textoMalas(data.malas) : ""},
+              ${data.categoria}, ${data.capacidade_passageiros}, ${data.malas}, ${data.placa},
+              ${data.foto}, ${data.itens}, ${data.ordem}, false)
       RETURNING id
     `;
     await ctx.auditar(admin, {
@@ -669,20 +712,44 @@ export const vpsCriarVeiculoFrota = createServerFn({ method: "POST" })
 
 export const vpsSalvarVeiculoFrota = createServerFn({ method: "POST" })
   .inputValidator((data) =>
-    veiculoInput.extend({ id: z.string().uuid(), ativo: z.boolean() }).parse(data),
+    veiculoInput
+      .extend({ id: z.string().uuid(), ativo: z.boolean() })
+      .superRefine((d, ctx) => {
+        // Veículo VISÍVEL precisa estar completo — senão é o quadrado preto
+        // do site. Rascunho (ativo = false) pode estar pela metade.
+        if (!d.ativo) return;
+        const falta = faltandoParaPublicarVeiculo(d);
+        if (falta.length) {
+          ctx.addIssue({
+            code: "custom",
+            message: `Para deixar o veículo visível falta: ${falta.join(", ")}.`,
+          });
+        }
+      })
+      .parse(data),
   )
   .handler(async ({ data }) => {
     const ctx = await contexto();
     const admin = await ctx.admin();
     // Ver comentário em vpsSalvarRota — mesmo achado de upload órfão.
     const [antes] = await ctx.sql<Record<string, unknown>[]>`
-      SELECT nome, modelo, passageiros, bagagem, foto, itens, ordem, ativo
+      SELECT nome, modelo, passageiros, bagagem, categoria, capacidade_passageiros, malas, placa,
+             foto, itens, ordem, ativo
         FROM public.frota_veiculos WHERE id = ${data.id}
     `;
+    // Texto exibido no site: composto dos números; sem número (veículo antigo
+    // editado só em outros campos) mantém o texto que já estava.
+    const passageirosTxt = data.capacidade_passageiros
+      ? textoPassageiros(data.capacidade_passageiros)
+      : String(antes?.["passageiros"] ?? "");
+    const bagagemTxt =
+      data.malas !== null ? textoMalas(data.malas) : String(antes?.["bagagem"] ?? "");
     await ctx.sql`
       UPDATE public.frota_veiculos
-         SET nome = ${data.nome}, modelo = ${data.modelo}, passageiros = ${data.passageiros},
-             bagagem = ${data.bagagem}, foto = ${data.foto}, itens = ${data.itens},
+         SET nome = ${data.nome}, modelo = ${data.modelo}, passageiros = ${passageirosTxt},
+             bagagem = ${bagagemTxt}, categoria = ${data.categoria},
+             capacidade_passageiros = ${data.capacidade_passageiros}, malas = ${data.malas},
+             placa = ${data.placa}, foto = ${data.foto}, itens = ${data.itens},
              ordem = ${data.ordem}, ativo = ${data.ativo}
        WHERE id = ${data.id}
     `;
@@ -695,8 +762,10 @@ export const vpsSalvarVeiculoFrota = createServerFn({ method: "POST" })
       const diff = diferencaCampos(antes, data, [
         "nome",
         "modelo",
-        "passageiros",
-        "bagagem",
+        "categoria",
+        "capacidade_passageiros",
+        "malas",
+        "placa",
         "foto",
         "itens",
         "ordem",

@@ -14,6 +14,7 @@ import { listFrotaVeiculos } from "@/lib/frota.functions";
 import { mapearConteudo, texto } from "@/lib/conteudo";
 import { whatsappLink } from "@/lib/whatsapp";
 import { buscaCombina } from "@/lib/busca";
+import { tiposDeVeiculo } from "@/lib/publicacao";
 import { camposDeBusca } from "@/data/rotas";
 import { HomeSkeleton } from "@/components/site/Skeletons";
 import { ErroCarregamento } from "@/components/site/ErroCarregamento";
@@ -213,7 +214,8 @@ function Home() {
         <div className="mx-auto max-w-6xl px-4 py-section">
           <h2 className="font-display text-fluid-xl">A frota</h2>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-            Dois tipos de veículo, escolhidos conforme o número de passageiros e a bagagem.
+            {tiposDeVeiculo(veiculos.length)}, escolhidos conforme o número de passageiros e a
+            bagagem.
           </p>
           <div className="mt-8 grid gap-6 md:grid-cols-2">
             {veiculos.map((v) => (

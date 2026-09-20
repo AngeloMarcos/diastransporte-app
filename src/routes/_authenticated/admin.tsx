@@ -173,6 +173,7 @@ import { transicoesPermitidas, type PedidoStatus } from "@/lib/pedidos-transicoe
 import { PEDIDO_STATUS_META, PEDIDO_STATUS_OPTIONS, formatarDataHora } from "@/lib/pedidos-status";
 import type { UsuarioAdmin } from "@/lib/usuarios.functions";
 import { comTempoLimite, mensagemAmigavel } from "@/lib/tempo-limite";
+import { faltandoParaPublicarRota, faltandoParaPublicarVeiculo } from "@/lib/publicacao";
 
 // Achado revisando UX: a aba ativa era só useState — sem URL de verdade,
 // não dava pra favoritar/compartilhar um link direto pra "Corridas" e um
@@ -1062,11 +1063,28 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
   const queryClient = useQueryClient();
   const [aberto, setAberto] = useState(false);
   const [form, setForm] = useState(rota);
+  // Texto cru do <textarea> de embarque (um local por linha) — separar em
+  // lista a cada tecla comeria a quebra de linha recém-digitada.
+  const [embarqueTexto, setEmbarqueTexto] = useState(rota.embarque.join("\n"));
   const [enviandoFoto, setEnviandoFoto] = useState(false);
 
   const salvar = useMutation({
     mutationFn: async () => {
-      await salvarRota({ ...form, id: rota.id });
+      const embarque = embarqueTexto
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
+      // Rota visível precisa de foto, resumo e preço (senão vai pro ar como
+      // card com imagem vazia — auditoria do site). O servidor confere de novo.
+      if (form.ativo) {
+        const falta = faltandoParaPublicarRota(form);
+        if (falta.length) {
+          throw new Error(
+            `Para deixar a rota visível falta: ${falta.join(", ")}. Complete ou desmarque "Rota visível no site".`,
+          );
+        }
+      }
+      await salvarRota({ ...form, embarque, id: rota.id });
     },
     onSuccess: () => {
       toast.success("Rota atualizada.");
@@ -1092,7 +1110,17 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
   // Usa `rota` (a prop, fonte de verdade) em vez de `form` (rascunho de
   // edição em andamento) — não depende de ter aberto "Editar" antes.
   const alternarAtivo = useMutation({
-    mutationFn: async () => salvarRota({ ...rota, ativo: !rota.ativo }),
+    mutationFn: async () => {
+      if (!rota.ativo) {
+        const falta = faltandoParaPublicarRota(rota);
+        if (falta.length) {
+          throw new Error(
+            `Não dá pra ativar ainda — falta: ${falta.join(", ")}. Abra "Editar" e complete.`,
+          );
+        }
+      }
+      await salvarRota({ ...rota, ativo: !rota.ativo });
+    },
     onSuccess: () => {
       toast.success(rota.ativo ? "Rota ocultada." : "Rota ativada.");
       void queryClient.invalidateQueries({ queryKey: ["admin-rotas"] });
@@ -1253,6 +1281,39 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
               value={form.resumo}
               onChange={(e) => setForm({ ...form, resumo: e.target.value })}
             />
+          </div>
+          {/* Sprint 3 (auditoria, A6): estes três só existiam no banco — o
+              admin não conseguia marcar "somente ida", listar os locais de
+              embarque nem ajustar a ordem de "Mais pedidos". */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <CampoNumero
+              label="Ordem em “Mais pedidos” (maior aparece primeiro)"
+              value={form.popularidade}
+              onChange={(v) => setForm({ ...form, popularidade: v ?? 0 })}
+            />
+            <label className="flex min-h-11 items-center gap-3 text-sm md:pt-7">
+              <input
+                type="checkbox"
+                className="size-5"
+                checked={form.ida_e_volta}
+                onChange={(e) => setForm({ ...form, ida_e_volta: e.target.checked })}
+              />
+              Trecho disponível nos dois sentidos (ida e volta)
+            </label>
+          </div>
+          <div>
+            <Label>Locais de embarque (um por linha)</Label>
+            <Textarea
+              className="mt-2"
+              rows={4}
+              value={embarqueTexto}
+              onChange={(e) => setEmbarqueTexto(e.target.value)}
+              placeholder={"Aeroporto Marechal Cunha Machado (São Luís)\nCentro histórico"}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              É a lista que o cliente escolhe em “Zona de embarque” — e o que a busca do site usa
+              (ex.: “aeroporto”).
+            </p>
           </div>
           <div>
             <Label>Descrição completa</Label>
@@ -1428,12 +1489,40 @@ function AdminFrota() {
 const VEICULO_VAZIO = {
   nome: "",
   modelo: "",
-  passageiros: "",
-  bagagem: "",
+  // Sprint 3: número + categoria no lugar de "passageiros/bagagem" em texto
+  // livre (o texto do site é composto a partir daqui, no servidor).
+  categoria: null as "pequeno" | "grande" | null,
+  capacidade_passageiros: null as number | null,
+  malas: null as number | null,
+  placa: null as string | null,
   foto: "",
   itens: [] as string[],
   ordem: 0,
 };
+
+/** Select de categoria do veículo (a mesma do tarifário: pequeno / grande). */
+function CampoCategoriaVeiculo({
+  value,
+  onChange,
+}: {
+  value: "pequeno" | "grande" | null;
+  onChange: (v: "pequeno" | "grande") => void;
+}) {
+  return (
+    <div>
+      <Label>Categoria (tarifário)</Label>
+      <Select value={value ?? ""} onValueChange={(v) => onChange(v as "pequeno" | "grande")}>
+        <SelectTrigger className="mt-2 h-11">
+          <SelectValue placeholder="Escolha…" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="pequeno">Carro pequeno</SelectItem>
+          <SelectItem value="grande">Carro grande</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 function NovoVeiculoDialog() {
   const queryClient = useQueryClient();
@@ -1446,7 +1535,9 @@ function NovoVeiculoDialog() {
       await criarVeiculoFrota(form);
     },
     onSuccess: () => {
-      toast.success("Veículo criado. Edite os detalhes e adicione uma foto.");
+      toast.success(
+        "Veículo criado como rascunho (oculto). Adicione a foto e ative quando estiver pronto.",
+      );
       void queryClient.invalidateQueries({ queryKey: ["admin-frota-veiculos"] });
       setOpen(false);
       setForm(VEICULO_VAZIO);
@@ -1464,7 +1555,10 @@ function NovoVeiculoDialog() {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Novo veículo</DialogTitle>
-          <DialogDescription>Crie o registro básico — edite foto e itens depois.</DialogDescription>
+          <DialogDescription>
+            Entra oculto (rascunho). Adicione a foto e os itens na lista e ative — um veículo só
+            fica visível no site com foto, modelo, categoria e capacidade.
+          </DialogDescription>
         </DialogHeader>
         <Campo
           label="Nome"
@@ -1476,6 +1570,27 @@ function NovoVeiculoDialog() {
           value={form.modelo}
           onChange={(v) => setForm((f) => ({ ...f, modelo: v }))}
         />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <CampoCategoriaVeiculo
+            value={form.categoria}
+            onChange={(v) => setForm((f) => ({ ...f, categoria: v }))}
+          />
+          <Campo
+            label="Placa (opcional)"
+            value={form.placa ?? ""}
+            onChange={(v) => setForm((f) => ({ ...f, placa: v.trim() ? v : null }))}
+          />
+          <CampoNumero
+            label="Capacidade (passageiros)"
+            value={form.capacidade_passageiros}
+            onChange={(v) => setForm((f) => ({ ...f, capacidade_passageiros: v }))}
+          />
+          <CampoNumero
+            label="Malas"
+            value={form.malas}
+            onChange={(v) => setForm((f) => ({ ...f, malas: v }))}
+          />
+        </div>
         <DialogFooter>
           <Button className="h-11 w-full" onClick={() => criar.mutate()} disabled={criar.isPending}>
             {criar.isPending ? (
@@ -1558,8 +1673,21 @@ function VeiculoEditor({ veiculo }: { veiculo: VeiculoFrotaRow }) {
   const [novoItem, setNovoItem] = useState("");
   const [enviandoFoto, setEnviandoFoto] = useState(false);
 
+  // O que falta pra este veículo poder aparecer no site (ver lib/publicacao.ts).
+  const faltas = faltandoParaPublicarVeiculo(veiculo);
+
   const salvar = useMutation({
-    mutationFn: async () => salvarVeiculoFrota(form),
+    mutationFn: async () => {
+      if (form.ativo) {
+        const falta = faltandoParaPublicarVeiculo(form);
+        if (falta.length) {
+          throw new Error(
+            `Para deixar o veículo visível falta: ${falta.join(", ")}. Complete ou desmarque "Visível no site".`,
+          );
+        }
+      }
+      await salvarVeiculoFrota(form);
+    },
     onSuccess: () => {
       toast.success("Veículo atualizado.");
       void queryClient.invalidateQueries({ queryKey: ["admin-frota-veiculos"] });
@@ -1579,7 +1707,14 @@ function VeiculoEditor({ veiculo }: { veiculo: VeiculoFrotaRow }) {
   // Mesmo achado de RotaEditor::alternarAtivo — 1 clique em vez de
   // Editar → rolar → Salvar. Usa `veiculo` (prop), não `form` (rascunho).
   const alternarAtivo = useMutation({
-    mutationFn: async () => salvarVeiculoFrota({ ...veiculo, ativo: !veiculo.ativo }),
+    mutationFn: async () => {
+      if (!veiculo.ativo && faltas.length) {
+        throw new Error(
+          `Não dá pra ativar ainda — falta: ${faltas.join(", ")}. Abra "Editar" e complete.`,
+        );
+      }
+      await salvarVeiculoFrota({ ...veiculo, ativo: !veiculo.ativo });
+    },
     onSuccess: () => {
       toast.success(veiculo.ativo ? "Veículo ocultado." : "Veículo ativado.");
       void queryClient.invalidateQueries({ queryKey: ["admin-frota-veiculos"] });
@@ -1624,6 +1759,9 @@ function VeiculoEditor({ veiculo }: { veiculo: VeiculoFrotaRow }) {
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               {veiculo.modelo || "sem modelo"}
               <AtivoBadge ativo={veiculo.ativo} />
+              {!veiculo.ativo && faltas.length > 0 && (
+                <span className="text-amber-400">rascunho — falta: {faltas.join(", ")}</span>
+              )}
             </div>
           </div>
         </div>
@@ -1677,15 +1815,24 @@ function VeiculoEditor({ veiculo }: { veiculo: VeiculoFrotaRow }) {
               value={form.modelo}
               onChange={(v) => setForm({ ...form, modelo: v })}
             />
-            <Campo
-              label="Passageiros (texto livre)"
-              value={form.passageiros}
-              onChange={(v) => setForm({ ...form, passageiros: v })}
+            <CampoCategoriaVeiculo
+              value={form.categoria}
+              onChange={(v) => setForm({ ...form, categoria: v })}
             />
             <Campo
-              label="Bagagem (texto livre)"
-              value={form.bagagem}
-              onChange={(v) => setForm({ ...form, bagagem: v })}
+              label="Placa (opcional)"
+              value={form.placa ?? ""}
+              onChange={(v) => setForm({ ...form, placa: v.trim() ? v : null })}
+            />
+            <CampoNumero
+              label="Capacidade (passageiros)"
+              value={form.capacidade_passageiros}
+              onChange={(v) => setForm({ ...form, capacidade_passageiros: v })}
+            />
+            <CampoNumero
+              label="Malas"
+              value={form.malas}
+              onChange={(v) => setForm({ ...form, malas: v })}
             />
             <CampoNumero
               label="Ordem de exibição"

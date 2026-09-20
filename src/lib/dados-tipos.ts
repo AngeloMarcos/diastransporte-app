@@ -68,6 +68,12 @@ export type VeiculoFrotaRow = {
   modelo: string;
   passageiros: string;
   bagagem: string;
+  // Sprint 3: números e categoria — os textos acima (o que o site exibe) são
+  // compostos a partir deles pelo servidor. Nulos só em veículo antigo.
+  categoria: "pequeno" | "grande" | null;
+  capacidade_passageiros: number | null;
+  malas: number | null;
+  placa: string | null;
   foto: string;
   itens: string[];
   ordem: number;

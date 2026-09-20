@@ -129,6 +129,12 @@ export async function salvarRota(rota: RotaRow): Promise<void> {
     destino: rota.destino,
     duracao: rota.duracao,
     distancia: rota.distancia,
+    // Sprint 3: antes só dava pra editar estes campos no banco — o admin não
+    // conseguia marcar "somente ida", listar os locais de embarque nem mexer
+    // na ordem de "mais pedidos".
+    ida_e_volta: rota.ida_e_volta,
+    embarque: rota.embarque,
+    popularidade: Number(rota.popularidade) || 0,
     preco_pequeno: Number(rota.preco_pequeno) || 0,
     preco_grande: rota.preco_grande === null ? null : Number(rota.preco_grande),
     preco_pequeno_noite:
@@ -392,8 +398,10 @@ export async function removerBlocoConteudo(id: string): Promise<void> {
 export type NovoVeiculoInput = {
   nome: string;
   modelo: string;
-  passageiros: string;
-  bagagem: string;
+  categoria: "pequeno" | "grande" | null;
+  capacidade_passageiros: number | null;
+  malas: number | null;
+  placa: string | null;
   foto: string;
   itens: string[];
   ordem: number;

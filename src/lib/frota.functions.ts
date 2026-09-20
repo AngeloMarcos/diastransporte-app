@@ -34,9 +34,21 @@ function clienteAvulso(url: string, key: string) {
 export const listFrotaVeiculos = createServerFn({ method: "GET" }).handler(
   async (): Promise<Veiculo[]> => {
     if (MODO_VPS) {
-      const { vpsListFrotaVeiculosPublicos } = await import("@/lib/vps/dados.functions");
-      const linhas = await vpsListFrotaVeiculosPublicos();
-      return linhas.length ? linhas : veiculosEstaticos;
+      // Auditoria do site: "linhas.length ? banco : estático" escondia o banco
+      // vazio. Fallback estático só se a LEITURA falhar (a frota real vem da
+      // migration 0015).
+      try {
+        const { vpsListFrotaVeiculosPublicos } = await import("@/lib/vps/dados.functions");
+        return await vpsListFrotaVeiculosPublicos();
+      } catch (erro) {
+        console.error(
+          JSON.stringify({
+            tipo: "listFrotaVeiculos_fallback_estatico",
+            erro: erro instanceof Error ? erro.message : String(erro),
+          }),
+        );
+        return veiculosEstaticos;
+      }
     }
 
     const url = process.env["SUPABASE_URL"];
@@ -57,9 +69,18 @@ export const listFrotaVeiculos = createServerFn({ method: "GET" }).handler(
 export const listFrotaGaleria = createServerFn({ method: "GET" }).handler(
   async (): Promise<FotoGaleria[]> => {
     if (MODO_VPS) {
-      const { vpsListFrotaGaleriaPublica } = await import("@/lib/vps/dados.functions");
-      const linhas = await vpsListFrotaGaleriaPublica();
-      return linhas.length ? linhas : galeriaEstatica;
+      try {
+        const { vpsListFrotaGaleriaPublica } = await import("@/lib/vps/dados.functions");
+        return await vpsListFrotaGaleriaPublica();
+      } catch (erro) {
+        console.error(
+          JSON.stringify({
+            tipo: "listFrotaGaleria_fallback_estatico",
+            erro: erro instanceof Error ? erro.message : String(erro),
+          }),
+        );
+        return galeriaEstatica;
+      }
     }
 
     const url = process.env["SUPABASE_URL"];
