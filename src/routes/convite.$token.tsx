@@ -1,6 +1,6 @@
 // Página do convite de acesso do motorista (link gerado pelo admin — ver
 // vps/convite.functions.ts). O motorista escolhe a própria senha e já entra.
-// Só existe no deploy da VPS (public.convites, migration 0016).
+// Usa public.convites (migration 0016).
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
@@ -12,12 +12,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { senhaForte, SENHA_MIN, SENHA_REGRA_TEXTO } from "@/lib/senha";
-import { MODO_VPS } from "@/lib/vps/config";
 import { aceitarConvite, verificarConvite } from "@/lib/vps/convite.functions";
 
 export const Route = createFileRoute("/convite/$token")({
   loader: async ({ params }): Promise<{ valido: boolean; nome: string }> => {
-    if (!MODO_VPS) return { valido: false, nome: "" };
     try {
       const r = await verificarConvite({ data: { token: params.token } });
       return r.valido ? { valido: true, nome: r.nome } : { valido: false, nome: "" };

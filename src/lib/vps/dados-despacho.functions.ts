@@ -4,8 +4,7 @@
 // Etapa 6). Arquivo separado de vps/dados.functions.ts (que já é grande)
 // pra manter o domínio do despacho isolado. Mesmo padrão de autorização do
 // resto do app: sem RLS nessas tabelas, então toda checagem é feita aqui em
-// TypeScript, não no banco. Só é chamado quando VITE_AUTH_MODE=vps — este
-// domínio inteiro é VPS-only por enquanto (ver comentário em dados.ts).
+// TypeScript, não no banco. Chamado pelas telas através de src/lib/dados.ts.
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeader } from "@tanstack/react-start/server";
 import { z } from "zod";

@@ -87,7 +87,7 @@ function Carrinho() {
   useEffect(() => {
     if (!user) return;
     void (async () => {
-      const perfil = await perfilContato(user.id).catch(() => null);
+      const perfil = await perfilContato().catch(() => null);
       // Achado revisando UX: sem perfil.nome salvo, isto preenchia "Seu
       // nome" com o e-mail cru (ex.: "joao83@gmail.com") — e esse valor ia
       // direto na mensagem pro motorista. Sem fallback pra e-mail aqui: o
@@ -184,7 +184,6 @@ function Carrinho() {
           contato_nome: nome || user.email || null,
           contato_telefone: telefone || null,
         })),
-        user.id,
       );
       const totalOficial = gravados.reduce((s, r) => s + (r.valor ?? 0), 0);
       const divergente =

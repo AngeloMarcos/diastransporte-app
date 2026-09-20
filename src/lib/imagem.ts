@@ -2,7 +2,7 @@
 // Foto de celular chega com 4–12 MB e milhares de pixels de largura; no site
 // isso vira carregamento lento no 4G do turista. Aqui a foto é redimensionada
 // e regravada em WebP no navegador do admin, antes de subir — vale igual para
-// o Lovable Cloud e para a VPS, sem depender de biblioteca nativa no servidor.
+// qualquer backend, sem depender de biblioteca nativa no servidor.
 // Regravar pelo canvas também descarta os metadados EXIF (inclusive a
 // localização GPS da foto) e já aplica a rotação correta.
 

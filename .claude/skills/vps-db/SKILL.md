@@ -1,62 +1,24 @@
 ---
 name: vps-db
-description: Connect to and operate the project's own PostgreSQL database once it's migrated off Supabase onto the VPS — direct psql access, running migrations, backups/restore. Use whenever the user asks to query, migrate, back up, or restore the self-hosted database.
+description: Operate the project's PostgreSQL database on the VPS — psql access, migrations, backups/restore, safe data fixes. Use whenever the user asks to query, migrate, back up, or restore the database.
 ---
 
-## Status: schema e dados prontos, rodando só dentro do Docker Compose da VPS (sem acesso ainda)
+## The database
 
-O projeto hoje roda em produção no Postgres gerenciado pelo Supabase (ver `CLAUDE.md`, seção
-"Two backends, one data layer"). O schema equivalente para a VPS **já existe e está
-commitado** em `db/`:
+Postgres 16 in the `db` container (database `diasapp`; not published outside the compose network).
+Two roles: `diasapp_migration` (owner/DDL, used by `db/migrate.mjs` and for admin fixes) and
+`dias_app` (runtime, CRUD only). Schema = `db/migrations/*.sql`, applied in order and tracked in
+`public.schema_migrations`. There is no RLS: authorization is in the server functions
+(`exigirUsuario` / `exigirAdmin` / `exigirMotorista`), so every new endpoint must check it by hand.
 
-- `db/migrations/0001_init.sql` — schema completo (`usuarios`, `sessoes`, `rotas`,
-  `conteudo_site`, `agendamentos` + a view `profiles` pra compatibilidade, + o mesmo trigger
-  `agendamentos_calcular_valor` que existe no lado Supabase). Sem RLS, sem GRANT de
-  PostgREST — autorização é feita na camada de aplicação (`src/lib/vps/auth.server.ts`).
-- `db/migrations/0002_roles.sql` — cria a role `dias_app` (CRUD apenas), separada da role de
-  migration (DDL). Aplicar manualmente com `psql`, passando `app_password` — não entra no
-  runner automático (`db/migrate.mjs` pula esse arquivo de propósito).
-- `db/migrate.mjs` — runner idempotente: aplica `db/migrations/*.sql` em ordem, registra em
-  `public.schema_migrations`, aceita `--seed` pra aplicar `db/seed.sql` também.
-- `db/seed.sql` — dados reais exportados do Supabase em 2026-08-14 (rotas, conteúdo,
-  agendamentos históricos com `user_id = NULL`, já que as contas nascem de novo no login
-  próprio).
-- `db/criar-admins.mjs` — cria/atualiza os 3 admins com senha provisória (bcrypt).
-- `db/migrar-imagens.mjs` — baixa as fotos ainda servidas pelo Lovable e reescreve os
-  caminhos no banco pra `/api/uploads/...` (disco da VPS).
+## Operating
 
-Falta só o acesso: ninguém rodou esses scripts contra a VPS de verdade ainda (SSH não
-autorizado — ver `.claude/skills/vps-deploy/SKILL.md`). Até lá, esse schema só existe dentro
-do container `db` do `docker-compose.yml`.
+- psql on the server: `ssh deploy@179.197.74.90 "cd /opt/diastransporte-app && docker compose -f docker-compose.staging.yml exec -T db psql -U diasapp_migration -d diasapp -c '…'"`. Multi-line SQL: pipe a heredoc into `psql` (with `exec -T`).
+- New migration: add `db/migrations/00NN_nome.sql` (plain SQL, next number, idempotent: `IF NOT EXISTS`, `CREATE OR REPLACE`, `DROP TRIGGER IF EXISTS`). Test it first inside `BEGIN … ROLLBACK` with checks (savepoints for expected failures), then deploy — the deploy step runs `node db/migrate.mjs`. New tables get `dias_app` grants from default privileges; sequences need an explicit `GRANT USAGE, SELECT`.
+- Backup before a destructive change: run `/home/deploy/backup-postgres.sh`, or `pg_dump -Fc` inside the container. Prove restores with `infra/testar-restauracao.sh` (see the `vps-deploy` skill).
+- Reset a user's password (no e-mail flow exists): generate a bcrypt hash (cost 12) with `bcryptjs` inside the app container and `UPDATE usuarios SET senha_hash = …, tentativas_falhas = 0, bloqueado_ate = NULL`; delete that user's rows in `sessoes`. Never put passwords in files.
+- `auditoria` is append-only by design (UPDATE/DELETE revoked) — a stray audit row from a test stays.
 
-## Como conectar e operar
+## Before anything destructive
 
-- **Connection string**: vem do `.env` na VPS (não commitado) — `DATABASE_URL` (role `dias_app`,
-  CRUD) e `DATABASE_URL_MIGRATION` (role de migration, DDL). Formato
-  `postgres://usuario:senha@host:5432/dias`. Da máquina de dev, via túnel SSH (o Postgres do
-  compose não publica porta pra fora): `ssh -L 5433:localhost:5432 deploy@179.197.74.90` e
-  então `psql "postgres://...@localhost:5433/dias"`.
-- **Rodar uma query pontual**: `psql "$DATABASE_URL" -c "select ..."`.
-- **Aplicar migrations novas**: adicionar arquivo em `db/migrations/` seguindo o padrão
-  existente (SQL puro, prefixo numérico crescente, idempotente com `IF NOT EXISTS`/
-  `CREATE OR REPLACE`), depois `DATABASE_URL_MIGRATION=... node db/migrate.mjs`. Isso roda
-  automaticamente a cada deploy via o workflow do GitHub Actions também.
-- **Manter os dois schemas em sincronia**: qualquer mudança em `supabase/migrations/*.sql`
-  (lado Lovable, ainda em produção) deveria ganhar um equivalente em `db/migrations/*.sql`
-  (lado VPS) — e vice-versa, já que `src/lib/dados.ts` espera que os dois tenham o mesmo
-  formato de linha para cada tabela.
-- **Backup antes de qualquer migration destrutiva**:
-  `pg_dump "$DATABASE_URL_MIGRATION" -F c -f backup-$(date +%Y%m%d-%H%M).dump`
-- **Restore**: `pg_restore -d "$DATABASE_URL_MIGRATION" --clean --if-exists backup-....dump`
-- **RLS**: não existe fora do Supabase. A autorização no lado VPS é 100% na camada de
-  aplicação — `exigirUsuario`/`exigirAdmin` em `src/lib/vps/auth.server.ts`, chamados no
-  início de toda `createServerFn` em `src/lib/vps/dados.functions.ts`. Se adicionar uma
-  tabela/endpoint novo no lado VPS, a checagem de autorização precisa ser escrita à mão ali
-  — o banco não vai impedir nada sozinho.
-
-## Antes de rodar algo destrutivo
-
-Sempre confirmar com o usuário antes de `DROP`, `TRUNCATE`, `DELETE` sem `WHERE`, ou restore
-que sobrescreve dados existentes — mesmo com acesso concedido. `db/seed.sql` contém dados
-reais de clientes (nome, telefone) exportados do banco de produção — tratar como dado
-sensível, não como fixture descartável.
+Confirm with the user before `DROP`, `TRUNCATE`, `DELETE` without `WHERE`, or a restore over live data. `db/seed.sql` holds real names/phones exported from the old system — treat it as sensitive.

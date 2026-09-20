@@ -34,12 +34,12 @@ function MinhasViagens() {
   const queryClient = useQueryClient();
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["meus-agendamentos", usuarioId],
-    queryFn: () => listarMinhasViagens(usuarioId),
+    queryFn: () => listarMinhasViagens(),
     enabled: Boolean(usuarioId),
   });
 
   const cancelar = useMutation({
-    mutationFn: (id: string) => cancelarMinhaViagem(id, usuarioId),
+    mutationFn: (id: string) => cancelarMinhaViagem(id),
     onSuccess: () => {
       toast.success("Reserva cancelada.");
       void queryClient.invalidateQueries({ queryKey: ["meus-agendamentos", usuarioId] });

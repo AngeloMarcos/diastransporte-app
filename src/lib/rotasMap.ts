@@ -24,9 +24,6 @@ export type RotaRow = {
   updated_at?: string;
 };
 
-export const ROTA_COLUMNS =
-  "id,slug,origem,destino,ida_e_volta,duracao,distancia,preco_pequeno,preco_grande,preco_pequeno_noite,preco_grande_noite,destaque,popularidade,resumo,descricao,embarque,foto,galeria,ativo,updated_at";
-
 export function rowToRota(row: RotaRow): Rota {
   return {
     id: row.id,

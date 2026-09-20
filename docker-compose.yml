@@ -44,7 +44,6 @@ services:
       LEADS_WEBHOOK_URL: ${LEADS_WEBHOOK_URL:-}
       LEADS_WEBHOOK_SECRET: ${LEADS_WEBHOOK_SECRET:-}
       UPLOADS_DIR: /var/lib/dias-transporte/uploads
-      VITE_AUTH_MODE: vps
       PORT: 3000
     volumes:
       - uploads:/var/lib/dias-transporte/uploads

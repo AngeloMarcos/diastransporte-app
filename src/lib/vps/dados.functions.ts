@@ -1,7 +1,6 @@
-// Camada de dados do deploy próprio (VPS): tudo que no Lovable Cloud passa
-// pelo cliente Supabase + RLS aqui passa por estas server functions, que
-// autorizam pela sessão em cookie (auth.server.ts) antes de tocar no Postgres.
-// Só são chamadas quando VITE_AUTH_MODE=vps (ver src/lib/dados.ts).
+// Camada de dados da vitrine e do painel: server functions que autorizam pela
+// sessão em cookie (auth.server.ts) antes de tocar no Postgres — não há RLS,
+// a checagem é feita aqui. Chamadas pelas telas através de src/lib/dados.ts.
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
@@ -70,7 +69,7 @@ export const vpsListRotasAdmin = createServerFn({ method: "GET" }).handler(
 // Sem sessão nenhuma — equivalente à policy "Rotas ativas públicas" do
 // Supabase (USING (ativo OR admin)), aqui só a metade pública mesmo, já que
 // quem quer ver as inativas usa vpsListRotasAdmin. Chamada por
-// rotas.functions.ts::listRotas quando MODO_VPS — sem isto, a home e o
+// rotas.functions.ts::listRotas — sem isto, a home e o
 // /transfers nunca liam o Postgres da VPS de jeito nenhum (só caíam no
 // fallback estático), então editar uma rota no admin não tinha efeito
 // nenhum no site público. Bug real, achado revisando o front-end.
@@ -533,7 +532,7 @@ export const vpsRemoverAgendamento = createServerFn({ method: "POST" })
 // -------------------------------------------------------------- conteúdo
 // Sem sessão — conteudo_site é 100% público no Supabase também (GRANT
 // SELECT ON conteudo_site TO anon, sem policy restritiva). Chamada por
-// conteudo.functions.ts::listConteudo quando MODO_VPS — mesmo bug de
+// conteudo.functions.ts::listConteudo — mesmo bug de
 // vpsListRotasPublicas: sem isto, todo texto/imagem editado no admin não
 // aparecia em lugar nenhum do site público, só o texto padrão hardcoded.
 export const vpsListConteudoPublico = createServerFn({ method: "GET" }).handler(

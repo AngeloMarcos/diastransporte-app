@@ -1,7 +1,6 @@
-// Endurecimento HTTP do deploy próprio (VPS) — lógica pura, sem dependência de
-// runtime: cabeçalhos de segurança, origem real atrás de proxy e limite de
-// requisições por IP. Ligado em src/server.ts só quando MODO_VPS (o Lovable
-// Cloud tem o próprio edge e embute o site num iframe de pré-visualização).
+// Endurecimento HTTP — lógica pura, sem dependência de runtime: cabeçalhos de
+// segurança, origem real atrás de proxy e limite de requisições por IP (ligado em
+// src/server.ts).
 
 /** Cabeçalhos de segurança de toda resposta. HSTS só sob HTTPS: mandar HSTS por
  * HTTP puro é ignorado pelo navegador, e no IP:porta de teste seria enganoso. */

@@ -9,7 +9,6 @@ import {
   pedidoLimitavel,
   requisicaoHttps,
 } from "./lib/seguranca";
-import { MODO_VPS } from "./lib/vps/config";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -52,14 +51,12 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
-// Endurecimento só no deploy próprio (VPS): o Lovable Cloud tem o próprio edge
-// e embute o site num iframe de pré-visualização, que estes cabeçalhos quebrariam.
+// Endurecimento HTTP: cabeçalhos de segurança em toda resposta e limite de escritas por IP.
 // 120 escritas/min por IP: folgado pra quem usa o painel, curto pra quem
 // automatiza cadastro ou tentativa de senha (que ainda tem o bloqueio por conta).
 const limiteEscritas = new LimiteDeTaxa(120, 60_000);
 
 function comCabecalhosDeSeguranca(request: Request, response: Response): Response {
-  if (!MODO_VPS) return response;
   const cabecalhos = cabecalhosDeSeguranca({
     https: requisicaoHttps(request.url, request.headers),
   });
@@ -70,7 +67,7 @@ function comCabecalhosDeSeguranca(request: Request, response: Response): Respons
 }
 
 async function tratar(request: Request, env: unknown, ctx: unknown): Promise<Response> {
-  if (MODO_VPS && pedidoLimitavel(request.method, new URL(request.url).pathname)) {
+  if (pedidoLimitavel(request.method, new URL(request.url).pathname)) {
     const { excedeu, retryAposSeg } = limiteEscritas.excedeu(ipDoCliente(request.headers));
     if (excedeu) {
       return new Response(

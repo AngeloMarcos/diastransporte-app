@@ -1,10 +1,9 @@
 # Build + runtime do Dias Transporte para deploy próprio (VPS).
-# O preset do nitro muda para node_server (no Lovable Cloud o alvo é Cloudflare).
+# O nitro empacota o app como servidor Node (preset node_server).
 FROM node:22-alpine AS build
 WORKDIR /app
 
-ENV NITRO_PRESET=node_server \
-    VITE_AUTH_MODE=vps
+ENV NITRO_PRESET=node_server
 
 COPY package.json package-lock.json* bun.lock* ./
 RUN npm install --no-audit --no-fund

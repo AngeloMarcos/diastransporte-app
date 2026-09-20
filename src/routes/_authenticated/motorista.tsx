@@ -49,7 +49,6 @@ import {
   salvarObservacaoMotorista,
   transicionarStatusPedidoMotorista,
 } from "@/lib/dados";
-import { MODO_VPS } from "@/lib/vps/config";
 import { podeConcluir, STATUS_ATIVOS } from "@/lib/status";
 import { PEDIDO_STATUS_META, formatarDataHora } from "@/lib/pedidos-status";
 import { transicoesPermitidas, type PedidoStatus } from "@/lib/pedidos-transicoes";
@@ -90,15 +89,9 @@ function MotoristaPage() {
     );
   }
 
-  // Etapa 9 do roteiro da fusão: o modelo de motorista do despacho
-  // (fornecedores + pedidos.fornecedor_id) substitui o antigo
-  // (agendamentos.motorista_id) só em MODO_VPS, onde o despacho existe de
-  // fato — checagem contra o banco de produção antes de trocar mostrou
-  // zero uso real do modelo antigo (nenhum usuarios.motorista=true,
-  // nenhuma atribuição pendente/confirmada), então a troca é segura. Fora
-  // de MODO_VPS (Supabase) o despacho não existe, então mantém o painel
-  // antigo funcionando — sem regressão pra quem ainda estiver nesse ramo.
-  return MODO_VPS ? <PainelMotoristaDespacho /> : <PainelMotoristaLegado />;
+  // Modelo de motorista do despacho (fornecedores + pedidos.fornecedor_id). O painel
+  // antigo (agendamentos.motorista_id) foi removido: nunca teve uso real em produção.
+  return <PainelMotoristaDespacho />;
 }
 
 // ------------------------------------------------------- modelo despacho
@@ -401,171 +394,6 @@ function PedidoMotoristaCard({
           )}
           Salvar observação
         </Button>
-      </div>
-    </article>
-  );
-}
-
-// ---------------------------------------------------------- modelo antigo
-// (agendamentos.motorista_id) — mantido pro ramo Supabase, onde o despacho
-// não existe. Ver comentário em MotoristaPage acima.
-function PainelMotoristaLegado() {
-  const { user } = useAuth();
-  const motoristaId = user?.id ?? "";
-  const queryClient = useQueryClient();
-
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["minhas-corridas", motoristaId],
-    queryFn: () => listarCorridasMotorista(motoristaId),
-    enabled: Boolean(motoristaId),
-  });
-
-  const concluir = useMutation({
-    mutationFn: (id: string) => concluirCorridaComoMotorista(id, motoristaId),
-    onSuccess: () => {
-      toast.success("Corrida marcada como concluída.");
-      void queryClient.invalidateQueries({ queryKey: ["minhas-corridas", motoristaId] });
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Não foi possível concluir."),
-  });
-
-  const proximas = (data ?? []).filter((a) => STATUS_ATIVOS.has(a.status));
-  const historico = (data ?? []).filter((a) => !STATUS_ATIVOS.has(a.status));
-
-  return (
-    <div className="min-h-screen">
-      <Header />
-      <main className="mx-auto max-w-4xl px-gutter py-section">
-        <div>
-          <h1 className="font-display text-fluid-2xl">Minhas corridas</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Corridas que o escritório atribuiu a você.
-          </p>
-        </div>
-
-        {isLoading && <MinhasViagensSkeleton />}
-
-        {isError && (
-          <div className="mt-10 rounded-lg border border-border bg-card p-8 text-center">
-            <p className="text-sm text-muted-foreground">
-              {error instanceof Error ? error.message : "Não foi possível carregar suas corridas."}
-            </p>
-            <Button className="mt-4" onClick={() => void refetch()}>
-              Tentar de novo
-            </Button>
-          </div>
-        )}
-
-        {!isLoading && !isError && !data?.length && (
-          <div className="mt-10 rounded-lg border border-border bg-card p-8 text-center">
-            <p className="text-sm text-muted-foreground">Nenhuma corrida atribuída a você ainda.</p>
-          </div>
-        )}
-
-        {!isLoading && !isError && Boolean(data?.length) && (
-          <div className="mt-8 space-y-10">
-            <section className="space-y-4">
-              <h2 className="text-fluid-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Próximas
-              </h2>
-              {proximas.length ? (
-                <div className="space-y-4">
-                  {proximas.map((a) => (
-                    <CorridaCardLegado
-                      key={a.id}
-                      agendamento={a}
-                      onConcluir={() => concluir.mutate(a.id)}
-                      concluindo={concluir.isPending}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">Nenhuma corrida futura atribuída.</p>
-              )}
-            </section>
-
-            {historico.length > 0 && (
-              <section className="space-y-4">
-                <h2 className="text-fluid-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                  Histórico
-                </h2>
-                <div className="space-y-4">
-                  {historico.map((a) => (
-                    <CorridaCardLegado key={a.id} agendamento={a} />
-                  ))}
-                </div>
-              </section>
-            )}
-          </div>
-        )}
-      </main>
-      <Footer />
-    </div>
-  );
-}
-
-function CorridaCardLegado({
-  agendamento: a,
-  onConcluir,
-  concluindo,
-}: {
-  agendamento: AgendamentoRow;
-  onConcluir?: () => void;
-  concluindo?: boolean;
-}) {
-  return (
-    <article className="rounded-lg border border-border bg-card p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <h3 className="font-display text-fluid-base break-words">{a.trecho}</h3>
-        <StatusBadge status={a.status} />
-      </div>
-      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <CalendarDays className="size-3.5" /> {a.data_viagem ?? "data a combinar"}
-          {a.hora ? ` · ${a.hora}` : ""}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <Car className="size-3.5" /> Carro {a.carro} · {a.periodo}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <Users className="size-3.5" /> {a.passageiros} passageiro(s)
-        </span>
-        {a.valor ? <span>{formatBRL(a.valor)}</span> : null}
-      </div>
-      {a.embarque_local ? (
-        <p className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground">
-          <MapPin className="size-3.5" /> Embarque: {a.embarque_local}
-        </p>
-      ) : null}
-      {a.observacoes ? <p className="mt-3 text-sm text-muted-foreground">{a.observacoes}</p> : null}
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        {a.contato_telefone ? (
-          <Button asChild size="sm" variant="secondary">
-            <a
-              href={whatsappLink(`Olá ${a.contato_nome ?? ""}! Sou o motorista da sua corrida.`)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <MessageCircle className="size-4" /> Falar com o passageiro
-            </a>
-          </Button>
-        ) : null}
-        {onConcluir && podeConcluir(a.status) ? (
-          <ConfirmarAcao
-            titulo={`Marcar "${a.trecho}" como concluída?`}
-            descricao="O escritório passa a ver essa corrida como finalizada."
-            textoConfirmar="Concluir corrida"
-            destrutivo={false}
-            onConfirmar={onConcluir}
-            trigger={(abrir) => (
-              <Button size="sm" disabled={concluindo} onClick={abrir}>
-                <CheckCircle2 className="size-4" /> Concluir corrida
-              </Button>
-            )}
-          />
-        ) : a.status === "pendente" ? (
-          <p className="text-xs text-muted-foreground">Aguardando confirmação do escritório.</p>
-        ) : null}
       </div>
     </article>
   );

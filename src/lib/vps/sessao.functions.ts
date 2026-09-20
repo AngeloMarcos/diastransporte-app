@@ -1,6 +1,4 @@
-// Server functions de login próprio (deploy em VPS).
-// Só entram em uso quando VITE_AUTH_MODE=vps; no Lovable Cloud o login segue
-// pelo backend gerenciado.
+// Server functions de login próprio (sessão em cookie HttpOnly).
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeader, setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";

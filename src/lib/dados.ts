@@ -1,8 +1,7 @@
-// Adaptador de dados: as telas chamam SEMPRE estas funções, nunca o backend
-// direto. Em MODO_VPS elas caem nas server functions de src/lib/vps/*; no
-// Lovable Cloud seguem pelo cliente Supabase + RLS (comportamento atual).
-// Quando o site estiver 100% na VPS, basta apagar os ramos "cloud" daqui.
-import { supabase } from "@/integrations/supabase/client";
+// Camada de dados do app: as telas chamam SEMPRE estas funções, nunca o backend
+// direto. Cada uma cai numa server function de src/lib/vps/* (Postgres próprio;
+// autorização feita no servidor). Antes da migração havia um segundo ramo, para o
+// Lovable Cloud (Supabase + RLS) — removido quando o Lovable foi desligado.
 import { otimizarImagem } from "@/lib/imagem";
 import type { LeadRow, LeadStatus, NovoLead } from "@/lib/leads";
 import type {
@@ -14,17 +13,9 @@ import type {
   UsuarioAdmin,
   VeiculoFrotaRow,
 } from "@/lib/dados-tipos";
-import { contarReservasMesmoCarroData } from "@/lib/disponibilidade.functions";
 import { hojeEmMaranhao } from "@/lib/fuso-maranhao";
 import { HORA_REGEX } from "@/lib/periodo";
-import { ROTA_COLUMNS, type RotaRow } from "@/lib/rotasMap";
-import {
-  definirPapelAdmin,
-  definirPapelMotorista,
-  listUsuarios,
-  redefinirSenhaUsuario,
-} from "@/lib/usuarios.functions";
-import { MODO_VPS } from "@/lib/vps/config";
+import type { RotaRow } from "@/lib/rotasMap";
 import { sessaoAtual } from "@/lib/vps/sessao.functions";
 import {
   vpsAtribuirMotorista,
@@ -93,19 +84,9 @@ import {
   type PedidoImportRow,
 } from "@/lib/vps/dados-despacho.functions";
 
-function erro(e: { message: string } | null): void {
-  if (e) throw new Error(e.message);
-}
-
 // ------------------------------------------------------------------ rotas
 export async function listarRotasAdmin(): Promise<RotaRow[]> {
-  if (MODO_VPS) return vpsListRotasAdmin();
-  const { data, error } = await supabase
-    .from("rotas")
-    .select(ROTA_COLUMNS)
-    .order("popularidade", { ascending: false });
-  erro(error);
-  return (data ?? []) as unknown as RotaRow[];
+  return vpsListRotasAdmin();
 }
 
 export type NovaRotaInput = {
@@ -119,12 +100,7 @@ export type NovaRotaInput = {
 };
 
 export async function criarRota(input: NovaRotaInput): Promise<void> {
-  if (MODO_VPS) {
-    await vpsCriarRota({ data: input });
-    return;
-  }
-  const { error } = await supabase.from("rotas").insert({ ...input, ativo: false });
-  erro(error);
+  await vpsCriarRota({ data: input });
 }
 
 export async function salvarRota(rota: RotaRow): Promise<void> {
@@ -151,68 +127,28 @@ export async function salvarRota(rota: RotaRow): Promise<void> {
     galeria: rota.galeria,
     ativo: rota.ativo,
   };
-  if (MODO_VPS) {
-    await vpsSalvarRota({ data: { id: rota.id, ...campos } });
-    return;
-  }
-  const { error } = await supabase.from("rotas").update(campos).eq("id", rota.id);
-  erro(error);
+  await vpsSalvarRota({ data: { id: rota.id, ...campos } });
 }
 
 export async function removerRota(id: string): Promise<void> {
-  if (MODO_VPS) {
-    await vpsRemoverRota({ data: { id } });
-    return;
-  }
-  const { error } = await supabase.from("rotas").delete().eq("id", id);
-  erro(error);
+  await vpsRemoverRota({ data: { id } });
 }
 
 // ----------------------------------------------------------- agendamentos
 export async function listarAgendamentos(): Promise<AgendamentoRow[]> {
-  if (MODO_VPS) return vpsListAgendamentos();
-  const { data, error } = await supabase
-    .from("agendamentos")
-    .select("*")
-    .order("created_at", { ascending: false });
-  erro(error);
-  return (data ?? []) as AgendamentoRow[];
+  return vpsListAgendamentos();
 }
 
-export async function listarMinhasViagens(userId: string): Promise<AgendamentoRow[]> {
-  if (MODO_VPS) return vpsMinhasViagens();
-  const { data, error } = await supabase
-    .from("agendamentos")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
-  erro(error);
-  return (data ?? []) as AgendamentoRow[];
+export async function listarMinhasViagens(): Promise<AgendamentoRow[]> {
+  return vpsMinhasViagens();
 }
 
 /** Autoatendimento: o próprio cliente cancela uma reserva pendente/confirmada dele. */
-export async function cancelarMinhaViagem(id: string, userId: string): Promise<void> {
-  if (MODO_VPS) {
-    await vpsCancelarMinhaViagem({ data: { id } });
-    return;
-  }
-  const { data, error } = await supabase
-    .from("agendamentos")
-    .update({ status: "cancelado" })
-    .eq("id", id)
-    .eq("user_id", userId)
-    .in("status", ["pendente", "confirmado"])
-    .select("id");
-  erro(error);
-  if (!data?.length) {
-    throw new Error("Não foi possível cancelar (reserva não encontrada ou já concluída).");
-  }
+export async function cancelarMinhaViagem(id: string): Promise<void> {
+  await vpsCancelarMinhaViagem({ data: { id } });
 }
 
-export async function criarReservas(
-  itens: NovaReserva[],
-  userId: string,
-): Promise<AgendamentoRow[]> {
+export async function criarReservas(itens: NovaReserva[]): Promise<AgendamentoRow[]> {
   // Reforço no lado do servidor (não confiar só na validação do formulário):
   // sem WhatsApp válido a reserva não pode ser operacionalizada — ninguém
   // consegue avisar o cliente sobre o carro.
@@ -239,7 +175,7 @@ export async function criarReservas(
   // Trava contra reserva duplicada: mesma rota, data, horário e carro, ainda
   // ativa. Cobre tanto duplo-clique quanto reenviar o checkout depois de uma
   // resposta que falhou sem o cliente perceber que já tinha sido criada.
-  const existentes = await listarMinhasViagens(userId);
+  const existentes = await listarMinhasViagens();
   for (const item of itens) {
     const duplicada = existentes.find(
       (a) =>
@@ -256,13 +192,7 @@ export async function criarReservas(
     }
   }
 
-  if (MODO_VPS) return vpsCriarReservas({ data: { itens } });
-  const { data, error } = await supabase
-    .from("agendamentos")
-    .insert(itens.map((i) => ({ ...i, user_id: userId })))
-    .select("*");
-  erro(error);
-  return (data ?? []) as AgendamentoRow[];
+  return vpsCriarReservas({ data: { itens } });
 }
 
 /**
@@ -275,28 +205,17 @@ export async function contarConflitosPotenciais(
   data: string,
 ): Promise<number> {
   if (!data) return 0;
-  if (MODO_VPS) return vpsContarMesmoCarroData({ data: { carro, data } });
-  return contarReservasMesmoCarroData({ data: { carro, data } });
+  return vpsContarMesmoCarroData({ data: { carro, data } });
 }
 
 export async function atualizarStatusAgendamento(id: string, status: string): Promise<void> {
-  if (MODO_VPS) {
-    await vpsAtualizarStatus({
-      data: { id, status: status as "pendente" | "confirmado" | "concluido" | "cancelado" },
-    });
-    return;
-  }
-  const { error } = await supabase.from("agendamentos").update({ status }).eq("id", id);
-  erro(error);
+  await vpsAtualizarStatus({
+    data: { id, status: status as "pendente" | "confirmado" | "concluido" | "cancelado" },
+  });
 }
 
 export async function removerAgendamento(id: string): Promise<void> {
-  if (MODO_VPS) {
-    await vpsRemoverAgendamento({ data: { id } });
-    return;
-  }
-  const { error } = await supabase.from("agendamentos").delete().eq("id", id);
-  erro(error);
+  await vpsRemoverAgendamento({ data: { id } });
 }
 
 /** Admin atribui (ou remove, com `motoristaId: null`) um motorista a um agendamento. */
@@ -304,101 +223,44 @@ export async function atribuirMotorista(
   agendamentoId: string,
   motoristaId: string | null,
 ): Promise<void> {
-  if (MODO_VPS) {
-    await vpsAtribuirMotorista({ data: { id: agendamentoId, motoristaId } });
-    return;
-  }
-  const { error } = await supabase
-    .from("agendamentos")
-    .update({ motorista_id: motoristaId })
-    .eq("id", agendamentoId);
-  erro(error);
+  await vpsAtribuirMotorista({ data: { id: agendamentoId, motoristaId } });
 }
 
-export async function listarCorridasMotorista(motoristaId: string): Promise<AgendamentoRow[]> {
-  if (MODO_VPS) return vpsMinhasCorridas();
-  const { data, error } = await supabase
-    .from("agendamentos")
-    .select("*")
-    .eq("motorista_id", motoristaId)
-    .order("created_at", { ascending: false });
-  erro(error);
-  return (data ?? []) as AgendamentoRow[];
+export async function listarCorridasMotorista(): Promise<AgendamentoRow[]> {
+  return vpsMinhasCorridas();
 }
 
 /** Autoatendimento: o motorista marca como concluída uma corrida confirmada e atribuída a ele. */
-export async function concluirCorridaComoMotorista(id: string, motoristaId: string): Promise<void> {
-  if (MODO_VPS) {
-    await vpsConcluirCorrida({ data: { id } });
-    return;
-  }
-  const { data, error } = await supabase
-    .from("agendamentos")
-    .update({ status: "concluido" })
-    .eq("id", id)
-    .eq("motorista_id", motoristaId)
-    .eq("status", "confirmado")
-    .select("id");
-  erro(error);
-  if (!data?.length) {
-    throw new Error("Não foi possível concluir (corrida não encontrada ou não confirmada).");
-  }
+export async function concluirCorridaComoMotorista(id: string): Promise<void> {
+  await vpsConcluirCorrida({ data: { id } });
 }
 
 // -------------------------------------------------------------- conteúdo
 export async function listarConteudoAdmin(): Promise<ConteudoBloco[]> {
-  if (MODO_VPS) return vpsListConteudoAdmin();
-  const { data, error } = await supabase
-    .from("conteudo_site")
-    .select("id, chave, secao, titulo, texto, imagem, ordem")
-    .order("ordem", { ascending: true });
-  erro(error);
-  return (data ?? []) as ConteudoBloco[];
+  return vpsListConteudoAdmin();
 }
 
 export async function criarBlocoConteudo(chave: string): Promise<void> {
-  if (MODO_VPS) {
-    await vpsCriarBloco({ data: { chave } });
-    return;
-  }
-  const { error } = await supabase.from("conteudo_site").insert({ chave, secao: "geral" });
-  erro(error);
+  await vpsCriarBloco({ data: { chave } });
 }
 
 export async function salvarBlocoConteudo(bloco: ConteudoBloco): Promise<void> {
-  const campos = {
-    titulo: bloco.titulo,
-    texto: bloco.texto,
-    imagem: bloco.imagem,
-    ordem: Number(bloco.ordem) || 0,
-  };
-  if (MODO_VPS) {
-    await vpsSalvarBloco({ data: { id: bloco.id, ...campos } });
-    return;
-  }
-  const { error } = await supabase.from("conteudo_site").update(campos).eq("id", bloco.id);
-  erro(error);
+  await vpsSalvarBloco({
+    data: {
+      id: bloco.id,
+      titulo: bloco.titulo,
+      texto: bloco.texto,
+      imagem: bloco.imagem,
+      ordem: Number(bloco.ordem) || 0,
+    },
+  });
 }
 
 export async function removerBlocoConteudo(id: string): Promise<void> {
-  if (MODO_VPS) {
-    await vpsRemoverBloco({ data: { id } });
-    return;
-  }
-  const { error } = await supabase.from("conteudo_site").delete().eq("id", id);
-  erro(error);
+  await vpsRemoverBloco({ data: { id } });
 }
 
 // ---------------------------------------------------------------- frota
-// Só existe o ramo VPS por enquanto: o cliente Supabase tipado usado aqui
-// (createClient<Database>) só aceita nomes de tabela que já estão em
-// src/integrations/supabase/types.ts, e esse arquivo só é regenerado pelo
-// pipeline do Lovable depois que supabase/migrations/20260907010000_frota.sql
-// for de fato aplicada — não dá pra escrever supabase.from("frota_veiculos")
-// sem quebrar o typecheck antes disso. A aba "Frota" do admin fica escondida
-// fora de MODO_VPS (ver admin.tsx) até esse ramo existir. A LEITURA pública
-// (frota.functions.ts) já funciona nos dois backends desde já — usa um
-// cliente Supabase avulso, sem essa trava de tipos.
 export type NovoVeiculoInput = {
   nome: string;
   modelo: string;
@@ -412,69 +274,41 @@ export type NovoVeiculoInput = {
 };
 
 export async function listarFrotaVeiculosAdmin(): Promise<VeiculoFrotaRow[]> {
-  if (MODO_VPS) return vpsListFrotaVeiculosAdmin();
-  throw new Error("Edição de frota ainda não disponível neste ambiente.");
+  return vpsListFrotaVeiculosAdmin();
 }
 
 export async function criarVeiculoFrota(input: NovoVeiculoInput): Promise<void> {
-  if (MODO_VPS) {
-    await vpsCriarVeiculoFrota({ data: input });
-    return;
-  }
-  throw new Error("Edição de frota ainda não disponível neste ambiente.");
+  await vpsCriarVeiculoFrota({ data: input });
 }
 
 export async function salvarVeiculoFrota(veiculo: VeiculoFrotaRow): Promise<void> {
-  if (MODO_VPS) {
-    await vpsSalvarVeiculoFrota({ data: veiculo });
-    return;
-  }
-  throw new Error("Edição de frota ainda não disponível neste ambiente.");
+  await vpsSalvarVeiculoFrota({ data: veiculo });
 }
 
 export async function removerVeiculoFrota(id: string): Promise<void> {
-  if (MODO_VPS) {
-    await vpsRemoverVeiculoFrota({ data: { id } });
-    return;
-  }
-  throw new Error("Edição de frota ainda não disponível neste ambiente.");
+  await vpsRemoverVeiculoFrota({ data: { id } });
 }
 
 export type NovaFotoGaleriaInput = { foto: string; alt: string; ordem: number };
 
 export async function listarFrotaGaleriaAdmin(): Promise<FotoGaleriaRow[]> {
-  if (MODO_VPS) return vpsListFrotaGaleriaAdmin();
-  throw new Error("Edição de frota ainda não disponível neste ambiente.");
+  return vpsListFrotaGaleriaAdmin();
 }
 
 export async function criarFotoGaleria(input: NovaFotoGaleriaInput): Promise<void> {
-  if (MODO_VPS) {
-    await vpsCriarFotoGaleria({ data: input });
-    return;
-  }
-  throw new Error("Edição de frota ainda não disponível neste ambiente.");
+  await vpsCriarFotoGaleria({ data: input });
 }
 
 export async function salvarFotoGaleria(foto: FotoGaleriaRow): Promise<void> {
-  if (MODO_VPS) {
-    await vpsSalvarFotoGaleria({ data: foto });
-    return;
-  }
-  throw new Error("Edição de frota ainda não disponível neste ambiente.");
+  await vpsSalvarFotoGaleria({ data: foto });
 }
 
 export async function removerFotoGaleria(id: string): Promise<void> {
-  if (MODO_VPS) {
-    await vpsRemoverFotoGaleria({ data: { id } });
-    return;
-  }
-  throw new Error("Edição de frota ainda não disponível neste ambiente.");
+  await vpsRemoverFotoGaleria({ data: { id } });
 }
 
 // -------------------------------------------------------------- despacho
-// Portado do car-fleet-co (Etapa 6 do roteiro da fusão). Domínio inteiro
-// VPS-only por enquanto — mesmo motivo de frota acima: essas tabelas não
-// existem no lado Supabase, então não há ramo Supabase pra escrever aqui.
+// Portado do car-fleet-co (Etapa 6 do roteiro da fusão).
 export type FiltroPedidosAdmin = {
   codigo?: string;
   canal?: string;
@@ -490,21 +324,18 @@ export type FiltroPedidosAdmin = {
 };
 
 export async function listarPedidosAdmin(filtro: FiltroPedidosAdmin = {}) {
-  if (MODO_VPS) return vpsListarPedidosAdmin({ data: filtro });
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsListarPedidosAdmin({ data: filtro });
 }
 
 /** Resumo do despacho pra "Visão geral": contagem por status, corridas de
  * hoje e corridas sem motorista atribuído. Equivalente ao dashboard próprio
  * que o car-fleet-co tinha antes da fusão. */
 export async function dashboardDespacho() {
-  if (MODO_VPS) return vpsDashboardDespacho();
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsDashboardDespacho();
 }
 
 export async function pedidoDetalheAdmin(id: number) {
-  if (MODO_VPS) return vpsPedidoDetalheAdmin({ data: { id } });
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsPedidoDetalheAdmin({ data: { id } });
 }
 
 export type NovoPedidoInput = {
@@ -525,8 +356,7 @@ export type NovoPedidoInput = {
 };
 
 export async function criarPedido(input: NovoPedidoInput) {
-  if (MODO_VPS) return vpsCriarPedido({ data: input });
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsCriarPedido({ data: input });
 }
 
 // Edição completa de um pedido já existente (achado revisando UX: só dava
@@ -541,29 +371,22 @@ export type EdicaoPedidoInput = Omit<NovoPedidoInput, "observacoes_internas"> & 
 };
 
 export async function atualizarPedido(input: EdicaoPedidoInput) {
-  if (MODO_VPS) return vpsAtualizarPedido({ data: input });
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsAtualizarPedido({ data: input });
 }
 
 /** Transiciona o status de uma corrida (regra em pedidos-transicoes.ts, validada de novo no servidor). */
 export async function transicionarStatusPedido(pedidoId: number, novoStatus: string) {
-  if (MODO_VPS) return vpsTransicionarStatusPedido({ data: { pedidoId, novoStatus } });
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsTransicionarStatusPedido({ data: { pedidoId, novoStatus } });
 }
 
 /** Atribui (ou remove, com `fornecedorId: null`) o motorista de uma corrida. */
 export async function atribuirMotoristaPedido(pedidoId: number, fornecedorId: string | null) {
-  if (MODO_VPS) return vpsAtribuirMotoristaPedido({ data: { pedidoId, fornecedorId } });
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsAtribuirMotoristaPedido({ data: { pedidoId, fornecedorId } });
 }
 
 /** Observações internas da corrida — nunca visíveis pro motorista, só pro admin. */
 export async function salvarNotasInternas(pedidoId: number, texto: string): Promise<void> {
-  if (MODO_VPS) {
-    await vpsSalvarNotasInternas({ data: { pedidoId, texto } });
-    return;
-  }
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  await vpsSalvarNotasInternas({ data: { pedidoId, texto } });
 }
 
 // -------------------------------------------------------- painel do motorista
@@ -579,63 +402,46 @@ export async function meuFornecedor(): Promise<{
   cidade_atuacao: string;
   email: string;
 } | null> {
-  if (MODO_VPS) return vpsMeuFornecedor();
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsMeuFornecedor();
 }
 
 export async function listarPedidosMotorista() {
-  if (MODO_VPS) return vpsListarPedidosMotorista();
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsListarPedidosMotorista();
 }
 
 export async function transicionarStatusPedidoMotorista(pedidoId: number, novoStatus: string) {
-  if (MODO_VPS) return vpsTransicionarStatusPedidoMotorista({ data: { pedidoId, novoStatus } });
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsTransicionarStatusPedidoMotorista({ data: { pedidoId, novoStatus } });
 }
 
 export async function salvarObservacaoMotorista(pedidoId: number, texto: string): Promise<void> {
-  if (MODO_VPS) {
-    await vpsSalvarObservacaoMotorista({ data: { pedidoId, texto } });
-    return;
-  }
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  await vpsSalvarObservacaoMotorista({ data: { pedidoId, texto } });
 }
 
 export async function listarCategoriasVeiculo() {
-  if (MODO_VPS) return vpsListarCategoriasVeiculo();
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsListarCategoriasVeiculo();
 }
 
 export async function criarCategoriaVeiculo(
   nome: string,
   capacidade_passageiros: number | null,
 ): Promise<void> {
-  if (MODO_VPS) {
-    await vpsCriarCategoriaVeiculo({ data: { nome, capacidade_passageiros } });
-    return;
-  }
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  await vpsCriarCategoriaVeiculo({ data: { nome, capacidade_passageiros } });
 }
 
 export async function atualizarCategoriaVeiculo(
   id: string,
   campos: { nome: string; capacidade_passageiros: number | null } | { ativo: boolean },
 ): Promise<void> {
-  if (MODO_VPS) {
-    await vpsAtualizarCategoriaVeiculo({
-      data:
-        "ativo" in campos
-          ? { id, ativo: campos.ativo, nome: "", capacidade_passageiros: null }
-          : { id, ...campos },
-    });
-    return;
-  }
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  await vpsAtualizarCategoriaVeiculo({
+    data:
+      "ativo" in campos
+        ? { id, ativo: campos.ativo, nome: "", capacidade_passageiros: null }
+        : { id, ...campos },
+  });
 }
 
 export async function listarEmpresasClientes() {
-  if (MODO_VPS) return vpsListarEmpresasClientes();
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsListarEmpresasClientes();
 }
 
 export async function criarEmpresaCliente(campos: {
@@ -644,11 +450,7 @@ export async function criarEmpresaCliente(campos: {
   email_contato: string | null;
   telefone_contato: string | null;
 }): Promise<void> {
-  if (MODO_VPS) {
-    await vpsCriarEmpresaCliente({ data: campos });
-    return;
-  }
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  await vpsCriarEmpresaCliente({ data: campos });
 }
 
 export async function atualizarEmpresaCliente(
@@ -662,39 +464,30 @@ export async function atualizarEmpresaCliente(
       }
     | { ativo: boolean },
 ): Promise<void> {
-  if (MODO_VPS) {
-    await vpsAtualizarEmpresaCliente({
-      data:
-        "ativo" in campos
-          ? {
-              id,
-              ativo: campos.ativo,
-              nome: "",
-              documento: null,
-              email_contato: null,
-              telefone_contato: null,
-            }
-          : { id, ...campos },
-    });
-    return;
-  }
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  await vpsAtualizarEmpresaCliente({
+    data:
+      "ativo" in campos
+        ? {
+            id,
+            ativo: campos.ativo,
+            nome: "",
+            documento: null,
+            email_contato: null,
+            telefone_contato: null,
+          }
+        : { id, ...campos },
+  });
 }
 
 export async function listarCanaisVenda() {
-  if (MODO_VPS) return vpsListarCanaisVenda();
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsListarCanaisVenda();
 }
 
 export async function criarCanalVenda(
   nome: string,
   tipo: "ota" | "site_proprio" | "parceiro" | "outro",
 ): Promise<void> {
-  if (MODO_VPS) {
-    await vpsCriarCanalVenda({ data: { nome, tipo } });
-    return;
-  }
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  await vpsCriarCanalVenda({ data: { nome, tipo } });
 }
 
 export async function atualizarCanalVenda(
@@ -702,16 +495,10 @@ export async function atualizarCanalVenda(
   campos:
     { nome: string; tipo: "ota" | "site_proprio" | "parceiro" | "outro" } | { ativo: boolean },
 ): Promise<void> {
-  if (MODO_VPS) {
-    await vpsAtualizarCanalVenda({
-      data:
-        "ativo" in campos
-          ? { id, ativo: campos.ativo, nome: "", tipo: "outro" }
-          : { id, ...campos },
-    });
-    return;
-  }
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  await vpsAtualizarCanalVenda({
+    data:
+      "ativo" in campos ? { id, ativo: campos.ativo, nome: "", tipo: "outro" } : { id, ...campos },
+  });
 }
 
 // -------------------------------------------------------- fornecedores (motoristas)
@@ -727,17 +514,12 @@ export type Fornecedor = {
 };
 
 export async function listarFornecedores(): Promise<Fornecedor[]> {
-  if (MODO_VPS) return vpsListarFornecedores();
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsListarFornecedores();
 }
 
 /** Observações internas do motorista (nunca visíveis pra ele, só pro admin). */
 export async function salvarNotasFornecedor(fornecedorId: string, texto: string): Promise<void> {
-  if (MODO_VPS) {
-    await vpsSalvarNotasFornecedor({ data: { fornecedorId, texto } });
-    return;
-  }
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  await vpsSalvarNotasFornecedor({ data: { fornecedorId, texto } });
 }
 
 export type NovoMotoristaInput = {
@@ -752,43 +534,37 @@ export type NovoMotoristaInput = {
 
 /** Cria login + cadastro de fornecedor numa transação só (ver vpsCriarMotorista). */
 export async function criarNovoMotorista(input: NovoMotoristaInput) {
-  if (MODO_VPS) return vpsCriarMotorista({ data: input });
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsCriarMotorista({ data: input });
 }
 
 /** Link de acesso novo pro motorista (convite inicial perdido ou "esqueci minha senha"). */
 export async function gerarConviteMotorista(fornecedorId: string) {
-  if (MODO_VPS) return vpsGerarConviteMotorista({ data: { fornecedorId } });
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsGerarConviteMotorista({ data: { fornecedorId } });
 }
 
 /** Remove o motorista, ou — se ele já tiver corridas no histórico — só desativa e revoga o login. */
 export async function removerCadastroMotorista(
   fornecedorId: string,
 ): Promise<{ desativado: boolean; removido: boolean }> {
-  if (MODO_VPS) return vpsRemoverMotorista({ data: { fornecedorId } });
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsRemoverMotorista({ data: { fornecedorId } });
 }
 
 /** Cria um login novo pra um fornecedor desativado, reativando o cadastro
  * (ver vpsReativarMotorista — o usuário original foi apagado, não dá pra
  * só virar um boolean de volta). */
 export async function reativarMotorista(fornecedorId: string, email: string, senha: string) {
-  if (MODO_VPS) return vpsReativarMotorista({ data: { fornecedorId, email, senha } });
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsReativarMotorista({ data: { fornecedorId, email, senha } });
 }
 
 // ---------------------------------------------------- importação de pedidos
 export async function verificarCodigosExistentes(codigos: string[]): Promise<string[]> {
-  if (MODO_VPS) return vpsVerificarCodigosExistentes({ data: { codigos } });
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsVerificarCodigosExistentes({ data: { codigos } });
 }
 
 export async function importarPedidos(
   rows: PedidoImportRow[],
 ): Promise<{ inseridos: number; ignorados: number }> {
-  if (MODO_VPS) return vpsImportarPedidos({ data: { rows } });
-  throw new Error("Despacho ainda não disponível neste ambiente.");
+  return vpsImportarPedidos({ data: { rows } });
 }
 
 // -------------------------------------------------------------- auditoria
@@ -801,16 +577,12 @@ export type FiltroAuditoria = {
 /** Trilha de auditoria das ações do admin (quem mudou o quê e quando).
  * VPS-only: a tabela nasce com a migration 0012 do Postgres da VPS. */
 export async function listarAuditoria(filtro: FiltroAuditoria = {}): Promise<AuditoriaRow[]> {
-  if (MODO_VPS) return vpsListarAuditoria({ data: filtro });
-  throw new Error("Auditoria ainda não disponível neste ambiente.");
+  return vpsListarAuditoria({ data: filtro });
 }
-
 // ------------------------------------------------------------------ leads
-/** Registra um pedido de orçamento do formulário de contato. Best-effort e
- * PÚBLICO: só existe na VPS (migration 0017). No Lovable Cloud devolve
- * salvo:false sem erro — a tela segue pro WhatsApp do mesmo jeito. */
+/** Registra um pedido de orçamento do formulário de contato (público; a tela
+ * trata falha como não-bloqueante, pois o WhatsApp já foi aberto). */
 export async function criarLead(lead: NovoLead): Promise<{ salvo: boolean }> {
-  if (!MODO_VPS) return { salvo: false };
   await vpsCriarLead({ data: lead });
   return { salvo: true };
 }
@@ -818,8 +590,7 @@ export async function criarLead(lead: NovoLead): Promise<{ salvo: boolean }> {
 export async function listarLeads(
   filtro: { status?: LeadStatus; busca?: string } = {},
 ): Promise<LeadRow[]> {
-  if (MODO_VPS) return vpsListarLeads({ data: filtro });
-  throw new Error("Leads ainda não disponíveis neste ambiente.");
+  return vpsListarLeads({ data: filtro });
 }
 
 export async function atualizarLead(dados: {
@@ -827,76 +598,46 @@ export async function atualizarLead(dados: {
   status?: LeadStatus;
   notaInterna?: string;
 }): Promise<void> {
-  if (!MODO_VPS) throw new Error("Leads ainda não disponíveis neste ambiente.");
   await vpsAtualizarLead({ data: dados });
 }
 
 // ------------------------------------------------------ usuários e acessos
 export async function listarUsuarios(): Promise<UsuarioAdmin[]> {
-  return MODO_VPS ? vpsListUsuarios() : listUsuarios();
+  return vpsListUsuarios();
 }
 
 export async function definirAdmin(userId: string, admin: boolean): Promise<void> {
-  if (MODO_VPS) {
-    await vpsDefinirAdmin({ data: { userId, admin } });
-    return;
-  }
-  await definirPapelAdmin({ data: { userId, admin } });
+  await vpsDefinirAdmin({ data: { userId, admin } });
 }
 
 export async function definirMotorista(userId: string, motorista: boolean): Promise<void> {
-  if (MODO_VPS) {
-    await vpsDefinirMotorista({ data: { userId, motorista } });
-    return;
-  }
-  await definirPapelMotorista({ data: { userId, motorista } });
+  await vpsDefinirMotorista({ data: { userId, motorista } });
 }
 
 export async function redefinirSenha(userId: string, senha: string): Promise<void> {
-  if (MODO_VPS) {
-    await vpsRedefinirSenha({ data: { userId, senha } });
-    return;
-  }
-  await redefinirSenhaUsuario({ data: { userId, senha } });
+  await vpsRedefinirSenha({ data: { userId, senha } });
 }
 
 // ---------------------------------------------------------------- imagens
-/** Envia uma foto e devolve a URL pública (disco da VPS ou storage do Cloud). */
-export async function enviarImagem(original: File, prefixo: string): Promise<string> {
+/** Envia uma foto (disco da VPS, via /api/uploads) e devolve a URL pública. */
+export async function enviarImagem(original: File): Promise<string> {
   // Redimensiona e regrava em WebP (sem EXIF/GPS) antes de subir — ver lib/imagem.ts.
   const arquivo = await otimizarImagem(original);
-  if (MODO_VPS) {
-    const corpo = new FormData();
-    corpo.append("arquivo", arquivo);
-    const resposta = await fetch("/api/uploads", { method: "POST", body: corpo });
-    if (!resposta.ok) throw new Error("Falha ao enviar a foto.");
-    const json = (await resposta.json()) as { url?: string; erro?: string };
-    if (!json.url) throw new Error(json.erro ?? "Falha ao enviar a foto.");
-    return json.url;
-  }
-  const caminho = `${prefixo}/${Date.now()}-${arquivo.name.replace(/[^\w.-]/g, "_")}`;
-  const { error } = await supabase.storage.from("rotas").upload(caminho, arquivo);
-  erro(error);
-  const { data, error: erroUrl } = await supabase.storage
-    .from("rotas")
-    .createSignedUrl(caminho, 60 * 60 * 24 * 365 * 20);
-  if (erroUrl || !data) throw erroUrl ?? new Error("Falha ao gerar link da imagem.");
-  return data.signedUrl;
+  const corpo = new FormData();
+  corpo.append("arquivo", arquivo);
+  const resposta = await fetch("/api/uploads", { method: "POST", body: corpo });
+  if (!resposta.ok) throw new Error("Falha ao enviar a foto.");
+  const json = (await resposta.json()) as { url?: string; erro?: string };
+  if (!json.url) throw new Error(json.erro ?? "Falha ao enviar a foto.");
+  return json.url;
 }
 
 // ------------------------------------------------------------------ perfil
-/** Nome/telefone salvos do cliente, para pré-preencher o checkout. */
-export async function perfilContato(
-  userId: string,
-): Promise<{ nome: string | null; telefone: string | null } | null> {
-  if (MODO_VPS) {
-    const sessao = await sessaoAtual();
-    return sessao ? { nome: sessao.nome || null, telefone: sessao.telefone || null } : null;
-  }
-  const { data } = await supabase
-    .from("profiles")
-    .select("nome,telefone")
-    .eq("id", userId)
-    .maybeSingle();
-  return data ?? null;
+/** Nome/telefone salvos do cliente logado, para pré-preencher o checkout. */
+export async function perfilContato(): Promise<{
+  nome: string | null;
+  telefone: string | null;
+} | null> {
+  const sessao = await sessaoAtual();
+  return sessao ? { nome: sessao.nome || null, telefone: sessao.telefone || null } : null;
 }

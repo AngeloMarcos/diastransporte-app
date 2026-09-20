@@ -1,4 +1,4 @@
-// Tipos compartilhados entre as duas infraestruturas (Lovable Cloud e VPS).
+// Tipos das linhas trocadas entre as server functions (src/lib/vps) e as telas.
 // Client-safe: só tipos, nenhum import de servidor.
 export type AgendamentoRow = {
   id: string;

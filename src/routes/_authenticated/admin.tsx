@@ -160,7 +160,6 @@ import {
 } from "@/lib/leads";
 import type { PedidoImportRow } from "@/lib/vps/dados-despacho.functions";
 import { encerrarSessaoAtual, useAuth } from "@/hooks/useAuth";
-import { MODO_VPS } from "@/lib/vps/config";
 import { cn } from "@/lib/utils";
 import { formatBRL } from "@/data/rotas";
 import {
@@ -177,16 +176,16 @@ import {
   type StatusAgendamento,
 } from "@/lib/status";
 import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
-import { ROTA_COLUMNS, type RotaRow } from "@/lib/rotasMap";
+import type { RotaRow } from "@/lib/rotasMap";
 import type {
   AuditoriaRow,
   FotoGaleriaRow,
+  UsuarioAdmin,
   ValorAuditoria,
   VeiculoFrotaRow,
 } from "@/lib/dados-tipos";
 import { transicoesPermitidas, type PedidoStatus } from "@/lib/pedidos-transicoes";
 import { PEDIDO_STATUS_META, PEDIDO_STATUS_OPTIONS, formatarDataHora } from "@/lib/pedidos-status";
-import type { UsuarioAdmin } from "@/lib/usuarios.functions";
 import { comTempoLimite, mensagemAmigavel } from "@/lib/tempo-limite";
 import { faltandoParaPublicarRota, faltandoParaPublicarVeiculo } from "@/lib/publicacao";
 import { linkWhatsappConvite, mensagemConviteMotorista, montarLinkConvite } from "@/lib/convite";
@@ -195,7 +194,7 @@ import { linkWhatsappConvite, mensagemConviteMotorista, montarLinkConvite } from
 // não dava pra favoritar/compartilhar um link direto pra "Corridas" e um
 // F5 sempre voltava pra "Visão geral", perdendo o lugar onde a pessoa
 // estava. "aba" na query string resolve os dois; validação solta aqui (só
-// string) porque a lista de abas válidas (soVps incluso) só existe mais
+// string) porque a lista de abas válidas só existe mais
 // abaixo no arquivo — o componente é quem decide o fallback pra "geral".
 export const Route = createFileRoute("/_authenticated/admin")({
   validateSearch: (busca: Record<string, unknown>): { aba?: string } =>
@@ -263,38 +262,32 @@ function linkWhatsappCliente(telefone: string | null) {
 const abas = [
   { id: "geral", label: "Visão geral", icon: LayoutDashboard },
   { id: "rotas", label: "Rotas e preços", icon: RouteIcon },
-  // Edição de frota só existe no ramo VPS por enquanto — ver o comentário
-  // em dados.ts::listarFrotaVeiculosAdmin sobre por que o ramo Supabase
-  // ainda não existe. Escondida (não removida) fora de MODO_VPS: a aba
-  // nem aparece, em vez de aparecer e dar erro ao tentar carregar.
-  { id: "frota", label: "Frota", icon: Truck, soVps: true },
+  { id: "frota", label: "Frota", icon: Truck },
   { id: "agendamentos", label: "Agendamentos", icon: CalendarCheck },
-  // Pedidos de orçamento do formulário de contato (migration 0017) — VPS-only.
-  { id: "leads", label: "Leads", icon: Inbox, soVps: true },
+  // Pedidos de orçamento do formulário de contato (migration 0017).
+  { id: "leads", label: "Leads", icon: Inbox },
   { id: "conteudo", label: "Conteúdo do site", icon: FileText },
   { id: "usuarios", label: "Usuários e acessos", icon: Users },
-  // Trilha de auditoria (migration 0012) — a tabela só existe no Postgres da
-  // VPS, então a aba some fora de MODO_VPS em vez de aparecer e dar erro.
-  { id: "auditoria", label: "Auditoria", icon: ScrollText, soVps: true },
-  // Despacho (portado do car-fleet-co, Etapa 6/7 do roteiro da fusão) —
-  // mesmo motivo de "frota" acima: VPS-only, aba escondida fora de MODO_VPS.
-  { id: "corridas", label: "Pedidos", icon: Car, soVps: true },
-  { id: "fornecedores", label: "Motoristas", icon: UserCog, soVps: true },
-  { id: "empresas", label: "Empresas", icon: Building2, soVps: true },
-  { id: "canais", label: "Canais de venda", icon: Radio, soVps: true },
-  { id: "categorias", label: "Categorias", icon: Tag, soVps: true },
+  // Trilha de auditoria (migration 0012).
+  { id: "auditoria", label: "Auditoria", icon: ScrollText },
+  // Despacho (portado do car-fleet-co, Etapa 6/7 do roteiro da fusão).
+  { id: "corridas", label: "Pedidos", icon: Car },
+  { id: "fornecedores", label: "Motoristas", icon: UserCog },
+  { id: "empresas", label: "Empresas", icon: Building2 },
+  { id: "canais", label: "Canais de venda", icon: Radio },
+  { id: "categorias", label: "Categorias", icon: Tag },
 ] as const;
 
 function AdminPage() {
   const { user, isAdmin, carregando } = useAuth();
   const navigate = useNavigate();
   const queryClientSair = useQueryClient();
-  const abasVisiveis = abas.filter((a) => !("soVps" in a && a.soVps) || MODO_VPS);
+  const abasVisiveis = abas;
   // "aba" vem sempre da URL, não de um useState à parte — sem uma segunda
   // fonte de verdade não tem como o botão "voltar" do navegador ou um F5
   // ficarem fora de sincronia com o estado. Cai em "geral" se a query
   // string não tiver nada, tiver um valor desconhecido, ou apontar pra uma
-  // aba VPS-only fora de MODO_VPS.
+  // aba que não existe.
   const { aba: abaBruta } = Route.useSearch();
   // Auditoria do site: /admin?aba=pedidos caía na Visão geral porque a chave
   // interna da aba é "corridas" (só o rótulo virou "Pedidos"). Aceita os
@@ -350,7 +343,7 @@ function AdminPage() {
   const { data: despachoLive } = useQuery({
     queryKey: ["admin-dashboard-despacho"],
     queryFn: () => dashboardDespacho(),
-    enabled: isAdmin && MODO_VPS,
+    enabled: isAdmin,
     refetchInterval: 30_000,
   });
   const semMotoristaCount = despachoLive?.semMotorista.length ?? 0;
@@ -378,7 +371,7 @@ function AdminPage() {
   const { data: leadsNovos } = useQuery({
     queryKey: ["admin-leads-novos"],
     queryFn: () => listarLeads({ status: "novo" }),
-    enabled: isAdmin && MODO_VPS,
+    enabled: isAdmin,
     refetchInterval: 60_000,
   });
   const leadsNovosCount = leadsNovos?.length ?? 0;
@@ -437,15 +430,14 @@ function AdminPage() {
             <TabsList className="inline-flex h-auto w-max justify-start gap-1 bg-secondary/60 p-1 md:flex md:w-full md:flex-col md:items-stretch md:gap-0.5 md:bg-transparent md:p-0">
               {abasVisiveis.map(({ id, label, icon: Icon }) => (
                 <Fragment key={id}>
-                  {/* Só existe um segundo grupo (Despacho) quando MODO_VPS
-                      está ligado — nesse caso "rotas" é sempre o primeiro
+                  {/* Dois grupos (Site e Despacho): "rotas" é sempre o primeiro
                       item do bloco Site e "corridas" o primeiro do bloco
                       Despacho, dado o array reordenado acima. Escondido no
                       scroller horizontal do mobile (hidden md:block): um
                       rótulo de texto ali vira só mais um item confuso na
                       faixa, a separação visual só faz sentido na coluna. */}
-                  {MODO_VPS && id === "rotas" && <GrupoLabel texto="Site" />}
-                  {MODO_VPS && id === "corridas" && <GrupoLabel texto="Despacho" />}
+                  {id === "rotas" && <GrupoLabel texto="Site" />}
+                  {id === "corridas" && <GrupoLabel texto="Despacho" />}
                   <TabsTrigger
                     value={id}
                     className="min-h-11 shrink-0 gap-2 whitespace-nowrap px-3 text-sm md:w-full md:justify-start md:rounded-lg md:px-3 md:py-2.5 md:data-[state=active]:bg-secondary md:data-[state=active]:shadow-none"
@@ -496,55 +488,39 @@ function AdminPage() {
             <TabsContent value="rotas" className="mt-0">
               <AdminRotas />
             </TabsContent>
-            {MODO_VPS && (
-              <TabsContent value="frota" className="mt-0">
-                <AdminFrota />
-              </TabsContent>
-            )}
+            <TabsContent value="frota" className="mt-0">
+              <AdminFrota />
+            </TabsContent>
             <TabsContent value="agendamentos" className="mt-0">
               <AdminAgendamentos />
             </TabsContent>
-            {MODO_VPS && (
-              <TabsContent value="leads" className="mt-0">
-                <AdminLeads />
-              </TabsContent>
-            )}
-            {MODO_VPS && (
-              <TabsContent value="corridas" className="mt-0">
-                <AdminPedidos />
-              </TabsContent>
-            )}
-            {MODO_VPS && (
-              <TabsContent value="fornecedores" className="mt-0">
-                <AdminFornecedores />
-              </TabsContent>
-            )}
-            {MODO_VPS && (
-              <TabsContent value="empresas" className="mt-0">
-                <AdminEmpresas />
-              </TabsContent>
-            )}
-            {MODO_VPS && (
-              <TabsContent value="canais" className="mt-0">
-                <AdminCanais />
-              </TabsContent>
-            )}
-            {MODO_VPS && (
-              <TabsContent value="categorias" className="mt-0">
-                <AdminCategorias />
-              </TabsContent>
-            )}
+            <TabsContent value="leads" className="mt-0">
+              <AdminLeads />
+            </TabsContent>
+            <TabsContent value="corridas" className="mt-0">
+              <AdminPedidos />
+            </TabsContent>
+            <TabsContent value="fornecedores" className="mt-0">
+              <AdminFornecedores />
+            </TabsContent>
+            <TabsContent value="empresas" className="mt-0">
+              <AdminEmpresas />
+            </TabsContent>
+            <TabsContent value="canais" className="mt-0">
+              <AdminCanais />
+            </TabsContent>
+            <TabsContent value="categorias" className="mt-0">
+              <AdminCategorias />
+            </TabsContent>
             <TabsContent value="conteudo" className="mt-0">
               <AdminConteudo />
             </TabsContent>
             <TabsContent value="usuarios" className="mt-0">
               <AdminUsuarios />
             </TabsContent>
-            {MODO_VPS && (
-              <TabsContent value="auditoria" className="mt-0">
-                <AdminAuditoria />
-              </TabsContent>
-            )}
+            <TabsContent value="auditoria" className="mt-0">
+              <AdminAuditoria />
+            </TabsContent>
           </div>
         </Tabs>
       </main>
@@ -604,7 +580,6 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
   const { data: despacho, isLoading: carregandoDespacho } = useQuery({
     queryKey: ["admin-dashboard-despacho"],
     queryFn: () => dashboardDespacho(),
-    enabled: MODO_VPS,
     refetchInterval: 30_000,
   });
 
@@ -615,22 +590,18 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
   const { data: frotaLista } = useQuery({
     queryKey: ["admin-frota-veiculos"],
     queryFn: () => listarFrotaVeiculosAdmin(),
-    enabled: MODO_VPS,
   });
   const { data: categoriasLista } = useQuery({
     queryKey: ["admin-categorias-veiculo"],
     queryFn: () => listarCategoriasVeiculo(),
-    enabled: MODO_VPS,
   });
   const { data: motoristasLista } = useQuery({
     queryKey: ["admin-fornecedores"],
     queryFn: () => listarFornecedores(),
-    enabled: MODO_VPS,
   });
   const { data: canaisLista } = useQuery({
     queryKey: ["admin-canais-venda"],
     queryFn: () => listarCanaisVenda(),
-    enabled: MODO_VPS,
   });
 
   if (carregandoAgendamentos || carregandoRotas) {
@@ -722,7 +693,7 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
         </div>
       )}
 
-      {MODO_VPS && passosFeitos < passos.length && (
+      {passosFeitos < passos.length && (
         <div className="rounded-lg border border-border bg-card p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-display text-lg">Primeiros passos</h2>
@@ -907,127 +878,125 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
         )}
       </div>
 
-      {MODO_VPS && (
-        <div className="space-y-6 border-t border-border pt-8">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="font-display text-xl">Despacho</h2>
-            <Button
-              variant="secondary"
-              className="h-11 shrink-0"
-              onClick={() => onIrPara("corridas")}
-            >
-              Ver pedidos
-            </Button>
-          </div>
-
-          {carregandoDespacho ? (
-            <p className="text-sm text-muted-foreground">Carregando despacho…</p>
-          ) : (
-            <>
-              <div className="rounded-lg border border-border bg-card p-5">
-                <h3 className="font-display text-lg">Status dos pedidos</h3>
-                {(() => {
-                  const porStatus = despacho?.porStatus ?? {};
-                  const totalPedidos = Object.values(porStatus).reduce((s, n) => s + n, 0);
-                  // Achado revisando UX: a barra+legenda combinava todos os
-                  // status numa única linha corrida — difícil de bater o
-                  // olho e achar um número específico. Trocado por um grid
-                  // de blocos (um por status), igual ao dashboard que o
-                  // car-fleet-co tinha antes da fusão (print trazido pelo
-                  // usuário) — cada bloco já mostra o rótulo e a contagem.
-                  return totalPedidos ? (
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                      {PEDIDO_STATUS_OPTIONS.map((s) => (
-                        <div key={s} className="rounded-lg border border-border bg-background p-3">
-                          <p className="text-xs text-muted-foreground">
-                            {PEDIDO_STATUS_META[s].label}
-                          </p>
-                          <p className="mt-1 font-display text-xl">{porStatus[s] ?? 0}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-4 text-sm text-muted-foreground">
-                      Nenhum pedido cadastrado ainda.
-                    </p>
-                  );
-                })()}
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-lg border border-border bg-card p-5">
-                  <h3 className="font-display text-lg">Pedidos de hoje</h3>
-                  {despacho?.hoje.length ? (
-                    <div className="mt-4 divide-y divide-border">
-                      {despacho.hoje.map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => onIrPara("corridas")}
-                          className="flex w-full flex-wrap items-center justify-between gap-2 py-3 text-left"
-                        >
-                          <div>
-                            <p className="text-sm font-medium">
-                              {p.passageiro_nome} · {p.cidade_atendimento}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatarDataHora(p.data_hora_encontro)} ·{" "}
-                              {p.direcao === "IN" ? "Chegada" : "Saída"}
-                            </p>
-                          </div>
-                          <Badge
-                            variant="outline"
-                            className={PEDIDO_STATUS_META[p.status as PedidoStatus].badgeClass}
-                          >
-                            {PEDIDO_STATUS_META[p.status as PedidoStatus].label}
-                          </Badge>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-4 text-sm text-muted-foreground">Nenhum pedido hoje.</p>
-                  )}
-                </div>
-
-                <div className="rounded-lg border border-border bg-card p-5">
-                  <h3 className="font-display text-lg">Sem motorista atribuído</h3>
-                  {despacho?.semMotorista.length ? (
-                    <div className="mt-4 divide-y divide-border">
-                      {despacho.semMotorista.map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => onIrPara("corridas")}
-                          className="flex w-full flex-wrap items-center justify-between gap-2 py-3 text-left"
-                        >
-                          <div>
-                            <p className="text-sm font-medium">
-                              #{p.id} · {p.passageiro_nome} · {p.cidade_atendimento}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatarDataHora(p.data_hora_encontro)}
-                            </p>
-                          </div>
-                          <Badge
-                            variant="outline"
-                            className={PEDIDO_STATUS_META[p.status as PedidoStatus].badgeClass}
-                          >
-                            {PEDIDO_STATUS_META[p.status as PedidoStatus].label}
-                          </Badge>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-4 text-sm text-muted-foreground">
-                      Todos os pedidos ativos têm motorista.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
+      <div className="space-y-6 border-t border-border pt-8">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-display text-xl">Despacho</h2>
+          <Button
+            variant="secondary"
+            className="h-11 shrink-0"
+            onClick={() => onIrPara("corridas")}
+          >
+            Ver pedidos
+          </Button>
         </div>
-      )}
+
+        {carregandoDespacho ? (
+          <p className="text-sm text-muted-foreground">Carregando despacho…</p>
+        ) : (
+          <>
+            <div className="rounded-lg border border-border bg-card p-5">
+              <h3 className="font-display text-lg">Status dos pedidos</h3>
+              {(() => {
+                const porStatus = despacho?.porStatus ?? {};
+                const totalPedidos = Object.values(porStatus).reduce((s, n) => s + n, 0);
+                // Achado revisando UX: a barra+legenda combinava todos os
+                // status numa única linha corrida — difícil de bater o
+                // olho e achar um número específico. Trocado por um grid
+                // de blocos (um por status), igual ao dashboard que o
+                // car-fleet-co tinha antes da fusão (print trazido pelo
+                // usuário) — cada bloco já mostra o rótulo e a contagem.
+                return totalPedidos ? (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                    {PEDIDO_STATUS_OPTIONS.map((s) => (
+                      <div key={s} className="rounded-lg border border-border bg-background p-3">
+                        <p className="text-xs text-muted-foreground">
+                          {PEDIDO_STATUS_META[s].label}
+                        </p>
+                        <p className="mt-1 font-display text-xl">{porStatus[s] ?? 0}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-4 text-sm text-muted-foreground">
+                    Nenhum pedido cadastrado ainda.
+                  </p>
+                );
+              })()}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-lg border border-border bg-card p-5">
+                <h3 className="font-display text-lg">Pedidos de hoje</h3>
+                {despacho?.hoje.length ? (
+                  <div className="mt-4 divide-y divide-border">
+                    {despacho.hoje.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => onIrPara("corridas")}
+                        className="flex w-full flex-wrap items-center justify-between gap-2 py-3 text-left"
+                      >
+                        <div>
+                          <p className="text-sm font-medium">
+                            {p.passageiro_nome} · {p.cidade_atendimento}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatarDataHora(p.data_hora_encontro)} ·{" "}
+                            {p.direcao === "IN" ? "Chegada" : "Saída"}
+                          </p>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={PEDIDO_STATUS_META[p.status as PedidoStatus].badgeClass}
+                        >
+                          {PEDIDO_STATUS_META[p.status as PedidoStatus].label}
+                        </Badge>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-4 text-sm text-muted-foreground">Nenhum pedido hoje.</p>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-border bg-card p-5">
+                <h3 className="font-display text-lg">Sem motorista atribuído</h3>
+                {despacho?.semMotorista.length ? (
+                  <div className="mt-4 divide-y divide-border">
+                    {despacho.semMotorista.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => onIrPara("corridas")}
+                        className="flex w-full flex-wrap items-center justify-between gap-2 py-3 text-left"
+                      >
+                        <div>
+                          <p className="text-sm font-medium">
+                            #{p.id} · {p.passageiro_nome} · {p.cidade_atendimento}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatarDataHora(p.data_hora_encontro)}
+                          </p>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={PEDIDO_STATUS_META[p.status as PedidoStatus].badgeClass}
+                        >
+                          {PEDIDO_STATUS_META[p.status as PedidoStatus].label}
+                        </Badge>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-4 text-sm text-muted-foreground">
+                    Todos os pedidos ativos têm motorista.
+                  </p>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -1292,7 +1261,7 @@ function RotaEditor({ rota }: { rota: RotaRow }) {
   async function enviarFoto(arquivo: File, destino: "principal" | "galeria") {
     setEnviandoFoto(true);
     try {
-      const url = await uploadImagem(arquivo, rota.slug);
+      const url = await uploadImagem(arquivo);
       setForm((f) =>
         destino === "principal"
           ? { ...f, foto: url, galeria: [url, ...f.galeria] }
@@ -1886,7 +1855,7 @@ function VeiculoEditor({ veiculo }: { veiculo: VeiculoFrotaRow }) {
   async function enviarFoto(arquivo: File) {
     setEnviandoFoto(true);
     try {
-      const url = await uploadImagem(arquivo, `frota-${slugify(form.nome)}`);
+      const url = await uploadImagem(arquivo);
       setForm((f) => ({ ...f, foto: url }));
       toast.success("Foto enviada. Clique em salvar para publicar.");
     } catch (e) {
@@ -2123,7 +2092,7 @@ function NovaFotoGaleriaDialog() {
   async function enviarFoto(arquivo: File) {
     setEnviando(true);
     try {
-      const url = await uploadImagem(arquivo, "frota-galeria");
+      const url = await uploadImagem(arquivo);
       setFoto(url);
       toast.success("Foto enviada.");
     } catch (e) {
@@ -5192,31 +5161,26 @@ function AdminAgendamentos() {
 
   return (
     <div className="space-y-4">
-      {MODO_VPS && (
-        // Desde a fusão (Etapa 6 do roteiro), toda reserva nova também vira
-        // um pedido na aba "Pedidos" deste mesmo painel — não é mais outro
-        // app (o texto antigo aqui apontava pro car-fleet-co como sistema
-        // separado, o que deixou de existir). A atribuição de motorista
-        // abaixo continua funcionando como reserva manual, só deixou de ser
-        // o caminho principal.
-        <Alert>
-          <Truck className="size-4" />
-          <AlertTitle>O despacho agora acontece na aba "Pedidos"</AlertTitle>
-          <AlertDescription>
-            <Link
-              to="/admin"
-              search={{ aba: "corridas" }}
-              className="font-medium text-primary underline-offset-4 hover:underline"
-            >
-              Abrir Pedidos
-            </Link>
-            . Toda reserva nova vira automaticamente um pedido ali — é lá que motorista, status e
-            acompanhamento devem ser feitos. A atribuição de motorista aqui embaixo continua
-            disponível como reserva manual, não é mais o caminho principal.
-          </AlertDescription>
-        </Alert>
-      )}
-
+      // Desde a fusão (Etapa 6 do roteiro), toda reserva nova também vira // um pedido na aba
+      "Pedidos" deste mesmo painel — não é mais outro // app (o texto antigo aqui apontava pro
+      car-fleet-co como sistema // separado, o que deixou de existir). A atribuição de motorista //
+      abaixo continua funcionando como reserva manual, só deixou de ser // o caminho principal.
+      <Alert>
+        <Truck className="size-4" />
+        <AlertTitle>O despacho agora acontece na aba "Pedidos"</AlertTitle>
+        <AlertDescription>
+          <Link
+            to="/admin"
+            search={{ aba: "corridas" }}
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Abrir Pedidos
+          </Link>
+          . Toda reserva nova vira automaticamente um pedido ali — é lá que motorista, status e
+          acompanhamento devem ser feitos. A atribuição de motorista aqui embaixo continua
+          disponível como reserva manual, não é mais o caminho principal.
+        </AlertDescription>
+      </Alert>
       <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <Button
           variant={filtroStatus === "todos" ? "default" : "secondary"}
@@ -5248,7 +5212,6 @@ function AdminAgendamentos() {
           </Button>
         )}
       </div>
-
       <div className="relative sm:max-w-sm">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -5258,7 +5221,6 @@ function AdminAgendamentos() {
           placeholder="Buscar por nome, telefone ou trecho"
         />
       </div>
-
       {!lista.length ? (
         <ListaVazia icon={CalendarCheck} titulo="Nenhum agendamento ainda" />
       ) : !filtrados.length ? (
@@ -5534,7 +5496,7 @@ function ConteudoEditor({ item }: { item: ConteudoItem }) {
   async function enviarImagem(arquivo: File) {
     setEnviando(true);
     try {
-      const url = await uploadImagem(arquivo, `conteudo/${item.chave}`);
+      const url = await uploadImagem(arquivo);
       setForm((f) => ({ ...f, imagem: url }));
       toast.success("Imagem enviada. Clique em salvar para publicar.");
     } catch (e) {
@@ -6082,15 +6044,8 @@ function AdminUsuarios() {
   const [soAdmins, setSoAdmins] = useState(false);
   const [soMotoristas, setSoMotoristas] = useState(false);
 
-  // Auditoria do site (achado real): esta aba chamava direto as server
-  // functions do Supabase (listUsuarios/definirPapelAdmin/redefinirSenhaUsuario)
-  // em vez do dispatcher dual-backend de @/lib/dados — no deploy da VPS elas
-  // caíam no middleware do Supabase e a aba morria com "Missing Supabase
-  // environment variable(s)". Não era variável de ambiente faltando (e
-  // configurá-las ligaria o painel ao banco ANTIGO do Lovable): era o
-  // caminho de código errado. Agora tudo passa por dados.ts, que escolhe o
-  // backend certo. Tempo limite: sem ele, uma chamada pendurada deixava o
-  // skeleton eterno, sem nunca chegar no "Tentar de novo".
+  // Tempo limite: sem ele, uma chamada pendurada deixava o skeleton eterno, sem
+  // nunca chegar no "Tentar de novo".
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["admin-usuarios"],
     queryFn: () => comTempoLimite(listarUsuarios(), 20_000),

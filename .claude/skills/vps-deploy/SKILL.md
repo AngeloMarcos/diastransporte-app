@@ -1,63 +1,27 @@
 ---
 name: vps-deploy
-description: Deploy and operate the Dias Transporte app on its own VPS once it stops being deployed via "git push origin main" to Lovable — SSH build/restart, reading logs, rollback. Use whenever the user asks to deploy, restart, check logs, or roll back the VPS-hosted app.
+description: Operate the Dias Transporte app on its VPS — logs, restart, rollback, Caddy/HTTPS, backups. Use whenever the user asks to check logs, restart, roll back, or fix something on the server.
 ---
 
-## Status: código pronto, aguardando autorização SSH na VPS
+## Where things are
 
-Alvo confirmado: `root@179.197.74.90` (`srv1829771.hstgr.cloud`). Decisões já tomadas e **já
-implementadas no repo**: auth próprio no app (`src/lib/vps/`), fotos em disco na VPS
-(`/api/uploads`), deploy via GitHub Actions por SSH.
+- Host `179.197.74.90` (Hostinger, Debian), user `deploy`, key `~/.ssh/dias_transporte_claude`.
+- App: `/opt/diastransporte-app`, compose file `docker-compose.staging.yml` (the name is historical; it is the production stack): services `app`, `db` (Postgres 16, volume `diastransporte-app_db`), `caddy` (80/443, Let's Encrypt for `www.diastransporte.site`), `autoheal`. The app is **not** published on any host port; only Caddy is.
+- Old stacks `/opt/dias-transporte` and `/opt/car-fleet-co` are stopped (volumes kept). Do not start the old Caddy: it would fight the new one for 80/443.
+- DNS lives in the Hostinger panel (owner-managed): `A www → 179.197.74.90`. The apex `@` is not set up; its Caddy block is commented out in `infra/Caddyfile`.
 
-O que já existe e está commitado, pronto para rodar assim que houver acesso:
-- `docker-compose.yml` + `Dockerfile` — stack `db` (Postgres 16) + `app` (nitro preset
-  `node_server`, `VITE_AUTH_MODE=vps`), porta 3000 só em `127.0.0.1` (Caddy/Nginx do host
-  faz o proxy/HTTPS).
-- `.github/workflows/deploy.yml` — dispara a cada push em `main`: SSH na VPS, `git reset
-  --hard origin/main`, rebuild do container `app`, roda `db/migrate.mjs` com a role de
-  migration, sobe `app`, confere `curl` no site. Precisa dos secrets do repo `SSH_HOST`,
-  `SSH_USER`, `SSH_KEY`, `SSH_PORT` (opcional) — nenhum foi criado ainda.
-- `infra/vps-bootstrap.sh` — script idempotente pra autorizar as chaves, criar o usuário
-  `deploy`, e endurecer a VPS (`bash infra/vps-bootstrap.sh {keys|deploy|harden|lockdown|all}`).
+## Everyday commands (prefix: `cd /opt/diastransporte-app && docker compose -f docker-compose.staging.yml`)
 
-O que falta, na ordem:
-1. Autorizar as duas chaves ed25519 já geradas localmente no `authorized_keys` da VPS —
-   `~/.ssh/dias_transporte_claude` (uso interativo) e `~/.ssh/dias_transporte_deploy_ci`
-   (vira o secret `SSH_KEY` do GitHub Actions). Rodar `infra/vps-bootstrap.sh keys` (como
-   root, via Terminal web do painel Hostinger ou senha de root uma única vez) — **o
-   gerenciador de "Chave SSH" do painel só injeta em VPS novas, não numa já rodando.** Não
-   confiar em quem disser "adicionei a chave" sem prova real; testar sempre com
-   `ssh -i ~/.ssh/dias_transporte_claude root@179.197.74.90 "echo ok"`.
-2. Rodar `infra/vps-bootstrap.sh deploy` (cria o usuário `deploy` com sudo) e depois
-   `harden` (ufw + fail2ban + atualizações automáticas). Só rodar `lockdown` (desativa
-   root/senha por SSH) **depois** de confirmar que `ssh deploy@179.197.74.90` funciona.
-3. Clonar o repo em `/opt/dias-transporte` na VPS, copiar `.env.example` → `.env` e
-   preencher (`POSTGRES_PASSWORD`, `SESSION_SECRET` via `openssl rand -hex 32`, `APP_URL`).
-4. `docker compose up -d db`, aplicar `db/migrations/0002_roles.sql` manualmente com a role
-   de migration (exige a variável `app_password`, ver comentário no arquivo), então
-   `DATABASE_URL_MIGRATION=... node db/migrate.mjs --seed` pra schema + dados reais.
-5. `ADMIN_SENHA_INICIAL=... node db/criar-admins.mjs` pra criar os admins com senha
-   provisória (troque no primeiro acesso).
-6. `docker compose up -d app`, conferir que o site responde.
-7. Configurar os secrets do GitHub Actions e testar um push em `main` de verdade.
+- Logs: `… logs -f --tail=200 app` (or `db`, `caddy`). Status: `… ps`.
+- Restart without rebuild: `… restart app`. Deploy: see the `deploy` skill.
+- Rollback: `git reset --hard <previous-commit>`, `… build app`, `… up -d --no-deps app` (migrations only move forward — never roll back schema by hand without a backup).
+- Caddyfile change: `… up -d --force-recreate caddy` (the single-file bind mount goes stale after `git reset`).
+- Secrets live in `/opt/diastransporte-app/.env` (not in git; a copy of the previous one is in `/home/deploy/backups/`). Changing `APP_URL` changes the cookie `Secure` flag.
 
-## Como operar depois de tudo isso rodando
+## Backups
 
-- **Deploy**: automático a cada push em `main` (workflow acima). Manual: `workflow_dispatch`
-  pela aba Actions do GitHub, ou direto na VPS:
-  `ssh deploy@179.197.74.90 "cd /opt/dias-transporte && git pull && docker compose up -d --build app"`
-- **Logs**: `ssh deploy@179.197.74.90 "docker compose logs -f --tail=200 app"` (ou `db` pro
-  Postgres).
-- **Restart sem rebuild**: `ssh deploy@179.197.74.90 "cd /opt/dias-transporte && docker compose restart app"`
-- **Rollback**: `git reset --hard <commit-anterior>` na VPS + `docker compose up -d --build app`
-  (não há releases versionadas separadas hoje — considerar isso se downtime de rebuild virar
-  problema).
-- **Migração de imagens**: `db/migrar-imagens.mjs` baixa fotos do site Lovable ainda em
-  produção e reescreve os caminhos pro disco da VPS — rodar uma vez, depois do seed, antes de
-  cortar o tráfego pra VPS.
+`infra/backup-postgres.sh` (copy at `/home/deploy/backup-postgres.sh`, systemd timer daily ~04:00, 14 days kept in `/home/deploy/backups`) dumps every database it finds running plus the uploads volume; stopped stacks are skipped. To prove a restore works: `scp infra/testar-restauracao.sh deploy@VPS:/tmp/ && ssh deploy@VPS bash /tmp/testar-restauracao.sh` (never pipe it through `ssh bash -s`).
 
-## Antes de mexer em produção
+## Before touching production
 
-Sempre confirmar com o usuário antes de restart/deploy que pode causar downtime, e nunca
-rodar comandos destrutivos (`rm -rf`, `docker system prune`, `git reset --hard` sem checar o
-que será descartado, etc.) na VPS sem checar exatamente o que será afetado.
+Confirm with the user before anything that can cause downtime or data loss (restart during business hours, `down`, volume removal, restore over live data, `git reset --hard` on the server when there are uncommitted changes). Never run destructive commands without checking exactly what they affect.

@@ -1,49 +1,30 @@
 name: Deploy VPS
 
-# ATENÇÃO: este arquivo veio de vendor/car-fleet-co ou do clone inicial do
-# wander-book-craft (Etapa 0/1 do roteiro da fusão) e nunca foi adaptado pra
-# este app — achado revisando por que um "git reset --hard" no staging
-# quebrava o deploy (causa real era outra, ver commit "Para de versionar
-# .env", mas isso aqui é um risco à parte). APP_DIR abaixo aponta pro
-# diretório de PRODUÇÃO do wander-book-craft (/opt/dias-transporte), não
-# pro staging deste app novo (/opt/diastransporte-app); o comentário
-# original também presumia repositório privado (este é público, por
-# decisão do roteiro) e usa docker-compose.yml/porta padrão em vez do
-# docker-compose.staging.yml/porta 3002 que o staging real usa. Trigger
-# automático desligado até isto ser revisado e apontado pro lugar certo —
-# hoje só roda se alguém disparar manualmente (workflow_dispatch), então
-# mesmo que as secrets SSH_HOST/SSH_USER/SSH_KEY existam neste repo, nada
-# dispara sozinho a cada push.
-#
-# Segredos necessários no repositório, quando isto for reativado
-# (Settings → Secrets and variables → Actions):
-#   SSH_HOST  → IP ou host da VPS
-#   SSH_USER  → usuário com acesso ao diretório de deploy e ao grupo docker
-#   SSH_KEY   → chave privada SSH (a pública já precisa estar em
-#               ~/.ssh/authorized_keys do SSH_USER na VPS)
+# Deploy manual (workflow_dispatch): faz na VPS o mesmo que o passo 5 da skill
+# "deploy" — busca o commit, reconstrói a imagem, aplica migrations e recria o app.
+# Precisa dos segredos do repositório (Settings → Secrets and variables → Actions):
+#   SSH_HOST  → IP ou host da VPS (179.197.74.90)
+#   SSH_USER  → usuário com acesso ao diretório do app e ao grupo docker (deploy)
+#   SSH_KEY   → chave privada SSH (a pública já precisa estar em ~/.ssh/authorized_keys)
 #   SSH_PORT  → opcional (padrão 22)
-# Variável opcional (Settings → Secrets and variables → Actions → Variables):
-#   APP_URL   → usada só pra conferir se o site respondeu depois do deploy
+# Variável opcional: APP_URL → endereço conferido depois do deploy
+# (padrão https://www.diastransporte.site).
 
 on:
   workflow_dispatch:
 
 concurrency:
   group: deploy-vps
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
-  APP_DIR: /opt/dias-transporte # ver aviso acima — confirmar/corrigir antes de reativar
+  APP_DIR: /opt/diastransporte-app
+  COMPOSE: docker compose -f docker-compose.staging.yml
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Empacotar o commit
-        run: git archive HEAD --format=tar.gz -o /tmp/dias-transporte-deploy.tar.gz
-
       - name: Configurar chave SSH
         run: |
           mkdir -p ~/.ssh
@@ -51,36 +32,23 @@ jobs:
           chmod 600 ~/.ssh/id_deploy
           ssh-keyscan -p "${{ secrets.SSH_PORT || 22 }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Enviar pacote pra VPS
-        run: |
-          scp -i ~/.ssh/id_deploy -P "${{ secrets.SSH_PORT || 22 }}" \
-            /tmp/dias-transporte-deploy.tar.gz \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/dias-transporte-deploy.tar.gz"
-
-      - name: Extrair, migrar e reiniciar
+      - name: Atualizar, migrar e reiniciar
         run: |
           ssh -i ~/.ssh/id_deploy -p "${{ secrets.SSH_PORT || 22 }}" \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" bash -euo pipefail <<'REMOTO'
-          cd ${{ env.APP_DIR }}
-          tar xzf /tmp/dias-transporte-deploy.tar.gz
-          rm /tmp/dias-transporte-deploy.tar.gz
-          echo "${{ github.sha }}" > .deployed_commit
-          # O .env versionado no repo é o de dev/Lovable e sobrescreve o
-          # nosso a cada extração — restaura sempre da cópia de produção
-          # (fora do controle do git, gerada uma vez na VPS).
-          cp "$HOME/.env.secrets.bak" .env
-          chmod 600 .env
-          docker compose build app
-          docker compose up -d db
-          docker compose run --rm --entrypoint sh app -c 'node db/migrate.mjs'
-          docker compose up -d app
+          cd /opt/diastransporte-app
+          git fetch -q origin
+          git reset -q --hard "${{ github.sha }}"
+          docker compose -f docker-compose.staging.yml build app
+          docker compose -f docker-compose.staging.yml run --rm -T app node db/migrate.mjs
+          docker compose -f docker-compose.staging.yml up -d --no-deps app
           docker image prune -f
           REMOTO
 
       - name: Conferir se o site responde
         run: |
           for i in $(seq 1 20); do
-            if curl -fsS -o /dev/null "${{ vars.APP_URL || 'http://179.197.74.90' }}"; then
+            if curl -fsS -o /dev/null "${{ vars.APP_URL || 'https://www.diastransporte.site' }}"; then
               echo "site respondendo"; exit 0
             fi
             sleep 5
