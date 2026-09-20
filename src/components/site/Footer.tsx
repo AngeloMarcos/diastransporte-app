@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Instagram, MessageCircle } from "lucide-react";
-import logo from "@/assets/logo.jpeg";
+import logo from "@/assets/logo-96.webp";
 import { EMPRESA } from "@/data/rotas";
 import { whatsappLink } from "@/lib/whatsapp";
 import { Button } from "@/components/ui/button";

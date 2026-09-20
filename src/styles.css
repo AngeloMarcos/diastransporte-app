@@ -1,6 +1,10 @@
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
+/* Fontes servidas pelo próprio site (variáveis, só os subconjuntos usados são baixados):
+   sem CSS externo bloqueando a renderização e sem o Google recebendo o IP do visitante. */
+@import "@fontsource-variable/inter/wght.css";
+@import "@fontsource-variable/oswald/wght.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -42,8 +46,8 @@
   --color-surface-foreground: var(--surface-foreground);
   --color-whats: var(--whats);
   --color-whats-foreground: var(--whats-foreground);
-  --font-display: "Oswald", "Arial Narrow", sans-serif;
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Oswald Variable", "Oswald", "Arial Narrow", sans-serif;
+  --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {

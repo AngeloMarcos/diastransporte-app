@@ -27,10 +27,10 @@ describe("cabecalhosDeSeguranca", () => {
       "max-age=",
     );
   });
-  it("libera as fontes do Google e imagens https (as fotos do site)", () => {
+  it("não depende de terceiros para fontes e ainda permite imagens https (as fotos do site)", () => {
     const csp = cabecalhosDeSeguranca({ https: true })["content-security-policy"] ?? "";
-    expect(csp).toContain("https://fonts.googleapis.com");
-    expect(csp).toContain("https://fonts.gstatic.com");
+    expect(csp).not.toContain("googleapis");
+    expect(csp).not.toContain("gstatic");
     expect(csp).toMatch(/img-src[^;]*https:/);
   });
 });

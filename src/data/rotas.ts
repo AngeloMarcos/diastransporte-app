@@ -1,11 +1,11 @@
-import frota1 from "@/assets/frota-1.jpeg";
-import frota2 from "@/assets/frota-2.jpeg";
-import frota3 from "@/assets/frota-3.jpeg";
-import frota4 from "@/assets/frota-4.jpeg";
-import frota5 from "@/assets/frota-5.jpeg";
-import frota6 from "@/assets/frota-6.jpeg";
-import frota7 from "@/assets/frota-7.jpeg";
-import frota8 from "@/assets/frota-8.jpeg";
+import frota1 from "@/assets/frota-1.webp";
+import frota2 from "@/assets/frota-2.webp";
+import frota3 from "@/assets/frota-3.webp";
+import frota4 from "@/assets/frota-4.webp";
+import frota5 from "@/assets/frota-5.webp";
+import frota6 from "@/assets/frota-6.webp";
+import frota7 from "@/assets/frota-7.webp";
+import frota8 from "@/assets/frota-8.webp";
 
 export const fotos = {
   cronosPredio: frota1,

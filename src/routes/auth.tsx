@@ -272,6 +272,7 @@ function AuthPage() {
               <Input
                 id="nova-senha"
                 type="password"
+                autoComplete="new-password"
                 required
                 minLength={SENHA_MIN}
                 value={novaSenhaRecuperacao}
@@ -467,6 +468,7 @@ function AuthPage() {
               <Input
                 id="senha"
                 type="password"
+                autoComplete={modo === "criar" ? "new-password" : "current-password"}
                 value={senha}
                 onChange={(e) => setSenha(e.target.value)}
                 required

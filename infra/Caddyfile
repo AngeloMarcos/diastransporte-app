@@ -10,6 +10,13 @@
 
 www.diastransporte.site {
 	encode zstd gzip
+
+	# Arquivos de public/ (fotos da frota, ícones) não têm hash no nome, então o app
+	# não os marca como cacheáveis; 7 dias evita rebaixar as fotos a cada visita.
+	# /assets/* (com hash) o próprio app já serve como immutable por 1 ano.
+	@estaticos path /frota/* /icon-*.png /apple-touch-icon.png /favicon.png
+	header @estaticos Cache-Control "public, max-age=604800"
+
 	reverse_proxy app:3000
 }
 

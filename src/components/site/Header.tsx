@@ -2,7 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Car, LayoutDashboard, LogIn, LogOut, Phone, UserRound } from "lucide-react";
 
-import logo from "@/assets/logo.jpeg";
+import logo from "@/assets/logo-96.webp";
 import { EMPRESA } from "@/data/rotas";
 import { whatsappLink } from "@/lib/whatsapp";
 import { Button } from "@/components/ui/button";

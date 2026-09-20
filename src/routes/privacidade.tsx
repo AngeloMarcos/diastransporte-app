@@ -79,7 +79,7 @@ function Privacidade() {
         <Lista
           itens={[
             "WhatsApp (Meta): ao abrir a conversa a partir do site, você passa a usar o serviço do WhatsApp, que tem a própria política de privacidade.",
-            "Google Fonts: as fontes do site são carregadas dos servidores do Google, que recebem o endereço de IP de quem visita a página.",
+            "As fontes e as imagens do site são servidas pelo próprio site; não carregamos scripts de anúncios nem de rastreamento de terceiros.",
           ]}
         />
       </Secao>
