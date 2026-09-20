@@ -54,6 +54,22 @@ services:
     labels:
       - autoheal=true
 
+  # HTTPS do domínio (Let's Encrypt automático). Só sobe com o DNS de
+  # www.diastransporte.site apontando pra esta VPS — ver infra/Caddyfile.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
   # "restart: unless-stopped" sozinho só reage a um container que morreu de
   # verdade — um container "unhealthy" (healthcheck falhando, processo
   # travado mas de pé) fica parado no compose puro (sem Swarm) até alguém
@@ -71,3 +87,5 @@ services:
 volumes:
   db:
   uploads:
+  caddy_data:
+  caddy_config:
