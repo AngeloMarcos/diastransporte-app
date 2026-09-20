@@ -266,6 +266,9 @@ function RotaDetalhe() {
     return true;
   }
 
+  // Reserva online só existe pra rota que está no banco (tem id).
+  const reservaOnline = Boolean(rota.id);
+
   /** Único caminho que cria a reserva: joga no carrinho. */
   function adicionarItem(): boolean {
     if (!validarCampos()) return false;
@@ -684,13 +687,26 @@ function RotaDetalhe() {
               />
             </div>
 
-            <Button className="mt-4 w-full" onClick={adicionarEContinuar}>
-              <ShoppingBag className="size-4" /> Adicionar ao carrinho
-            </Button>
+            {/* Auditoria do site: sem rota.id (rota de fallback estático, banco
+                fora do ar) "Adicionar ao carrinho" só mostrava um erro. Nesse
+                caso a reserva online nem é oferecida — fica o WhatsApp, que
+                funciona sem depender do banco. */}
+            {reservaOnline ? (
+              <>
+                <Button className="mt-4 w-full" onClick={adicionarEContinuar}>
+                  <ShoppingBag className="size-4" /> Adicionar ao carrinho
+                </Button>
 
-            <Button variant="secondary" className="mt-2 w-full" onClick={reservarAgora}>
-              <CalendarCheck className="size-4" /> Reservar agora
-            </Button>
+                <Button variant="secondary" className="mt-2 w-full" onClick={reservarAgora}>
+                  <CalendarCheck className="size-4" /> Reservar agora
+                </Button>
+              </>
+            ) : (
+              <p className="mt-4 rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+                A reserva online deste trecho está temporariamente indisponível. Você pode reservar
+                agora pelo WhatsApp com os dados acima.
+              </p>
+            )}
 
             <Button
               className="mt-2 w-full bg-whats text-whats-foreground hover:bg-whats/90"
@@ -699,8 +715,10 @@ function RotaDetalhe() {
               <MessageCircle className="size-4" /> Reservar pelo WhatsApp
             </Button>
             <p className="mt-3 text-xs text-muted-foreground">
-              &quot;Reservar agora&quot; leva você direto ao carrinho para finalizar. Cancelamento
-              grátis até 24h antes.
+              {reservaOnline
+                ? '"Reservar agora" leva você direto ao carrinho para finalizar. '
+                : ""}
+              Cancelamento grátis até 24h antes.
             </p>
           </div>
         </aside>

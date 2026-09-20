@@ -1,6 +1,5 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
@@ -172,12 +171,8 @@ import type {
 } from "@/lib/dados-tipos";
 import { transicoesPermitidas, type PedidoStatus } from "@/lib/pedidos-transicoes";
 import { PEDIDO_STATUS_META, PEDIDO_STATUS_OPTIONS, formatarDataHora } from "@/lib/pedidos-status";
-import {
-  definirPapelAdmin,
-  listUsuarios,
-  redefinirSenhaUsuario,
-  type UsuarioAdmin,
-} from "@/lib/usuarios.functions";
+import type { UsuarioAdmin } from "@/lib/usuarios.functions";
+import { comTempoLimite, mensagemAmigavel } from "@/lib/tempo-limite";
 
 // Achado revisando UX: a aba ativa era só useState — sem URL de verdade,
 // não dava pra favoritar/compartilhar um link direto pra "Corridas" e um
@@ -281,7 +276,11 @@ function AdminPage() {
   // ficarem fora de sincronia com o estado. Cai em "geral" se a query
   // string não tiver nada, tiver um valor desconhecido, ou apontar pra uma
   // aba VPS-only fora de MODO_VPS.
-  const { aba: abaNaUrl } = Route.useSearch();
+  const { aba: abaBruta } = Route.useSearch();
+  // Auditoria do site: /admin?aba=pedidos caía na Visão geral porque a chave
+  // interna da aba é "corridas" (só o rótulo virou "Pedidos"). Aceita os
+  // dois nomes — link que alguém monta pelo nome que vê no menu funciona.
+  const abaNaUrl = abaBruta === "pedidos" ? "corridas" : abaBruta;
   const abaValida = abasVisiveis.find((a) => a.id === abaNaUrl);
   const aba = abaValida?.id ?? "geral";
   function setAba(novaAba: (typeof abas)[number]["id"]) {
@@ -2130,7 +2129,7 @@ function AdminPedidos() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-xl">Pedidos</h2>
-          <p className="text-sm text-muted-foreground">Todas as corridas do despacho.</p>
+          <p className="text-sm text-muted-foreground">Todos os pedidos do despacho.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -2326,7 +2325,7 @@ function AdminPedidos() {
           descricao={
             filtrosAtivos
               ? "Tente ajustar ou limpar os filtros."
-              : 'Crie o primeiro com "Nova corrida" ou traga vários de uma vez com "Importar planilha".'
+              : 'Crie o primeiro com "Novo pedido" ou traga vários de uma vez com "Importar planilha".'
           }
           acao={
             filtrosAtivos && (
@@ -3007,24 +3006,24 @@ function NovaCorridaDialog() {
       });
     },
     onSuccess: () => {
-      toast.success("Corrida criada.");
+      toast.success("Pedido criado.");
       void queryClient.invalidateQueries({ queryKey: ["admin-corridas"] });
       setOpen(false);
       setForm(CORRIDA_VAZIA);
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao criar corrida."),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao criar pedido."),
   });
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm" className="h-11">
-          <Plus className="size-4" /> Nova corrida
+          <Plus className="size-4" /> Novo pedido
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[85dvh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nova corrida</DialogTitle>
+          <DialogTitle>Novo pedido</DialogTitle>
           <DialogDescription>
             Cadastre manualmente uma corrida que não veio pelo checkout do site (telefone, WhatsApp,
             outro canal).
@@ -3173,7 +3172,7 @@ function NovaCorridaDialog() {
             ) : (
               <Plus className="size-4" />
             )}
-            Criar corrida
+            Criar pedido
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -4786,16 +4785,23 @@ function AdminAgendamentos() {
     <div className="space-y-4">
       {MODO_VPS && (
         // Desde a fusão (Etapa 6 do roteiro), toda reserva nova também vira
-        // um pedido na aba "Corridas" deste mesmo painel — não é mais outro
+        // um pedido na aba "Pedidos" deste mesmo painel — não é mais outro
         // app (o texto antigo aqui apontava pro car-fleet-co como sistema
         // separado, o que deixou de existir). A atribuição de motorista
         // abaixo continua funcionando como reserva manual, só deixou de ser
         // o caminho principal.
         <Alert>
           <Truck className="size-4" />
-          <AlertTitle>O despacho agora acontece na aba "Corridas"</AlertTitle>
+          <AlertTitle>O despacho agora acontece na aba "Pedidos"</AlertTitle>
           <AlertDescription>
-            Toda reserva nova vira automaticamente uma corrida ali — é lá que motorista, status e
+            <Link
+              to="/admin"
+              search={{ aba: "corridas" }}
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Abrir Pedidos
+            </Link>
+            . Toda reserva nova vira automaticamente um pedido ali — é lá que motorista, status e
             acompanhamento devem ser feitos. A atribuição de motorista aqui embaixo continua
             disponível como reserva manual, não é mais o caminho principal.
           </AlertDescription>
@@ -5427,20 +5433,27 @@ function AdminAuditoria() {
 function AdminUsuarios() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const carregarUsuarios = useServerFn(listUsuarios);
-  const alterarPapel = useServerFn(definirPapelAdmin);
-  const redefinirSenha = useServerFn(redefinirSenhaUsuario);
   const [busca, setBusca] = useState("");
   const [soAdmins, setSoAdmins] = useState(false);
   const [soMotoristas, setSoMotoristas] = useState(false);
 
-  const { data, isLoading, error } = useQuery({
+  // Auditoria do site (achado real): esta aba chamava direto as server
+  // functions do Supabase (listUsuarios/definirPapelAdmin/redefinirSenhaUsuario)
+  // em vez do dispatcher dual-backend de @/lib/dados — no deploy da VPS elas
+  // caíam no middleware do Supabase e a aba morria com "Missing Supabase
+  // environment variable(s)". Não era variável de ambiente faltando (e
+  // configurá-las ligaria o painel ao banco ANTIGO do Lovable): era o
+  // caminho de código errado. Agora tudo passa por dados.ts, que escolhe o
+  // backend certo. Tempo limite: sem ele, uma chamada pendurada deixava o
+  // skeleton eterno, sem nunca chegar no "Tentar de novo".
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["admin-usuarios"],
-    queryFn: () => carregarUsuarios(),
+    queryFn: () => comTempoLimite(listarUsuarios(), 20_000),
+    retry: 1,
   });
 
   const papel = useMutation({
-    mutationFn: (vars: { userId: string; admin: boolean }) => alterarPapel({ data: vars }),
+    mutationFn: (vars: { userId: string; admin: boolean }) => definirAdmin(vars.userId, vars.admin),
     onSuccess: () => {
       toast.success("Permissões atualizadas.");
       void queryClient.invalidateQueries({ queryKey: ["admin-usuarios"] });
@@ -5448,9 +5461,6 @@ function AdminUsuarios() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atualizar permissões."),
   });
 
-  // Ao contrário do toggle de admin acima (que chama o server fn do Supabase
-  // direto), este vai pelo dispatcher dual-backend em @/lib/dados — não
-  // repete o gap de não funcionar em modo VPS.
   const papelMotorista = useMutation({
     mutationFn: (vars: { userId: string; motorista: boolean }) =>
       definirMotorista(vars.userId, vars.motorista),
@@ -5462,7 +5472,8 @@ function AdminUsuarios() {
   });
 
   const senha = useMutation({
-    mutationFn: (vars: { userId: string; senha: string }) => redefinirSenha({ data: vars }),
+    mutationFn: (vars: { userId: string; senha: string }) =>
+      redefinirSenha(vars.userId, vars.senha),
     onSuccess: () => toast.success("Senha redefinida."),
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao redefinir a senha."),
   });
@@ -5495,10 +5506,26 @@ function AdminUsuarios() {
     );
   }
   if (error) {
+    // O erro real vai pro console; na tela só a mensagem amigável — nunca
+    // texto de infraestrutura pro cliente.
+    console.error("[admin] falha ao carregar usuários:", error);
     return (
-      <p className="text-sm text-red-400">
-        {error instanceof Error ? error.message : "Não foi possível carregar os usuários."}
-      </p>
+      <Alert variant="destructive">
+        <AlertTriangle className="size-4" />
+        <AlertTitle>Não foi possível carregar os usuários</AlertTitle>
+        <AlertDescription>
+          <p>{mensagemAmigavel(error, "Tente de novo em instantes.")}</p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-3"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+          >
+            {isFetching ? <Loader2 className="size-4 animate-spin" /> : null} Tentar de novo
+          </Button>
+        </AlertDescription>
+      </Alert>
     );
   }
 

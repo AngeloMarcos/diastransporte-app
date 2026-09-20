@@ -191,11 +191,15 @@ function Transfers() {
         ) : (
           <div className="mt-8 rounded-lg border border-dashed border-border p-8 text-center">
             <p className="text-sm text-muted-foreground">
-              Nenhum trecho encontrado para “{busca}”.
+              {busca.trim()
+                ? `Nenhum trecho encontrado para “${busca}”.`
+                : "Nenhum trecho disponível no momento. Fale com a gente pelo WhatsApp."}
             </p>
-            <Button size="sm" variant="secondary" className="mt-3" onClick={() => setBusca("")}>
-              Limpar busca
-            </Button>
+            {busca.trim() ? (
+              <Button size="sm" variant="secondary" className="mt-3" onClick={() => setBusca("")}>
+                Limpar busca
+              </Button>
+            ) : null}
           </div>
         )}
 

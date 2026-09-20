@@ -15,6 +15,8 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CarrinhoRouteImport } from './routes/carrinho'
 import { Route as ContatoRouteImport } from './routes/contato'
 import { Route as FrotaRouteImport } from './routes/frota'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedMinhasViagensRouteImport } from './routes/_authenticated/minhas-viagens'
@@ -51,6 +53,16 @@ const ContatoRoute = ContatoRouteImport.update({
 const FrotaRoute = FrotaRouteImport.update({
   id: '/frota',
   path: '/frota',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -101,6 +113,8 @@ export interface FileRoutesByFullPath {
   '/carrinho': typeof CarrinhoRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
+  '/login': typeof LoginRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
@@ -116,6 +130,8 @@ export interface FileRoutesByTo {
   '/carrinho': typeof CarrinhoRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
+  '/login': typeof LoginRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
@@ -133,6 +149,8 @@ export interface FileRoutesById {
   '/carrinho': typeof CarrinhoRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
+  '/login': typeof LoginRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
@@ -150,6 +168,8 @@ export interface FileRouteTypes {
     | '/carrinho'
     | '/contato'
     | '/frota'
+    | '/login'
+    | '/robots.txt'
     | '/sitemap.xml'
     | '/admin'
     | '/minhas-viagens'
@@ -165,6 +185,8 @@ export interface FileRouteTypes {
     | '/carrinho'
     | '/contato'
     | '/frota'
+    | '/login'
+    | '/robots.txt'
     | '/sitemap.xml'
     | '/admin'
     | '/minhas-viagens'
@@ -181,6 +203,8 @@ export interface FileRouteTypes {
     | '/carrinho'
     | '/contato'
     | '/frota'
+    | '/login'
+    | '/robots.txt'
     | '/sitemap.xml'
     | '/_authenticated/admin'
     | '/_authenticated/minhas-viagens'
@@ -198,6 +222,8 @@ export interface RootRouteChildren {
   CarrinhoRoute: typeof CarrinhoRoute
   ContatoRoute: typeof ContatoRoute
   FrotaRoute: typeof FrotaRoute
+  LoginRoute: typeof LoginRoute
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiUploadsRoute: typeof ApiUploadsRouteWithChildren
   TransfersRotaRoute: typeof TransfersRotaRoute
@@ -246,6 +272,20 @@ declare module '@tanstack/react-router' {
       path: '/frota'
       fullPath: '/frota'
       preLoaderRoute: typeof FrotaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sitemap.xml': {
@@ -341,6 +381,8 @@ const rootRouteChildren: RootRouteChildren = {
   CarrinhoRoute: CarrinhoRoute,
   ContatoRoute: ContatoRoute,
   FrotaRoute: FrotaRoute,
+  LoginRoute: LoginRoute,
+  RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiUploadsRoute: ApiUploadsRouteWithChildren,
   TransfersRotaRoute: TransfersRotaRoute,
