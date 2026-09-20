@@ -67,6 +67,7 @@ import {
   vpsCriarCategoriaVeiculo,
   vpsCriarEmpresaCliente,
   vpsCriarMotorista,
+  vpsGerarConviteMotorista,
   vpsCriarPedido,
   vpsImportarPedidos,
   vpsListarCanaisVenda,
@@ -739,7 +740,6 @@ export async function salvarNotasFornecedor(fornecedorId: string, texto: string)
 export type NovoMotoristaInput = {
   nome: string;
   email: string;
-  senha: string;
   telefone: string;
   cidade_atuacao: string;
   regiao_atuacao: string;
@@ -750,6 +750,12 @@ export type NovoMotoristaInput = {
 /** Cria login + cadastro de fornecedor numa transação só (ver vpsCriarMotorista). */
 export async function criarNovoMotorista(input: NovoMotoristaInput) {
   if (MODO_VPS) return vpsCriarMotorista({ data: input });
+  throw new Error("Despacho ainda não disponível neste ambiente.");
+}
+
+/** Link de acesso novo pro motorista (convite inicial perdido ou "esqueci minha senha"). */
+export async function gerarConviteMotorista(fornecedorId: string) {
+  if (MODO_VPS) return vpsGerarConviteMotorista({ data: { fornecedorId } });
   throw new Error("Despacho ainda não disponível neste ambiente.");
 }
 

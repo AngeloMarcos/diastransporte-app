@@ -970,7 +970,8 @@ const senhaMotoristaSchema = z.string().max(72).refine(senhaForte, SENHA_REGRA_T
 const criarMotoristaSchema = z.object({
   nome: z.string().min(2),
   email: z.string().email(),
-  senha: senhaMotoristaSchema,
+  // Sem "senha": o motorista escolhe a própria pelo link de convite (migration
+  // 0016) — antes o admin digitava a senha de outra pessoa.
   telefone: z.string().optional().default(""),
   cidade_atuacao: z.string().min(1),
   regiao_atuacao: z.string().optional().default(""),
@@ -984,7 +985,10 @@ export const vpsCriarMotorista = createServerFn({ method: "POST" })
     const ctx = await contexto();
     const admin = await ctx.admin();
     const { hashSenha } = await import("./auth.server");
-    const senhaHash = await hashSenha(data.senha);
+    const { randomBytes } = await import("crypto");
+    // Senha aleatória que ninguém conhece: a conta nasce sem acesso até o
+    // motorista abrir o convite e escolher a dele.
+    const senhaHash = await hashSenha(randomBytes(32).toString("hex"));
 
     try {
       const criado = await ctx.sql.begin(async (sql) => {
@@ -1032,7 +1036,11 @@ export const vpsCriarMotorista = createServerFn({ method: "POST" })
         entidadeId: criado.fornecedor.id,
         resumo: `Motorista criado: ${data.nome} (${data.email})`,
       });
-      return criado;
+      // O token só existe em claro aqui: a tela mostra o link uma vez (o banco
+      // guarda só o hash) — "Gerar novo link" cria outro se for preciso.
+      const { criarConvite } = await import("./convites.server");
+      const conviteToken = await criarConvite(criado.userId, admin.id);
+      return { ...criado, conviteToken };
     } catch (erro) {
       if (erro && typeof erro === "object" && "code" in erro && erro.code === "23505") {
         throw new Error("Já existe uma conta com este e-mail.");
@@ -1156,6 +1164,42 @@ export const vpsRemoverMotorista = createServerFn({ method: "POST" })
         : `Motorista desativado (tem histórico de corridas): ${nomeMotorista}`,
     });
     return resultado;
+  });
+
+// Gera (ou regenera) o link de acesso de um motorista ativo: serve pro
+// convite inicial perdido e também pro "esqueci minha senha" — o app não tem
+// e-mail, então o admin manda o link novo pelo WhatsApp. Invalida o link
+// anterior ainda não usado.
+export const vpsGerarConviteMotorista = createServerFn({ method: "POST" })
+  .inputValidator((data) => z.object({ fornecedorId: z.string().uuid() }).parse(data))
+  .handler(async ({ data }): Promise<{ token: string; nome: string; telefone: string | null }> => {
+    const ctx = await contexto();
+    const admin = await ctx.admin();
+    const [f] = await ctx.sql<
+      {
+        id: string;
+        nome: string;
+        telefone: string | null;
+        user_id: string | null;
+        ativo: boolean;
+      }[]
+    >`
+      SELECT id, nome, telefone, user_id, ativo FROM public.fornecedores WHERE id = ${data.fornecedorId}
+    `;
+    if (!f) throw new Error("Motorista não encontrado.");
+    if (!f.ativo || !f.user_id) {
+      throw new Error("Este motorista está desativado — reative o cadastro primeiro.");
+    }
+    const { criarConvite } = await import("./convites.server");
+    const token = await criarConvite(f.user_id, admin.id);
+    // Nunca o token na trilha — só o fato de ter sido gerado.
+    await ctx.auditar(admin, {
+      acao: "gerar_convite",
+      entidade: "motorista",
+      entidadeId: f.id,
+      resumo: `Gerou link de acesso para o motorista: ${f.nome}`,
+    });
+    return { token, nome: f.nome, telefone: f.telefone };
   });
 
 // -------------------------------------------------- importação por planilha

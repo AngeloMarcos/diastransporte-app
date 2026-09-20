@@ -3,11 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
+  Ban,
   BellRing,
   Building2,
   CalendarCheck,
   Car,
   Check,
+  Copy,
   FileDown,
   FileSpreadsheet,
   FileText,
@@ -103,6 +105,7 @@ import {
   criarEmpresaCliente,
   criarFotoGaleria,
   criarNovoMotorista,
+  gerarConviteMotorista,
   criarPedido,
   criarRota,
   dashboardDespacho,
@@ -174,6 +177,7 @@ import { PEDIDO_STATUS_META, PEDIDO_STATUS_OPTIONS, formatarDataHora } from "@/l
 import type { UsuarioAdmin } from "@/lib/usuarios.functions";
 import { comTempoLimite, mensagemAmigavel } from "@/lib/tempo-limite";
 import { faltandoParaPublicarRota, faltandoParaPublicarVeiculo } from "@/lib/publicacao";
+import { linkWhatsappConvite, mensagemConviteMotorista, montarLinkConvite } from "@/lib/convite";
 
 // Achado revisando UX: a aba ativa era só useState — sem URL de verdade,
 // não dava pra favoritar/compartilhar um link direto pra "Corridas" e um
@@ -568,6 +572,31 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
     refetchInterval: 30_000,
   });
 
+  // Checklist de primeiros passos (auditoria do site, item 10): cada tela
+  // vazia tinha só um texto, sem dizer POR ONDE começar. Reaproveita as
+  // mesmas consultas (e chaves de cache) das abas — sem custo extra quando a
+  // pessoa entra nelas depois.
+  const { data: frotaLista } = useQuery({
+    queryKey: ["admin-frota-veiculos"],
+    queryFn: () => listarFrotaVeiculosAdmin(),
+    enabled: MODO_VPS,
+  });
+  const { data: categoriasLista } = useQuery({
+    queryKey: ["admin-categorias-veiculo"],
+    queryFn: () => listarCategoriasVeiculo(),
+    enabled: MODO_VPS,
+  });
+  const { data: motoristasLista } = useQuery({
+    queryKey: ["admin-fornecedores"],
+    queryFn: () => listarFornecedores(),
+    enabled: MODO_VPS,
+  });
+  const { data: canaisLista } = useQuery({
+    queryKey: ["admin-canais-venda"],
+    queryFn: () => listarCanaisVenda(),
+    enabled: MODO_VPS,
+  });
+
   if (carregandoAgendamentos || carregandoRotas) {
     return <p className="text-sm text-muted-foreground">Carregando painel…</p>;
   }
@@ -599,6 +628,47 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
   // do radar de quem opera.
   const atrasadas = lista.filter(estaAtrasada);
 
+  const totalPedidos = Object.values(despacho?.porStatus ?? {}).reduce((soma, n) => soma + n, 0);
+  const passos: { id: (typeof abas)[number]["id"]; titulo: string; ok: boolean; dica: string }[] = [
+    {
+      id: "rotas",
+      titulo: "Cadastrar e ativar as rotas",
+      ok: rotasAtivas > 0,
+      dica: "Preços, foto e locais de embarque de cada trecho.",
+    },
+    {
+      id: "frota",
+      titulo: "Cadastrar a frota",
+      ok: (frotaLista ?? []).some((v) => v.ativo),
+      dica: "Um veículo por categoria, com foto — só aparece no site completo.",
+    },
+    {
+      id: "categorias",
+      titulo: "Criar as categorias de veículo",
+      ok: (categoriasLista ?? []).length > 0,
+      dica: "Usadas ao distribuir corridas e importar planilhas.",
+    },
+    {
+      id: "fornecedores",
+      titulo: "Cadastrar os motoristas",
+      ok: (motoristasLista ?? []).length > 0,
+      dica: "Cada um recebe um link para escolher a própria senha.",
+    },
+    {
+      id: "canais",
+      titulo: "Cadastrar os canais de venda",
+      ok: (canaisLista ?? []).length > 0,
+      dica: "De onde vêm os pedidos (site, agências, parceiros).",
+    },
+    {
+      id: "corridas",
+      titulo: "Receber o primeiro pedido",
+      ok: totalPedidos > 0,
+      dica: "Crie um manualmente, importe uma planilha ou espere uma reserva do site.",
+    },
+  ];
+  const passosFeitos = passos.filter((p) => p.ok).length;
+
   return (
     <div className="space-y-8">
       {atrasadas.length > 0 && (
@@ -613,6 +683,61 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
           <Button className="h-11 shrink-0" onClick={() => onIrPara("agendamentos")}>
             Revisar agora
           </Button>
+        </div>
+      )}
+
+      {MODO_VPS && passosFeitos < passos.length && (
+        <div className="rounded-lg border border-border bg-card p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-display text-lg">Primeiros passos</h2>
+            <p className="text-xs text-muted-foreground">
+              {passosFeitos} de {passos.length} concluídos
+            </p>
+          </div>
+          <div
+            className="mt-3 h-2 overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={passos.length}
+            aria-valuenow={passosFeitos}
+            aria-label="Progresso dos primeiros passos"
+          >
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{ width: `${(passosFeitos / passos.length) * 100}%` }}
+            />
+          </div>
+          <ul className="mt-4 divide-y divide-border">
+            {passos.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span
+                    className={cn(
+                      "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border",
+                      p.ok
+                        ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-400"
+                        : "border-border text-transparent",
+                    )}
+                    aria-hidden
+                  >
+                    <Check className="size-3" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className={cn("text-sm font-medium", p.ok && "text-muted-foreground")}>
+                      {p.titulo}
+                      {p.ok && <span className="sr-only"> (concluído)</span>}
+                    </p>
+                    {!p.ok && <p className="text-xs text-muted-foreground">{p.dica}</p>}
+                  </div>
+                </div>
+                {!p.ok && (
+                  <Button size="sm" variant="secondary" onClick={() => onIrPara(p.id)}>
+                    Ir agora
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -639,7 +764,7 @@ function AdminVisaoGeral({ onIrPara }: { onIrPara: (aba: (typeof abas)[number]["
           label="Cancelamentos"
           value={String(contagem["cancelado"] ?? 0)}
           hint="Do total de agendamentos"
-          icon={LayoutDashboard}
+          icon={Ban}
         />
       </div>
 
@@ -4357,6 +4482,7 @@ function AdminFornecedores() {
               <div className="flex items-center gap-2">
                 <AtivoBadge ativo={f.ativo} />
                 {!f.ativo && <ReativarMotoristaDialog fornecedor={f} />}
+                {f.ativo && <BotaoLinkAcesso fornecedor={f} />}
                 <NotasFornecedorDialog fornecedor={f} />
                 <ConfirmarAcao
                   titulo={`Remover o acesso do motorista "${f.nome}"?`}
@@ -4392,7 +4518,6 @@ function AdminFornecedores() {
 const MOTORISTA_VAZIO = {
   nome: "",
   email: "",
-  senha: "",
   telefone: "",
   cidade_atuacao: "",
   regiao_atuacao: "",
@@ -4400,10 +4525,115 @@ const MOTORISTA_VAZIO = {
   observacoes_internas: "",
 };
 
+type ConviteGerado = { token: string; nome: string; telefone: string | null };
+
+// Sprint 3 (auditoria, A6): antes o admin DIGITAVA a senha do motorista. Agora
+// o sistema gera um link de uso único (7 dias) e o próprio motorista escolhe
+// a senha. Sem e-mail (o app não tem provedor): o admin copia o link ou
+// manda direto pelo WhatsApp do motorista.
+function ConviteMotoristaDialog({
+  convite,
+  onClose,
+}: {
+  convite: ConviteGerado | null;
+  onClose: () => void;
+}) {
+  const link = convite ? montarLinkConvite(window.location.origin, convite.token) : "";
+  const whatsapp = convite
+    ? linkWhatsappConvite(convite.telefone, mensagemConviteMotorista(convite.nome, link))
+    : null;
+
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(link);
+      toast.success("Link copiado.");
+    } catch {
+      toast.error("Não consegui copiar — selecione o texto do link e copie manualmente.");
+    }
+  }
+
+  return (
+    <Dialog
+      open={convite !== null}
+      onOpenChange={(aberto) => {
+        if (!aberto) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Link de acesso de {convite?.nome}</DialogTitle>
+          <DialogDescription>
+            Mande este link para o motorista: ele escolhe a própria senha e já entra no painel. Vale
+            por 7 dias e só pode ser usado uma vez.
+          </DialogDescription>
+        </DialogHeader>
+        <Input
+          readOnly
+          value={link}
+          className="h-11 font-mono text-xs"
+          onFocus={(e) => e.currentTarget.select()}
+          aria-label="Link de acesso"
+        />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button className="h-11 flex-1" variant="secondary" onClick={() => void copiar()}>
+            <Copy className="size-4" /> Copiar link
+          </Button>
+          {whatsapp && (
+            <Button
+              asChild
+              className="h-11 flex-1 bg-whats text-whats-foreground hover:bg-whats/90"
+            >
+              <a href={whatsapp} target="_blank" rel="noreferrer">
+                <MessageCircle className="size-4" /> Enviar pelo WhatsApp
+              </a>
+            </Button>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Este link aparece só agora — o sistema guarda apenas uma versão criptografada. Se perder,
+          gere outro (o anterior deixa de valer).
+        </p>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Botão "gerar link de acesso" da linha do motorista (convite perdido ou
+ * "esqueci minha senha" — o app não tem e-mail, então o admin manda o link). */
+function BotaoLinkAcesso({ fornecedor: f }: { fornecedor: Fornecedor }) {
+  const [convite, setConvite] = useState<ConviteGerado | null>(null);
+  const gerar = useMutation({
+    mutationFn: () => gerarConviteMotorista(f.id),
+    onSuccess: (r) => setConvite(r),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao gerar o link."),
+  });
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-9 shrink-0"
+        title={`Gerar link de acesso para ${f.nome}`}
+        aria-label={`Gerar link de acesso para ${f.nome}`}
+        disabled={gerar.isPending}
+        onClick={() => gerar.mutate()}
+      >
+        {gerar.isPending ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <KeyRound className="size-4" />
+        )}
+      </Button>
+      <ConviteMotoristaDialog convite={convite} onClose={() => setConvite(null)} />
+    </>
+  );
+}
+
 function NovoMotoristaDialog() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(MOTORISTA_VAZIO);
+  const [convite, setConvite] = useState<ConviteGerado | null>(null);
 
   const { data: categorias } = useQuery({
     queryKey: ["admin-categorias-veiculo"],
@@ -4416,16 +4646,16 @@ function NovoMotoristaDialog() {
       if (!form.nome.trim() || !form.email.trim() || !form.cidade_atuacao.trim()) {
         throw new Error("Preencha nome, e-mail e cidade de atuação.");
       }
-      if (!senhaForte(form.senha)) throw new Error(SENHA_REGRA_TEXTO);
-      await criarNovoMotorista({
+      return criarNovoMotorista({
         ...form,
         categoria_veiculo_id: form.categoria_veiculo_id || null,
       });
     },
-    onSuccess: () => {
-      toast.success("Motorista criado.");
+    onSuccess: (r) => {
+      toast.success("Motorista criado. Envie o link de acesso para ele.");
       void queryClient.invalidateQueries({ queryKey: ["admin-fornecedores"] });
       setOpen(false);
+      setConvite({ token: r.conviteToken, nome: form.nome, telefone: form.telefone || null });
       setForm(MOTORISTA_VAZIO);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao criar motorista."),
@@ -4442,8 +4672,8 @@ function NovoMotoristaDialog() {
         <DialogHeader>
           <DialogTitle>Novo motorista</DialogTitle>
           <DialogDescription>
-            Cria o login e o cadastro de fornecedor juntos — ele passa a poder entrar no painel para
-            ver as corridas atribuídas a ele.
+            Cria o cadastro e gera um link de acesso: o motorista escolhe a própria senha e passa a
+            poder entrar no painel para ver as corridas atribuídas a ele.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 md:grid-cols-2">
@@ -4456,11 +4686,6 @@ function NovoMotoristaDialog() {
             label="E-mail (login)"
             value={form.email}
             onChange={(v) => setForm((f) => ({ ...f, email: v }))}
-          />
-          <Campo
-            label="Senha (mín. 8 caracteres)"
-            value={form.senha}
-            onChange={(v) => setForm((f) => ({ ...f, senha: v }))}
           />
           <Campo
             label="Telefone"
@@ -4516,6 +4741,7 @@ function NovoMotoristaDialog() {
           </Button>
         </DialogFooter>
       </DialogContent>
+      <ConviteMotoristaDialog convite={convite} onClose={() => setConvite(null)} />
     </Dialog>
   );
 }

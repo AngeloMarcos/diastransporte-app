@@ -22,6 +22,7 @@ import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedMinhasViagensRouteImport } from './routes/_authenticated/minhas-viagens'
 import { Route as AuthenticatedMotoristaRouteImport } from './routes/_authenticated/motorista'
 import { Route as ApiUploadsRouteImport } from './routes/api/uploads'
+import { Route as ConviteTokenRouteImport } from './routes/convite.$token'
 import { Route as TransfersIndexRouteImport } from './routes/transfers.index'
 import { Route as TransfersRotaRouteImport } from './routes/transfers.$rota'
 import { Route as ApiUploadsArquivoRouteImport } from './routes/api/uploads.$arquivo'
@@ -91,6 +92,11 @@ const ApiUploadsRoute = ApiUploadsRouteImport.update({
   path: '/api/uploads',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConviteTokenRoute = ConviteTokenRouteImport.update({
+  id: '/convite/$token',
+  path: '/convite/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TransfersIndexRoute = TransfersIndexRouteImport.update({
   id: '/transfers/',
   path: '/transfers/',
@@ -120,6 +126,7 @@ export interface FileRoutesByFullPath {
   '/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
   '/motorista': typeof AuthenticatedMotoristaRoute
   '/api/uploads': typeof ApiUploadsRouteWithChildren
+  '/convite/$token': typeof ConviteTokenRoute
   '/transfers/$rota': typeof TransfersRotaRoute
   '/transfers/': typeof TransfersIndexRoute
   '/api/uploads/$arquivo': typeof ApiUploadsArquivoRoute
@@ -137,6 +144,7 @@ export interface FileRoutesByTo {
   '/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
   '/motorista': typeof AuthenticatedMotoristaRoute
   '/api/uploads': typeof ApiUploadsRouteWithChildren
+  '/convite/$token': typeof ConviteTokenRoute
   '/transfers/$rota': typeof TransfersRotaRoute
   '/transfers': typeof TransfersIndexRoute
   '/api/uploads/$arquivo': typeof ApiUploadsArquivoRoute
@@ -156,6 +164,7 @@ export interface FileRoutesById {
   '/_authenticated/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
   '/_authenticated/motorista': typeof AuthenticatedMotoristaRoute
   '/api/uploads': typeof ApiUploadsRouteWithChildren
+  '/convite/$token': typeof ConviteTokenRoute
   '/transfers/$rota': typeof TransfersRotaRoute
   '/transfers/': typeof TransfersIndexRoute
   '/api/uploads/$arquivo': typeof ApiUploadsArquivoRoute
@@ -175,6 +184,7 @@ export interface FileRouteTypes {
     | '/minhas-viagens'
     | '/motorista'
     | '/api/uploads'
+    | '/convite/$token'
     | '/transfers/$rota'
     | '/transfers/'
     | '/api/uploads/$arquivo'
@@ -192,6 +202,7 @@ export interface FileRouteTypes {
     | '/minhas-viagens'
     | '/motorista'
     | '/api/uploads'
+    | '/convite/$token'
     | '/transfers/$rota'
     | '/transfers'
     | '/api/uploads/$arquivo'
@@ -210,6 +221,7 @@ export interface FileRouteTypes {
     | '/_authenticated/minhas-viagens'
     | '/_authenticated/motorista'
     | '/api/uploads'
+    | '/convite/$token'
     | '/transfers/$rota'
     | '/transfers/'
     | '/api/uploads/$arquivo'
@@ -226,6 +238,7 @@ export interface RootRouteChildren {
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiUploadsRoute: typeof ApiUploadsRouteWithChildren
+  ConviteTokenRoute: typeof ConviteTokenRoute
   TransfersRotaRoute: typeof TransfersRotaRoute
   TransfersIndexRoute: typeof TransfersIndexRoute
 }
@@ -323,6 +336,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiUploadsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/convite/$token': {
+      id: '/convite/$token'
+      path: '/convite/$token'
+      fullPath: '/convite/$token'
+      preLoaderRoute: typeof ConviteTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/transfers/': {
       id: '/transfers/'
       path: '/transfers'
@@ -385,6 +405,7 @@ const rootRouteChildren: RootRouteChildren = {
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiUploadsRoute: ApiUploadsRouteWithChildren,
+  ConviteTokenRoute: ConviteTokenRoute,
   TransfersRotaRoute: TransfersRotaRoute,
   TransfersIndexRoute: TransfersIndexRoute,
 }
