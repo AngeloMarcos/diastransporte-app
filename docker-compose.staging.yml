@@ -38,8 +38,8 @@ services:
       PORT: 3000
     volumes:
       - uploads:/var/lib/dias-transporte/uploads
-    ports:
-      - "3002:3000" # staging temporario, direto por IP (sem Caddy/domínio ainda)
+    # Sem "ports": o app só é alcançado pelo Caddy (rede interna do compose), em
+    # https://www.diastransporte.site — a porta 3002 direta por IP foi fechada.
     healthcheck:
       # Sem isso "restart: unless-stopped" só reagia a um crash de verdade
       # (processo morto) — um processo travado mas ainda de pé (ex.: preso

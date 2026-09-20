@@ -42,6 +42,11 @@ mkdir -p "$BACKUP_DIR"
 backup_db() {
   local projeto_dir="$1" servico_db="$2" usuario_db="$3" nome_db="$4" rotulo="$5"
   local destino="$BACKUP_DIR/${rotulo}-${DATA}.dump"
+  # Stack aposentada (parada de propósito após a fusão): não é falha.
+  if [ -z "$(cd "$projeto_dir" && docker compose ps -q --status running "$servico_db" 2>/dev/null)" ]; then
+    echo "→ ${rotulo}: stack parada, pulando"
+    return 0
+  fi
   echo "→ ${rotulo}: pg_dump ${nome_db}"
   if (cd "$projeto_dir" && docker compose exec -T "$servico_db" \
         pg_dump -U "$usuario_db" -d "$nome_db" -Fc) > "$destino"; then
