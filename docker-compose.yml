@@ -41,6 +41,8 @@ services:
       DATABASE_URL_MIGRATION: ${DATABASE_URL_MIGRATION:-}
       SESSION_SECRET: ${SESSION_SECRET:?defina SESSION_SECRET no .env}
       APP_URL: ${APP_URL:?defina APP_URL no .env}
+      LEADS_WEBHOOK_URL: ${LEADS_WEBHOOK_URL:-}
+      LEADS_WEBHOOK_SECRET: ${LEADS_WEBHOOK_SECRET:-}
       UPLOADS_DIR: /var/lib/dias-transporte/uploads
       VITE_AUTH_MODE: vps
       PORT: 3000
