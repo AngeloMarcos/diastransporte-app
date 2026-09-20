@@ -13,6 +13,7 @@ const PREFIXOS_PRIVADOS = [
   "/login",
   "/convite",
   "/motorista",
+  "/healthz",
 ];
 
 export function ehCaminhoPrivado(caminho: string): boolean {

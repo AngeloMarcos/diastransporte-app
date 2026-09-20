@@ -16,7 +16,8 @@ export type AgendamentoRow = {
   contato_nome: string | null;
   contato_telefone: string | null;
   status: string;
-  motorista_id: string | null;
+  /** Pedido de despacho ligado a esta reserva (bigint: pode chegar como string). */
+  pedido_id: number | string | null;
   created_at: string;
   updated_at: string;
 };

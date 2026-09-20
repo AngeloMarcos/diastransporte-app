@@ -18,10 +18,8 @@ import { HORA_REGEX } from "@/lib/periodo";
 import type { RotaRow } from "@/lib/rotasMap";
 import { sessaoAtual } from "@/lib/vps/sessao.functions";
 import {
-  vpsAtribuirMotorista,
   vpsAtualizarStatus,
   vpsCancelarMinhaViagem,
-  vpsConcluirCorrida,
   vpsContarMesmoCarroData,
   vpsCriarBloco,
   vpsCriarFotoGaleria,
@@ -37,7 +35,6 @@ import {
   vpsListRotasAdmin,
   vpsListUsuarios,
   vpsListarAuditoria,
-  vpsMinhasCorridas,
   vpsMinhasViagens,
   vpsRedefinirSenha,
   vpsRemoverAgendamento,
@@ -218,23 +215,6 @@ export async function removerAgendamento(id: string): Promise<void> {
   await vpsRemoverAgendamento({ data: { id } });
 }
 
-/** Admin atribui (ou remove, com `motoristaId: null`) um motorista a um agendamento. */
-export async function atribuirMotorista(
-  agendamentoId: string,
-  motoristaId: string | null,
-): Promise<void> {
-  await vpsAtribuirMotorista({ data: { id: agendamentoId, motoristaId } });
-}
-
-export async function listarCorridasMotorista(): Promise<AgendamentoRow[]> {
-  return vpsMinhasCorridas();
-}
-
-/** Autoatendimento: o motorista marca como concluída uma corrida confirmada e atribuída a ele. */
-export async function concluirCorridaComoMotorista(id: string): Promise<void> {
-  await vpsConcluirCorrida({ data: { id } });
-}
-
 // -------------------------------------------------------------- conteúdo
 export async function listarConteudoAdmin(): Promise<ConteudoBloco[]> {
   return vpsListConteudoAdmin();
@@ -392,9 +372,6 @@ export async function salvarNotasInternas(pedidoId: number, texto: string): Prom
 // -------------------------------------------------------- painel do motorista
 // (modelo despacho: fornecedores + pedidos.fornecedor_id — Etapa 9 do
 // roteiro da fusão). VPS-only, como o resto do despacho. Distinto de
-// meuFornecedor/listarCorridasMotorista mais abaixo, que são o modelo
-// antigo (agendamentos.motorista_id) — mantido funcionando nos dois
-// backends pra não regredir o pouco uso que já existisse lá.
 export async function meuFornecedor(): Promise<{
   id: string;
   nome: string;

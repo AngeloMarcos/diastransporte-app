@@ -94,7 +94,6 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  atribuirMotorista,
   atribuirMotoristaPedido,
   atualizarCanalVenda,
   atualizarCategoriaVeiculo,
@@ -5094,18 +5093,6 @@ function AdminAgendamentos() {
     queryFn: () => listarAgendamentos(),
   });
 
-  // Reaproveita a listagem de usuários (já dual-backend) só pra montar o
-  // seletor de motoristas — nenhum endpoint novo de listagem precisou existir.
-  const { data: usuarios } = useQuery({
-    queryKey: ["usuarios-motoristas"],
-    queryFn: () => listarUsuarios(),
-  });
-  const motoristas = useMemo(() => (usuarios ?? []).filter((u) => u.isMotorista), [usuarios]);
-  const nomePorMotorista = useMemo(
-    () => new Map((usuarios ?? []).map((u) => [u.id, u.nome || u.email])),
-    [usuarios],
-  );
-
   const atualizar = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       await atualizarStatusAgendamento(id, status);
@@ -5115,17 +5102,6 @@ function AdminAgendamentos() {
       void queryClient.invalidateQueries({ queryKey: ["admin-agendamentos"] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atualizar."),
-  });
-
-  const atribuir = useMutation({
-    mutationFn: async ({ id, motoristaId }: { id: string; motoristaId: string | null }) => {
-      await atribuirMotorista(id, motoristaId);
-    },
-    onSuccess: () => {
-      toast.success("Motorista atualizado.");
-      void queryClient.invalidateQueries({ queryKey: ["admin-agendamentos"] });
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atribuir motorista."),
   });
 
   const remover = useMutation({
@@ -5275,12 +5251,11 @@ function AdminAgendamentos() {
                         Embarque: {a.embarque_local}
                       </p>
                     ) : null}
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Motorista:{" "}
-                      {a.motorista_id
-                        ? (nomePorMotorista.get(a.motorista_id) ?? "—")
-                        : "não atribuído"}
-                    </p>
+                    {a.pedido_id ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Despacho: pedido #{a.pedido_id} (aba Pedidos)
+                      </p>
+                    ) : null}
                     {a.observacoes ? <p className="mt-2 text-sm">{a.observacoes}</p> : null}
                   </div>
 
@@ -5315,27 +5290,6 @@ function AdminAgendamentos() {
                         ].map((s) => (
                           <SelectItem key={s} value={s}>
                             {STATUS_META[s as StatusAgendamento].label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={a.motorista_id ?? "nenhum"}
-                      onValueChange={(motoristaId) =>
-                        atribuir.mutate({
-                          id: a.id,
-                          motoristaId: motoristaId === "nenhum" ? null : motoristaId,
-                        })
-                      }
-                    >
-                      <SelectTrigger className="h-11 flex-1 text-sm lg:w-[190px] lg:flex-none">
-                        <SelectValue placeholder="Sem motorista" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="nenhum">Sem motorista</SelectItem>
-                        {motoristas.map((m) => (
-                          <SelectItem key={m.id} value={m.id}>
-                            {m.nome || m.email}
                           </SelectItem>
                         ))}
                       </SelectContent>

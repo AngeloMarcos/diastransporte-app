@@ -274,45 +274,6 @@ export const vpsMinhasViagens = createServerFn({ method: "GET" }).handler(
   },
 );
 
-// Corridas atribuídas ao motorista logado — mesmo molde de vpsMinhasViagens,
-// filtrando por motorista_id em vez de user_id.
-export const vpsMinhasCorridas = createServerFn({ method: "GET" }).handler(
-  async (): Promise<AgendamentoRow[]> => {
-    const ctx = await contexto();
-    // ctx.motorista() (não só ctx.usuario()) — achado revisando autorização:
-    // sem isso, o filtro motorista_id = usuario.id era a ÚNICA barreira, e
-    // vpsAtribuirMotorista não conferia que o id atribuído era de fato um
-    // motorista (corrigido abaixo). Um cliente comum atribuído por engano
-    // conseguiria ver a corrida mesmo sem o papel de motorista.
-    const usuario = await ctx.motorista();
-    return ctx.sql<AgendamentoRow[]>`
-      SELECT * FROM public.agendamentos WHERE motorista_id = ${usuario.id} ORDER BY created_at DESC
-    `.then((linhas) => [...linhas]);
-  },
-);
-
-// Autoatendimento do motorista: só sai de "confirmado" para "concluido", e
-// só a própria corrida atribuída — mesmo padrão defensivo de
-// vpsCancelarMinhaViagem (filtra por dono na própria query, não só na sessão).
-export const vpsConcluirCorrida = createServerFn({ method: "POST" })
-  .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
-  .handler(async ({ data }) => {
-    const ctx = await contexto();
-    const usuario = await ctx.motorista(); // ver comentário em vpsMinhasCorridas
-    const linhas = await ctx.sql<{ id: string }[]>`
-      UPDATE public.agendamentos
-         SET status = 'concluido'
-       WHERE id = ${data.id}
-         AND motorista_id = ${usuario.id}
-         AND status = 'confirmado'
-       RETURNING id
-    `;
-    if (!linhas[0]) {
-      throw new Error("Não foi possível concluir (corrida não encontrada ou não confirmada).");
-    }
-    return { ok: true };
-  });
-
 // Autoatendimento: o próprio cliente cancela uma viagem dele (não exige
 // admin, diferente de vpsAtualizarStatus). Só sai de pendente/confirmado —
 // nunca reabre uma cancelada nem mexe em concluída — e só a própria linha,
@@ -375,11 +336,12 @@ export const vpsCriarReservas = createServerFn({ method: "POST" })
     // via a operação inteira como erro, tentar de novo duplicava as que já
     // tinham entrado. Espelha o que o insert em lote do Supabase já faz de
     // graça (uma única instrução SQL é atômica por padrão).
-    const criados = await ctx.sql.begin(async (sql) => {
-      const linhasCriadas: AgendamentoRow[] = [];
-      for (const item of data.itens) {
-        // O valor NÃO vem do cliente: o trigger agendamentos_valor_oficial calcula.
-        const linhas = await sql<AgendamentoRow[]>`
+    const criados = await ctx.sql
+      .begin(async (sql) => {
+        const linhasCriadas: AgendamentoRow[] = [];
+        for (const item of data.itens) {
+          // O valor NÃO vem do cliente: o trigger agendamentos_valor_oficial calcula.
+          const linhas = await sql<AgendamentoRow[]>`
           INSERT INTO public.agendamentos
             (user_id, rota_id, trecho, data_viagem, hora, periodo, carro, passageiros,
              embarque_local, observacoes, contato_nome, contato_telefone)
@@ -389,10 +351,19 @@ export const vpsCriarReservas = createServerFn({ method: "POST" })
                   ${item.contato_telefone})
           RETURNING *
         `;
-        if (linhas[0]) linhasCriadas.push(linhas[0]);
-      }
-      return linhasCriadas;
-    });
+          if (linhas[0]) linhasCriadas.push(linhas[0]);
+        }
+        return linhasCriadas;
+      })
+      .catch((erro: unknown) => {
+        // ux_agendamentos_sem_duplicata (migration 0018): a mesma reserva ativa já existe.
+        if (erro instanceof Error && "code" in erro && erro.code === "23505") {
+          throw new Error(
+            "Você já tem uma reserva para esse trecho, data, horário e carro — confira em Minhas viagens.",
+          );
+        }
+        throw erro;
+      });
 
     // Fora da transação e sem await: uma falha ou lentidão criando o pedido
     // de despacho nunca pode travar nem reverter o checkout do cliente
@@ -470,38 +441,6 @@ export const vpsAtualizarStatus = createServerFn({ method: "POST" })
       resumo: `Agendamento: ${statusAnterior ?? "?"} → ${data.status}`,
       antes: { status: statusAnterior },
       depois: { status: data.status },
-    });
-    return { ok: true };
-  });
-
-export const vpsAtribuirMotorista = createServerFn({ method: "POST" })
-  .inputValidator((data) =>
-    z.object({ id: z.string().uuid(), motoristaId: z.string().uuid().nullable() }).parse(data),
-  )
-  .handler(async ({ data }) => {
-    const ctx = await contexto();
-    const admin = await ctx.admin();
-    // Achado revisando autorização: sem esta checagem, qualquer uuid válido
-    // era aceito como motoristaId (um typo, um id de cliente comum) — a
-    // pessoa passaria a ver/concluir a corrida via vpsMinhasCorridas/
-    // vpsConcluirCorrida mesmo sem o papel de motorista.
-    if (data.motoristaId) {
-      const [motorista] = await ctx.sql<{ id: string }[]>`
-        SELECT id FROM public.usuarios WHERE id = ${data.motoristaId} AND motorista
-      `;
-      if (!motorista) throw new Error("Usuário não encontrado ou não é motorista.");
-    }
-    await ctx.sql`
-      UPDATE public.agendamentos SET motorista_id = ${data.motoristaId} WHERE id = ${data.id}
-    `;
-    await ctx.auditar(admin, {
-      acao: data.motoristaId ? "atribuir_motorista" : "remover_motorista",
-      entidade: "agendamento",
-      entidadeId: data.id,
-      resumo: data.motoristaId
-        ? "Motorista atribuído ao agendamento"
-        : "Motorista removido do agendamento",
-      depois: { motorista_id: data.motoristaId },
     });
     return { ok: true };
   });

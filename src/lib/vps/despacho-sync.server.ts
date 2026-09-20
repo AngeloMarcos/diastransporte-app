@@ -94,7 +94,18 @@ export async function criarPedidoDespacho(
       DO NOTHING
       RETURNING id
     `;
-    if (!criado) return; // já existe — nada a fazer
+    if (!criado) {
+      // Já existe (reenvio): só garante o elo, caso um envio anterior tenha falhado antes dele.
+      await tx`
+        UPDATE public.agendamentos a SET pedido_id = p.id
+          FROM public.pedidos p
+         WHERE a.id = ${agendamento.id} AND a.pedido_id IS NULL
+           AND p.codigo_reserva_canal = ${codigoReservaCanal}
+      `;
+      return;
+    }
+    // Elo com a reserva (agendamentos.pedido_id): os triggers da migration 0018 mantêm os status coerentes.
+    await tx`UPDATE public.agendamentos SET pedido_id = ${criado.id} WHERE id = ${agendamento.id}`;
     await tx`
       INSERT INTO public.pedidos_historico (pedido_id, status_anterior, status_novo)
       VALUES (${criado.id}, NULL, 'pendente_liberacao')

@@ -42,8 +42,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatBRL } from "@/data/rotas";
 import { useAuth } from "@/hooks/useAuth";
 import {
-  concluirCorridaComoMotorista,
-  listarCorridasMotorista,
   listarPedidosMotorista,
   meuFornecedor,
   salvarObservacaoMotorista,

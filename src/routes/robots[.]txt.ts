@@ -20,6 +20,7 @@ export const Route = createFileRoute("/robots.txt")({
           // poupa o rastreamento.
           "Disallow: /admin",
           "Disallow: /api/",
+          "Disallow: /healthz",
           "Disallow: /carrinho",
           "Disallow: /minhas-viagens",
           "Disallow: /auth",

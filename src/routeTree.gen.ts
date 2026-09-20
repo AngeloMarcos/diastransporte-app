@@ -16,6 +16,7 @@ import { Route as CancelamentoRouteImport } from './routes/cancelamento'
 import { Route as CarrinhoRouteImport } from './routes/carrinho'
 import { Route as ContatoRouteImport } from './routes/contato'
 import { Route as FrotaRouteImport } from './routes/frota'
+import { Route as HealthzRouteImport } from './routes/healthz'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
@@ -63,6 +64,11 @@ const ContatoRoute = ContatoRouteImport.update({
 const FrotaRoute = FrotaRouteImport.update({
   id: '/frota',
   path: '/frota',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HealthzRoute = HealthzRouteImport.update({
+  id: '/healthz',
+  path: '/healthz',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -144,6 +150,7 @@ export interface FileRoutesByFullPath {
   '/carrinho': typeof CarrinhoRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
+  '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
   '/privacidade': typeof PrivacidadeRoute
   '/robots.txt': typeof RobotsDottxtRoute
@@ -166,6 +173,7 @@ export interface FileRoutesByTo {
   '/carrinho': typeof CarrinhoRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
+  '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
   '/privacidade': typeof PrivacidadeRoute
   '/robots.txt': typeof RobotsDottxtRoute
@@ -190,6 +198,7 @@ export interface FileRoutesById {
   '/carrinho': typeof CarrinhoRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
+  '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
   '/privacidade': typeof PrivacidadeRoute
   '/robots.txt': typeof RobotsDottxtRoute
@@ -214,6 +223,7 @@ export interface FileRouteTypes {
     | '/carrinho'
     | '/contato'
     | '/frota'
+    | '/healthz'
     | '/login'
     | '/privacidade'
     | '/robots.txt'
@@ -236,6 +246,7 @@ export interface FileRouteTypes {
     | '/carrinho'
     | '/contato'
     | '/frota'
+    | '/healthz'
     | '/login'
     | '/privacidade'
     | '/robots.txt'
@@ -259,6 +270,7 @@ export interface FileRouteTypes {
     | '/carrinho'
     | '/contato'
     | '/frota'
+    | '/healthz'
     | '/login'
     | '/privacidade'
     | '/robots.txt'
@@ -283,6 +295,7 @@ export interface RootRouteChildren {
   CarrinhoRoute: typeof CarrinhoRoute
   ContatoRoute: typeof ContatoRoute
   FrotaRoute: typeof FrotaRoute
+  HealthzRoute: typeof HealthzRoute
   LoginRoute: typeof LoginRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
@@ -344,6 +357,13 @@ declare module '@tanstack/react-router' {
       path: '/frota'
       fullPath: '/frota'
       preLoaderRoute: typeof FrotaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/healthz': {
+      id: '/healthz'
+      path: '/healthz'
+      fullPath: '/healthz'
+      preLoaderRoute: typeof HealthzRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -482,6 +502,7 @@ const rootRouteChildren: RootRouteChildren = {
   CarrinhoRoute: CarrinhoRoute,
   ContatoRoute: ContatoRoute,
   FrotaRoute: FrotaRoute,
+  HealthzRoute: HealthzRoute,
   LoginRoute: LoginRoute,
   PrivacidadeRoute: PrivacidadeRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
