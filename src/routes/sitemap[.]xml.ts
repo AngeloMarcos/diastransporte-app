@@ -5,6 +5,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { listRotas } from "@/lib/rotas.functions";
 import { lastmodIso, lastmodMaisRecente } from "@/lib/seo";
+import { origemDaRequisicao } from "@/lib/seguranca";
 
 /** Data da última revisão do texto das páginas legais/institucionais — atualizar
  * junto com "Última atualização" da própria página quando o texto mudar. */
@@ -24,7 +25,7 @@ export const Route = createFileRoute("/sitemap.xml")({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const origem = new URL(request.url).origin;
+        const origem = origemDaRequisicao(request.url, request.headers);
         const rotas = await listRotas();
         // Home e listagem mudam quando qualquer trecho muda; sem data confiável
         // (rotas estáticas de fallback), o lastmod simplesmente não é emitido.

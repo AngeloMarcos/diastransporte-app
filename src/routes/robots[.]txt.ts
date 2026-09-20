@@ -6,11 +6,13 @@
 // sitemap.xml.ts (origem da própria requisição), sem variável de ambiente.
 import { createFileRoute } from "@tanstack/react-router";
 
+import { origemDaRequisicao } from "@/lib/seguranca";
+
 export const Route = createFileRoute("/robots.txt")({
   server: {
     handlers: {
       GET: ({ request }) => {
-        const origem = new URL(request.url).origin;
+        const origem = origemDaRequisicao(request.url, request.headers);
         const corpo = [
           "User-agent: *",
           "Allow: /",

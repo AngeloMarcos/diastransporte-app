@@ -4,10 +4,15 @@
 # descomente o bloco do domínio abaixo — o Caddy cuida do Let's Encrypt sozinho.
 
 :80 {
+	encode zstd gzip
+	# O app monta canonical/sitemap/og:image a partir de X-Forwarded-Proto/Host e
+	# usa X-Forwarded-For (que o Caddy sobrescreve) no limite de requisições por
+	# IP — o reverse_proxy do Caddy já envia os três por padrão; não remova.
 	reverse_proxy app:3000
 }
 
 # diastransporte.site, www.diastransporte.site {
+# 	encode zstd gzip
 # 	reverse_proxy app:3000
 # }
 

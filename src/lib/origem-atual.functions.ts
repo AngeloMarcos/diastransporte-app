@@ -16,9 +16,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 
+import { origemDaRequisicao } from "./seguranca";
+
 export const origemAtual = createServerFn({ method: "GET" }).handler((): string => {
   try {
-    return new URL(getRequest().url).origin;
+    const pedido = getRequest();
+    return origemDaRequisicao(pedido.url, pedido.headers);
   } catch {
     return "";
   }

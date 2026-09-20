@@ -2,6 +2,14 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import {
+  LimiteDeTaxa,
+  cabecalhosDeSeguranca,
+  ipDoCliente,
+  pedidoLimitavel,
+  requisicaoHttps,
+} from "./lib/seguranca";
+import { MODO_VPS } from "./lib/vps/config";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -44,18 +52,51 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+// Endurecimento só no deploy próprio (VPS): o Lovable Cloud tem o próprio edge
+// e embute o site num iframe de pré-visualização, que estes cabeçalhos quebrariam.
+// 120 escritas/min por IP: folgado pra quem usa o painel, curto pra quem
+// automatiza cadastro ou tentativa de senha (que ainda tem o bloqueio por conta).
+const limiteEscritas = new LimiteDeTaxa(120, 60_000);
+
+function comCabecalhosDeSeguranca(request: Request, response: Response): Response {
+  if (!MODO_VPS) return response;
+  const cabecalhos = cabecalhosDeSeguranca({
+    https: requisicaoHttps(request.url, request.headers),
+  });
+  // Respostas de fetch/estáticos podem ter cabeçalhos imutáveis: copia antes de mexer.
+  const nova = new Response(response.body, response);
+  for (const [nome, valor] of Object.entries(cabecalhos)) nova.headers.set(nome, valor);
+  return nova;
+}
+
+async function tratar(request: Request, env: unknown, ctx: unknown): Promise<Response> {
+  if (MODO_VPS && pedidoLimitavel(request.method, new URL(request.url).pathname)) {
+    const { excedeu, retryAposSeg } = limiteEscritas.excedeu(ipDoCliente(request.headers));
+    if (excedeu) {
+      return new Response(
+        JSON.stringify({ erro: "Muitas requisições. Tente de novo em instantes." }),
+        {
+          status: 429,
+          headers: { "content-type": "application/json", "retry-after": String(retryAposSeg) },
+        },
+      );
+    }
+  }
+  try {
+    const handler = await getServerEntry();
+    const response = await handler.fetch(request, env, ctx);
+    return await normalizeCatastrophicSsrResponse(response);
+  } catch (error) {
+    console.error(error);
+    return new Response(renderErrorPage(), {
+      status: 500,
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  }
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
-    try {
-      const handler = await getServerEntry();
-      const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
-    } catch (error) {
-      console.error(error);
-      return new Response(renderErrorPage(), {
-        status: 500,
-        headers: { "content-type": "text/html; charset=utf-8" },
-      });
-    }
+    return comCabecalhosDeSeguranca(request, await tratar(request, env, ctx));
   },
 };
