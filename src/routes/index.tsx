@@ -13,6 +13,8 @@ import { listConteudo, type ConteudoRow } from "@/lib/conteudo.functions";
 import { listFrotaVeiculos } from "@/lib/frota.functions";
 import { mapearConteudo, texto } from "@/lib/conteudo";
 import { whatsappLink } from "@/lib/whatsapp";
+import { buscaCombina } from "@/lib/busca";
+import { camposDeBusca } from "@/data/rotas";
 import { HomeSkeleton } from "@/components/site/Skeletons";
 import { ErroCarregamento } from "@/components/site/ErroCarregamento";
 import { origemAtual } from "@/lib/origem-atual.functions";
@@ -88,11 +90,7 @@ function Home() {
   const navigate = useNavigate();
   const [busca, setBusca] = useState("");
   const destaques = [...rotas].sort((a, b) => b.popularidade - a.popularidade).slice(0, 3);
-  const filtradas = busca.trim()
-    ? rotas.filter((r) =>
-        `${r.origem} ${r.destino}`.toLowerCase().includes(busca.trim().toLowerCase()),
-      )
-    : [];
+  const filtradas = busca.trim() ? rotas.filter((r) => buscaCombina(busca, camposDeBusca(r))) : [];
 
   function buscar(e: React.FormEvent) {
     e.preventDefault();

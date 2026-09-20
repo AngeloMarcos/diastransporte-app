@@ -9,7 +9,8 @@ import { ErroCarregamento } from "@/components/site/ErroCarregamento";
 import { ListagemHeroSkeleton, RotaGridSkeleton } from "@/components/site/Skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { type Rota } from "@/data/rotas";
+import { camposDeBusca, type Rota } from "@/data/rotas";
+import { buscaCombina } from "@/lib/busca";
 import { listRotas } from "@/lib/rotas.functions";
 import { whatsappLink } from "@/lib/whatsapp";
 import { origemAtual } from "@/lib/origem-atual.functions";
@@ -88,16 +89,22 @@ function Transfers() {
   const [busca, setBusca] = useState(buscaNaUrl ?? "");
 
   const lista = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     const base = rotas
       .filter((r) => (filtro === "grande" ? r.precoGrande !== null : true))
-      .filter((r) => !termo || `${r.origem} ${r.destino}`.toLowerCase().includes(termo));
+      .filter((r) => buscaCombina(busca, camposDeBusca(r)));
+    // Ordena pelo preço do veículo que o filtro mostra no card.
+    const precoDe = (r: Rota) =>
+      filtro === "grande" ? (r.precoGrande ?? r.precoPequeno) : r.precoPequeno;
     const copia = [...base];
-    if (ordem === "menor") copia.sort((a, b) => a.precoPequeno - b.precoPequeno);
-    else if (ordem === "maior") copia.sort((a, b) => b.precoPequeno - a.precoPequeno);
+    if (ordem === "menor") copia.sort((a, b) => precoDe(a) - precoDe(b));
+    else if (ordem === "maior") copia.sort((a, b) => precoDe(b) - precoDe(a));
     else copia.sort((a, b) => b.popularidade - a.popularidade);
     return copia;
   }, [rotas, ordem, filtro, busca]);
+  // Trechos que existem mas não têm carro grande (valor "sob consulta") ficam
+  // fora do filtro "Carro grande" — está certo, mas sumir sem explicação
+  // parecia bug.
+  const semCarroGrande = rotas.filter((r) => r.precoGrande === null).length;
 
   return (
     <div className="min-h-screen">
@@ -121,7 +128,7 @@ function Transfers() {
           <Input
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar por origem ou destino"
+            placeholder="Buscar por cidade, aeroporto ou hotel"
             className="h-11 pl-9"
           />
         </div>
@@ -144,6 +151,22 @@ function Transfers() {
             </Button>
           ))}
         </div>
+
+        {filtro === "grande" && semCarroGrande > 0 && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            {semCarroGrande} trecho(s) não têm carro grande com valor fechado (sob consulta) e não
+            aparecem neste filtro. Para eles,{" "}
+            <a
+              href={whatsappLink("Olá! Quero um orçamento de carro grande para um trecho.")}
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary underline-offset-4 hover:underline"
+            >
+              peça um orçamento pelo WhatsApp
+            </a>
+            .
+          </p>
+        )}
 
         {/* Achado revisando um print de referência trazido pelo usuário:
             "Ordenar por" já existia (era só mais três <Button> soltos
@@ -185,7 +208,7 @@ function Transfers() {
         {lista.length ? (
           <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {lista.map((r) => (
-              <RotaCard key={r.slug} rota={r} />
+              <RotaCard key={r.slug} rota={r} carro={filtro === "grande" ? "grande" : "pequeno"} />
             ))}
           </div>
         ) : (

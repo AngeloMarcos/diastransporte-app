@@ -45,6 +45,8 @@ import { adicionarAoCarrinho } from "@/lib/carrinho";
 import { RotaDetalheSkeleton } from "@/components/site/Skeletons";
 import { ErroCarregamento } from "@/components/site/ErroCarregamento";
 import { origemAtual } from "@/lib/origem-atual.functions";
+import { hojeEmMaranhao } from "@/lib/fuso-maranhao";
+import { periodoPelaHora } from "@/lib/periodo";
 import logo from "@/assets/logo.jpeg";
 
 const OUTRO_EMBARQUE = "outro";
@@ -197,6 +199,14 @@ const politicas = [
   },
 ];
 
+// undefined explícito nos campos: exactOptionalPropertyTypes exige, e é o que o
+// "limpar erro ao digitar" faz.
+type ErrosReserva = {
+  data?: string | undefined;
+  hora?: string | undefined;
+  embarque?: string | undefined;
+};
+
 function RotaDetalhe() {
   const loaderData = Route.useLoaderData() as { rota: Rota; rotas: Rota[]; origem: string };
   const { rota, rotas } = loaderData;
@@ -204,7 +214,14 @@ function RotaDetalhe() {
   const [indice, setIndice] = useState(0);
   const [data, setData] = useState("");
   const [hora, setHora] = useState("");
-  const [periodo, setPeriodo] = useState<"dia" | "noite">("dia");
+  // Sprint 2 (auditoria do site, A3): o período (tarifa dia / noite 18h às
+  // 5h) NÃO é mais uma escolha manual — era um botão independente do
+  // horário, então às 22:00 dava pra pagar a tarifa do dia. Agora sai do
+  // horário digitado (src/lib/periodo.ts) e o banco deriva a mesma coisa
+  // (migration 0014) em vez de confiar no que o navegador manda.
+  const periodo = periodoPelaHora(hora) ?? "dia";
+  const [erros, setErros] = useState<ErrosReserva>({});
+  const horaRef = useRef<HTMLInputElement>(null);
   const [carro, setCarro] = useState<"pequeno" | "grande">("pequeno");
   const [passageiros, setPassageiros] = useState(2);
   const [embarqueEscolha, setEmbarqueEscolha] = useState("");
@@ -219,6 +236,9 @@ function RotaDetalhe() {
   const maxPassageiros = carro === "pequeno" ? 4 : 5;
   const preco = precoFinal(rota, carro, periodo);
   const temNoite = rota.precoPequenoNoite !== undefined || rota.precoGrandeNoite !== undefined;
+  // Só avisa "tarifa noturna" quando ela de fato muda o valor deste veículo.
+  const tarifaNoturna =
+    periodo === "noite" && precoFinal(rota, carro, "noite") !== precoFinal(rota, carro, "dia");
   // Achado revisando UX: "Grande" ficava selecionável mesmo em rotas sem
   // esse porte (precoGrande null) — só virava "Sob consulta" em silêncio,
   // sem indicar que a opção nem existe pra este trecho.
@@ -232,7 +252,9 @@ function RotaDetalhe() {
   ]
     .filter((v): v is string => Boolean(v))
     .join(" — ");
-  const hojeISO = new Date().toISOString().slice(0, 10);
+  // Data de hoje no relógio de Maranhão: em UTC, depois das 21h "hoje" já
+  // virava amanhã e o próprio dia atual era recusado como data passada.
+  const hojeISO = hojeEmMaranhao();
 
   const relacionadas = useMemo(
     () => rotas.filter((r: Rota) => r.slug !== rota.slug).slice(0, 3),
@@ -246,20 +268,27 @@ function RotaDetalhe() {
    * não passava por aqui, então dava pra mandar mensagem sem data nem
    * embarque, direto contradizendo o aviso ao lado do campo de endereço. */
   function validarCampos(): boolean {
-    if (!data) {
-      toast.error("Escolha a data do embarque.");
+    // Erro inline no próprio campo (auditoria do site: o toast do topo
+    // aparecia por cima do menu e sumia em segundos, sem dizer qual campo).
+    // O primeiro campo inválido recebe foco.
+    const novos: ErrosReserva = {};
+    if (!data) novos.data = "Escolha a data do embarque.";
+    else if (data < hojeISO) novos.data = "Escolha uma data a partir de hoje.";
+    if (!hora) novos.hora = "Informe o horário — ele define a tarifa (dia ou noturna).";
+    else if (periodoPelaHora(hora) === null) novos.hora = "Horário inválido.";
+    if (!embarqueLocal) novos.embarque = "Escolha (ou informe) o local de embarque.";
+    setErros(novos);
+    if (novos.data) {
       dataRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       dataRef.current?.focus();
       return false;
     }
-    if (data < hojeISO) {
-      toast.error("Escolha uma data a partir de hoje.");
-      dataRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      dataRef.current?.focus();
+    if (novos.hora) {
+      horaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      horaRef.current?.focus();
       return false;
     }
-    if (!embarqueLocal) {
-      toast.error("Escolha (ou informe) o local de embarque.");
+    if (novos.embarque) {
       embarqueRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return false;
     }
@@ -538,48 +567,59 @@ function RotaDetalhe() {
                     type="date"
                     min={hojeISO}
                     value={data}
-                    onChange={(e) => setData(e.target.value)}
+                    onChange={(e) => {
+                      setData(e.target.value);
+                      setErros((x) => ({ ...x, data: undefined }));
+                    }}
+                    aria-invalid={Boolean(erros.data)}
+                    aria-describedby={erros.data ? "erro-data" : undefined}
                     className="mt-2"
                   />
+                  {erros.data && (
+                    <p id="erro-data" role="alert" className="mt-1 text-xs text-red-400">
+                      {erros.data}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="hora">Horário</Label>
                   <Input
                     id="hora"
+                    ref={horaRef}
                     type="time"
                     value={hora}
-                    onChange={(e) => setHora(e.target.value)}
+                    onChange={(e) => {
+                      setHora(e.target.value);
+                      setErros((x) => ({ ...x, hora: undefined }));
+                    }}
+                    aria-invalid={Boolean(erros.hora)}
+                    aria-describedby={erros.hora ? "erro-hora" : undefined}
                     className="mt-2"
                   />
+                  {erros.hora && (
+                    <p id="erro-hora" role="alert" className="mt-1 text-xs text-red-400">
+                      {erros.hora}
+                    </p>
+                  )}
                 </div>
               </div>
 
-              {/* Achado revisando UX: este toggle aparecia em toda rota, mas
-                  só sao-luis-barreirinhas tem preço noturno de verdade —
-                  nas outras 8, escolher "18h às 5h" mudava pro preço de dia
-                  em silêncio (via precoFinal ?? fallback), sem indicar que
-                  nada mudou. Esconder onde não existe é mais honesto que
-                  deixar escolher uma opção que não faz diferença nenhuma. */}
+              {/* O período não é mais um botão: sai do horário digitado (ver
+                  o comentário em periodo, acima). Só mostra o aviso onde a
+                  tarifa noturna existe de verdade. */}
               {temNoite && (
-                <div>
-                  <Label>Período</Label>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <Button
-                      type="button"
-                      variant={periodo === "dia" ? "default" : "secondary"}
-                      onClick={() => setPeriodo("dia")}
-                    >
-                      Dia
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={periodo === "noite" ? "default" : "secondary"}
-                      onClick={() => setPeriodo("noite")}
-                    >
-                      18h às 5h
-                    </Button>
-                  </div>
-                </div>
+                <p
+                  className={
+                    tarifaNoturna
+                      ? "rounded-md border border-primary/40 bg-primary/10 p-3 text-xs text-foreground"
+                      : "text-xs text-muted-foreground"
+                  }
+                  aria-live="polite"
+                >
+                  {tarifaNoturna
+                    ? "Tarifa noturna aplicada (viagens das 18h às 5h)."
+                    : "Viagens das 18h às 5h têm tarifa noturna — o valor se ajusta ao horário escolhido."}
+                </p>
               )}
 
               <div>
@@ -635,7 +675,26 @@ function RotaDetalhe() {
                       size="icon"
                       variant="secondary"
                       aria-label="Adicionar passageiro"
-                      onClick={() => setPassageiros((p) => Math.min(maxPassageiros, p + 1))}
+                      onClick={() => {
+                        if (passageiros < maxPassageiros) {
+                          setPassageiros((p) => p + 1);
+                        } else if (carro === "pequeno" && grandeDisponivel) {
+                          // Em vez de travar em silêncio no limite do carro pequeno,
+                          // troca pro grande (que comporta mais) e avisa.
+                          setCarro("grande");
+                          setPassageiros(5);
+                          toast.message("Para 5 passageiros usamos o carro grande.", {
+                            description: "O valor foi atualizado para o carro grande.",
+                          });
+                        } else {
+                          toast.message(
+                            `O limite deste veículo é de ${String(maxPassageiros)} passageiros.`,
+                            {
+                              description: "Para um grupo maior, peça um orçamento pelo WhatsApp.",
+                            },
+                          );
+                        }
+                      }}
                     >
                       <Plus className="size-4" />
                     </Button>
@@ -646,7 +705,13 @@ function RotaDetalhe() {
 
             <div className="mt-6" ref={embarqueRef}>
               <Label htmlFor="embarque">Zona de embarque</Label>
-              <Select value={embarqueEscolha} onValueChange={setEmbarqueEscolha}>
+              <Select
+                value={embarqueEscolha}
+                onValueChange={(v) => {
+                  setEmbarqueEscolha(v);
+                  setErros((x) => ({ ...x, embarque: undefined }));
+                }}
+              >
                 <SelectTrigger id="embarque" className="mt-2">
                   <SelectValue placeholder="De onde você sai?" />
                 </SelectTrigger>
@@ -659,13 +724,21 @@ function RotaDetalhe() {
                   <SelectItem value={OUTRO_EMBARQUE}>Não está na lista</SelectItem>
                 </SelectContent>
               </Select>
+              {erros.embarque && (
+                <p role="alert" className="mt-1 text-xs text-red-400">
+                  {erros.embarque}
+                </p>
+              )}
               <Label htmlFor="endereco" className="mt-4 block">
                 Endereço completo ou ponto de referência
               </Label>
               <Input
                 id="endereco"
                 value={embarqueOutro}
-                onChange={(e) => setEmbarqueOutro(e.target.value)}
+                onChange={(e) => {
+                  setEmbarqueOutro(e.target.value);
+                  setErros((x) => ({ ...x, embarque: undefined }));
+                }}
                 placeholder="Ex: Hotel Pousada Mar Azul, Rua das Flores nº 123"
                 maxLength={200}
                 className="mt-2"

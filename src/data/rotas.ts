@@ -223,6 +223,13 @@ export function getRota(slug: string) {
   return rotas.find((r) => r.slug === slug);
 }
 
+/** Tudo que a busca do site olha numa rota: cidades, locais de embarque (é
+ * assim que "aeroporto" acha as rotas de São Luís), resumo, descrição e selo.
+ * Auditoria do site: a busca só olhava origem+destino. */
+export function camposDeBusca(r: Rota): string[] {
+  return [r.origem, r.destino, ...r.embarque, r.resumo, r.descricao, r.destaque ?? ""];
+}
+
 export function formatBRL(valor: number) {
   return valor.toLocaleString("pt-BR", {
     style: "currency",

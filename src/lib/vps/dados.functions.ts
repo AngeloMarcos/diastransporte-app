@@ -23,6 +23,8 @@ import {
   type AtorAuditoria,
   type EventoAuditoria,
 } from "@/lib/auditoria";
+import { hojeEmMaranhao } from "@/lib/fuso-maranhao";
+import { HORA_REGEX } from "@/lib/periodo";
 import { senhaForte, SENHA_REGRA_TEXTO } from "@/lib/senha";
 import { transicaoValidaAgendamento, type StatusAgendamento } from "@/lib/status";
 
@@ -309,8 +311,16 @@ export const vpsCancelarMinhaViagem = createServerFn({ method: "POST" })
 const reserva = z.object({
   rota_id: z.string().uuid(),
   trecho: z.string().min(1).max(200),
-  data_viagem: z.string().max(20).nullable(),
-  hora: z.string().max(20).nullable(),
+  // Sprint 2 (auditoria do site, A3): data e horário deixam de ser opcionais
+  // na fronteira de rede. O horário decide a tarifa (dia/noite) — sem ele o
+  // cliente escolhia a tarifa mandando `periodo` à mão. O trigger do banco
+  // (migration 0014) deriva o período do horário; aqui só garantimos que ele
+  // existe. Data: não pode ser anterior a hoje (relógio de Maranhão).
+  data_viagem: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Informe a data da viagem.")
+    .refine((d) => d >= hojeEmMaranhao(), "A data da viagem já passou."),
+  hora: z.string().regex(HORA_REGEX, "Informe o horário da viagem (HH:MM)."),
   periodo: z.enum(["dia", "noite"]),
   carro: z.enum(["pequeno", "grande"]),
   passageiros: z.number().int().min(1).max(20),

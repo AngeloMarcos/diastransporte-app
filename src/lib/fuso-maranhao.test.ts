@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { limitesDoDiaEmMaranhao } from "./fuso-maranhao";
+import { hojeEmMaranhao, limitesDoDiaEmMaranhao } from "./fuso-maranhao";
 
 describe("limitesDoDiaEmMaranhao", () => {
   it("usa o dia de Maranhão (UTC-3), não o UTC, perto da virada", () => {
@@ -16,5 +16,18 @@ describe("limitesDoDiaEmMaranhao", () => {
     const { inicio, fim } = limitesDoDiaEmMaranhao(new Date("2026-09-10T18:00:00Z"));
     expect(inicio).toBe(new Date("2026-09-10T03:00:00Z").toISOString());
     expect(fim).toBe(new Date("2026-09-11T02:59:59.999Z").toISOString());
+  });
+});
+
+describe("hojeEmMaranhao", () => {
+  it("às 23:30 em Maranhão (02:30 UTC do dia seguinte) ainda é o dia local", () => {
+    // 2026-09-21T02:30Z == 2026-09-20 23:30 em UTC-3
+    expect(hojeEmMaranhao(new Date("2026-09-21T02:30:00Z"))).toBe("2026-09-20");
+  });
+  it("meio-dia é o mesmo dia nos dois fusos", () => {
+    expect(hojeEmMaranhao(new Date("2026-09-20T15:00:00Z"))).toBe("2026-09-20");
+  });
+  it("virada: 03:00 UTC já é 00:00 do dia novo em Maranhão", () => {
+    expect(hojeEmMaranhao(new Date("2026-09-21T03:00:00Z"))).toBe("2026-09-21");
   });
 });

@@ -22,3 +22,12 @@ export function limitesDoDiaEmMaranhao(agora: Date = new Date()): { inicio: stri
     fim: new Date(`${anoMesDia}T23:59:59.999-03:00`).toISOString(),
   };
 }
+
+/** Data de hoje (AAAA-MM-DD) no relógio de Maranhão. Achado da auditoria:
+ * a tela de reserva e o carrinho usavam new Date().toISOString().slice(0, 10),
+ * que é a data em UTC — a partir das 21:00 em Maranhão (UTC-3) isso já é
+ * "amanhã", e o próprio dia de hoje passava a ser recusado como data
+ * passada justamente no horário em que mais gente reserva. */
+export function hojeEmMaranhao(agora: Date = new Date()): string {
+  return new Date(agora.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}

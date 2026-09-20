@@ -18,6 +18,7 @@ import { mensagemCarrinho, whatsappLink } from "@/lib/whatsapp";
 import { CarrinhoSkeleton } from "@/components/site/Skeletons";
 import { ErroCarregamento } from "@/components/site/ErroCarregamento";
 import { origemAtual } from "@/lib/origem-atual.functions";
+import { hojeEmMaranhao } from "@/lib/fuso-maranhao";
 import logo from "@/assets/logo.jpeg";
 
 export const Route = createFileRoute("/carrinho")({
@@ -135,7 +136,8 @@ function Carrinho() {
     // O item pode ter ficado dias parado no carrinho — reconfirma que a
     // data ainda não passou antes de mandar pro banco (o trigger de preço
     // não valida isso, só a rota/carro/período).
-    const hojeISO = new Date().toISOString().slice(0, 10);
+    // Data de hoje no relógio de Maranhão (não UTC — depois das 21h em UTC já é amanhã).
+    const hojeISO = hojeEmMaranhao();
     const vencido = itens.find((i) => i.data && i.data < hojeISO);
     if (vencido) {
       toast.error(

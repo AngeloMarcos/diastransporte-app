@@ -3,7 +3,17 @@ import { ArrowRight, Clock, MapPin } from "lucide-react";
 import { formatBRL, type Rota } from "@/data/rotas";
 import { Button } from "@/components/ui/button";
 
-export function RotaCard({ rota }: { rota: Rota }) {
+export function RotaCard({
+  rota,
+  carro = "pequeno",
+}: {
+  rota: Rota;
+  carro?: "pequeno" | "grande";
+}) {
+  // Auditoria do site: com o filtro "Carro grande" o card continuava mostrando
+  // o preço do carro pequeno (São Luís → Barreirinhas: R$ 650, e o grande é
+  // R$ 900). Mostra o preço do veículo filtrado e diz qual é.
+  const preco = carro === "grande" ? (rota.precoGrande ?? rota.precoPequeno) : rota.precoPequeno;
   return (
     <article className="group flex flex-col overflow-hidden rounded-lg border border-border bg-card">
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
@@ -55,8 +65,10 @@ export function RotaCard({ rota }: { rota: Rota }) {
             <span className="block text-[11px] uppercase tracking-widest text-muted-foreground">
               A partir de
             </span>
-            <span className="font-display text-2xl">{formatBRL(rota.precoPequeno)}</span>
-            <span className="ml-1 text-xs text-muted-foreground">/ veículo</span>
+            <span className="font-display text-2xl">{formatBRL(preco)}</span>
+            <span className="ml-1 text-xs text-muted-foreground">
+              / {carro === "grande" ? "carro grande" : "veículo"}
+            </span>
           </div>
           <Button asChild size="sm" variant="secondary">
             <Link to="/transfers/$rota" params={{ rota: rota.slug }}>

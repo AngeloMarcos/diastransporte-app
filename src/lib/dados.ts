@@ -13,6 +13,8 @@ import type {
   VeiculoFrotaRow,
 } from "@/lib/dados-tipos";
 import { contarReservasMesmoCarroData } from "@/lib/disponibilidade.functions";
+import { hojeEmMaranhao } from "@/lib/fuso-maranhao";
+import { HORA_REGEX } from "@/lib/periodo";
 import { ROTA_COLUMNS, type RotaRow } from "@/lib/rotasMap";
 import {
   definirPapelAdmin,
@@ -208,6 +210,20 @@ export async function criarReservas(
     const digitos = (item.contato_telefone ?? "").replace(/\D/g, "");
     if (digitos.length < 10) {
       throw new Error("Informe um WhatsApp válido (com DDD) para finalizar a reserva.");
+    }
+    // Sprint 2 (auditoria do site, A3): a tarifa dia/noite sai do horário, e
+    // item antigo de carrinho (de antes de o horário ser obrigatório) pode
+    // não ter — pede pra refazer em vez de deixar o servidor rejeitar com
+    // mensagem técnica.
+    if (!item.hora || !HORA_REGEX.test(item.hora)) {
+      throw new Error(
+        `Falta o horário de "${item.trecho}" — o valor depende dele (tarifa noturna das 18h às 5h). Remova o item e adicione de novo com o horário.`,
+      );
+    }
+    if (!item.data_viagem || item.data_viagem < hojeEmMaranhao()) {
+      throw new Error(
+        `A data de "${item.trecho}" já passou ou não foi informada — remova o item e adicione de novo.`,
+      );
     }
   }
   // Trava contra reserva duplicada: mesma rota, data, horário e carro, ainda
