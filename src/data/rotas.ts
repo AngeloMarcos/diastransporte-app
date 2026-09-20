@@ -18,12 +18,35 @@ export const fotos = {
   frotaPorDoSol: frota8,
 };
 
-export const EMPRESA = {
+// Fonte única dos dados da empresa: rodapé, contato, dados estruturados (SEO) e
+// páginas legais leem daqui, pra horário/política não divergirem entre telas.
+export const EMPRESA: {
+  nome: string;
+  assinatura: string;
+  base: string;
+  whatsapp: string;
+  whatsappLabel: string;
+  /** Horário de atendimento (formato 24h "HH:MM", usado no dado estruturado). */
+  abre: string;
+  fecha: string;
+  horario: string;
+  horarioObs: string;
+  /** Cancelamento sem custo até X horas antes do embarque. */
+  cancelamentoGratisHoras: number;
+  /** Só exibidos nas páginas legais quando preenchidos (dado do dono do negócio). */
+  razaoSocial?: string;
+  cnpj?: string;
+} = {
   nome: "Dias Transporte",
   assinatura: "Do desembarque às dunas",
   base: "São Luís — MA",
   whatsapp: "559881506268",
   whatsappLabel: "(98) 98150-6268",
+  abre: "06:00",
+  fecha: "22:00",
+  horario: "Todos os dias, das 6h às 22h",
+  horarioObs: "embarques fora desse horário são combinados",
+  cancelamentoGratisHoras: 24,
 };
 
 export type Rota = {
@@ -45,6 +68,8 @@ export type Rota = {
   embarque: string[];
   foto: string;
   galeria: string[];
+  /** ISO da última edição (updated_at); alimenta o lastmod do sitemap. */
+  atualizadoEm?: string;
 };
 
 export const rotas: Rota[] = [

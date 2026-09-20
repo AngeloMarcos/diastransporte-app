@@ -54,7 +54,7 @@ async function contexto() {
 
 const COLUNAS_ROTA = `id, slug, origem, destino, ida_e_volta, duracao, distancia,
   preco_pequeno, preco_grande, preco_pequeno_noite, preco_grande_noite, destaque,
-  popularidade, resumo, descricao, embarque, foto, galeria, ativo`;
+  popularidade, resumo, descricao, embarque, foto, galeria, ativo, updated_at`;
 
 // ------------------------------------------------------------------ rotas
 export const vpsListRotasAdmin = createServerFn({ method: "GET" }).handler(

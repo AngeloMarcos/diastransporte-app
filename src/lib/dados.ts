@@ -3,6 +3,7 @@
 // Lovable Cloud seguem pelo cliente Supabase + RLS (comportamento atual).
 // Quando o site estiver 100% na VPS, basta apagar os ramos "cloud" daqui.
 import { supabase } from "@/integrations/supabase/client";
+import { otimizarImagem } from "@/lib/imagem";
 import type { LeadRow, LeadStatus, NovoLead } from "@/lib/leads";
 import type {
   AgendamentoRow,
@@ -861,7 +862,9 @@ export async function redefinirSenha(userId: string, senha: string): Promise<voi
 
 // ---------------------------------------------------------------- imagens
 /** Envia uma foto e devolve a URL pública (disco da VPS ou storage do Cloud). */
-export async function enviarImagem(arquivo: File, prefixo: string): Promise<string> {
+export async function enviarImagem(original: File, prefixo: string): Promise<string> {
+  // Redimensiona e regrava em WebP (sem EXIF/GPS) antes de subir — ver lib/imagem.ts.
+  const arquivo = await otimizarImagem(original);
   if (MODO_VPS) {
     const corpo = new FormData();
     corpo.append("arquivo", arquivo);

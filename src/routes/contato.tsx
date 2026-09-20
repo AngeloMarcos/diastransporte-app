@@ -23,8 +23,7 @@ export const Route = createFileRoute("/contato")({
       { title: "Contato e atendimento — Dias Transporte" },
       {
         name: "description",
-        content:
-          "Fale com a Dias Transporte pelo WhatsApp (98) 98150-6268. Atendimento todos os dias, das 6h às 22h, para transfers em São Luís e Lençóis Maranhenses.",
+        content: `Fale com a Dias Transporte pelo WhatsApp ${EMPRESA.whatsappLabel}. Atendimento: ${EMPRESA.horario.toLowerCase()}, para transfers em São Luís e Lençóis Maranhenses.`,
       },
       { property: "og:title", content: "Contato — Dias Transporte" },
       {
@@ -104,8 +103,7 @@ function Contato() {
                 </a>
               </li>
               <li className="flex items-center gap-2">
-                <Clock className="size-4 text-primary" /> Todos os dias, 6h às 22h (embarques 24h
-                combinados)
+                <Clock className="size-4 text-primary" /> {EMPRESA.horario} ({EMPRESA.horarioObs})
               </li>
               <li className="flex items-center gap-2">
                 <MapPin className="size-4 text-primary" /> Base em {EMPRESA.base}

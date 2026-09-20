@@ -12,12 +12,16 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as CancelamentoRouteImport } from './routes/cancelamento'
 import { Route as CarrinhoRouteImport } from './routes/carrinho'
 import { Route as ContatoRouteImport } from './routes/contato'
 import { Route as FrotaRouteImport } from './routes/frota'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as SobreRouteImport } from './routes/sobre'
+import { Route as TermosRouteImport } from './routes/termos'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedMinhasViagensRouteImport } from './routes/_authenticated/minhas-viagens'
 import { Route as AuthenticatedMotoristaRouteImport } from './routes/_authenticated/motorista'
@@ -41,6 +45,11 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CancelamentoRoute = CancelamentoRouteImport.update({
+  id: '/cancelamento',
+  path: '/cancelamento',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CarrinhoRoute = CarrinhoRouteImport.update({
   id: '/carrinho',
   path: '/carrinho',
@@ -61,6 +70,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacidadeRoute = PrivacidadeRouteImport.update({
+  id: '/privacidade',
+  path: '/privacidade',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
   id: '/robots.txt',
   path: '/robots.txt',
@@ -69,6 +83,16 @@ const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SobreRoute = SobreRouteImport.update({
+  id: '/sobre',
+  path: '/sobre',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermosRoute = TermosRouteImport.update({
+  id: '/termos',
+  path: '/termos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
@@ -116,12 +140,16 @@ const ApiUploadsArquivoRoute = ApiUploadsArquivoRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/cancelamento': typeof CancelamentoRoute
   '/carrinho': typeof CarrinhoRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
   '/login': typeof LoginRoute
+  '/privacidade': typeof PrivacidadeRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/sobre': typeof SobreRoute
+  '/termos': typeof TermosRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
   '/motorista': typeof AuthenticatedMotoristaRoute
@@ -134,12 +162,16 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/cancelamento': typeof CancelamentoRoute
   '/carrinho': typeof CarrinhoRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
   '/login': typeof LoginRoute
+  '/privacidade': typeof PrivacidadeRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/sobre': typeof SobreRoute
+  '/termos': typeof TermosRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
   '/motorista': typeof AuthenticatedMotoristaRoute
@@ -154,12 +186,16 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/cancelamento': typeof CancelamentoRoute
   '/carrinho': typeof CarrinhoRoute
   '/contato': typeof ContatoRoute
   '/frota': typeof FrotaRoute
   '/login': typeof LoginRoute
+  '/privacidade': typeof PrivacidadeRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/sobre': typeof SobreRoute
+  '/termos': typeof TermosRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/minhas-viagens': typeof AuthenticatedMinhasViagensRoute
   '/_authenticated/motorista': typeof AuthenticatedMotoristaRoute
@@ -174,12 +210,16 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/cancelamento'
     | '/carrinho'
     | '/contato'
     | '/frota'
     | '/login'
+    | '/privacidade'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/sobre'
+    | '/termos'
     | '/admin'
     | '/minhas-viagens'
     | '/motorista'
@@ -192,12 +232,16 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/cancelamento'
     | '/carrinho'
     | '/contato'
     | '/frota'
     | '/login'
+    | '/privacidade'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/sobre'
+    | '/termos'
     | '/admin'
     | '/minhas-viagens'
     | '/motorista'
@@ -211,12 +255,16 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/cancelamento'
     | '/carrinho'
     | '/contato'
     | '/frota'
     | '/login'
+    | '/privacidade'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/sobre'
+    | '/termos'
     | '/_authenticated/admin'
     | '/_authenticated/minhas-viagens'
     | '/_authenticated/motorista'
@@ -231,12 +279,16 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  CancelamentoRoute: typeof CancelamentoRoute
   CarrinhoRoute: typeof CarrinhoRoute
   ContatoRoute: typeof ContatoRoute
   FrotaRoute: typeof FrotaRoute
   LoginRoute: typeof LoginRoute
+  PrivacidadeRoute: typeof PrivacidadeRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  SobreRoute: typeof SobreRoute
+  TermosRoute: typeof TermosRoute
   ApiUploadsRoute: typeof ApiUploadsRouteWithChildren
   ConviteTokenRoute: typeof ConviteTokenRoute
   TransfersRotaRoute: typeof TransfersRotaRoute
@@ -264,6 +316,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cancelamento': {
+      id: '/cancelamento'
+      path: '/cancelamento'
+      fullPath: '/cancelamento'
+      preLoaderRoute: typeof CancelamentoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/carrinho': {
@@ -294,6 +353,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacidade': {
+      id: '/privacidade'
+      path: '/privacidade'
+      fullPath: '/privacidade'
+      preLoaderRoute: typeof PrivacidadeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/robots.txt': {
       id: '/robots.txt'
       path: '/robots.txt'
@@ -306,6 +372,20 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sobre': {
+      id: '/sobre'
+      path: '/sobre'
+      fullPath: '/sobre'
+      preLoaderRoute: typeof SobreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/termos': {
+      id: '/termos'
+      path: '/termos'
+      fullPath: '/termos'
+      preLoaderRoute: typeof TermosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/admin': {
@@ -398,12 +478,16 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  CancelamentoRoute: CancelamentoRoute,
   CarrinhoRoute: CarrinhoRoute,
   ContatoRoute: ContatoRoute,
   FrotaRoute: FrotaRoute,
   LoginRoute: LoginRoute,
+  PrivacidadeRoute: PrivacidadeRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  SobreRoute: SobreRoute,
+  TermosRoute: TermosRoute,
   ApiUploadsRoute: ApiUploadsRouteWithChildren,
   ConviteTokenRoute: ConviteTokenRoute,
   TransfersRotaRoute: TransfersRotaRoute,

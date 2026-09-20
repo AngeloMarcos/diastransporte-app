@@ -19,6 +19,7 @@ import { camposDeBusca } from "@/data/rotas";
 import { HomeSkeleton } from "@/components/site/Skeletons";
 import { ErroCarregamento } from "@/components/site/ErroCarregamento";
 import { origemAtual } from "@/lib/origem-atual.functions";
+import { dadosEstruturadosEmpresa } from "@/lib/seo";
 import logo from "@/assets/logo.jpeg";
 
 export const Route = createFileRoute("/")({
@@ -48,6 +49,17 @@ export const Route = createFileRoute("/")({
         ? [
             { property: "og:image", content: `${loaderData.origem}${logo}` },
             { name: "twitter:image", content: `${loaderData.origem}${logo}` },
+          ]
+        : []),
+      // Dado estruturado da empresa (nome, telefone, área e horário) — ver seo.ts.
+      ...(loaderData?.origem
+        ? [
+            {
+              "script:ld+json": dadosEstruturadosEmpresa(
+                loaderData.origem,
+                `${loaderData.origem}${logo}`,
+              ),
+            },
           ]
         : []),
     ],

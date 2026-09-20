@@ -4,9 +4,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { listRotas } from "@/lib/rotas.functions";
+import { lastmodIso, lastmodMaisRecente } from "@/lib/seo";
 
-function tagUrl(origem: string, caminho: string, prioridade: string) {
-  return `  <url>\n    <loc>${origem}${caminho}</loc>\n    <priority>${prioridade}</priority>\n  </url>`;
+/** Data da última revisão do texto das páginas legais/institucionais — atualizar
+ * junto com "Última atualização" da própria página quando o texto mudar. */
+const TEXTO_LEGAL_REVISADO_EM = "2026-09-20";
+
+function tagUrl(origem: string, caminho: string, prioridade: string, lastmod?: string) {
+  return [
+    "  <url>",
+    `    <loc>${origem}${caminho}</loc>`,
+    ...(lastmod ? [`    <lastmod>${lastmod}</lastmod>`] : []),
+    `    <priority>${prioridade}</priority>`,
+    "  </url>",
+  ].join("\n");
 }
 
 export const Route = createFileRoute("/sitemap.xml")({
@@ -15,13 +26,22 @@ export const Route = createFileRoute("/sitemap.xml")({
       GET: async ({ request }) => {
         const origem = new URL(request.url).origin;
         const rotas = await listRotas();
+        // Home e listagem mudam quando qualquer trecho muda; sem data confiável
+        // (rotas estáticas de fallback), o lastmod simplesmente não é emitido.
+        const ultimaEdicao = lastmodMaisRecente(rotas.map((r) => r.atualizadoEm));
 
         const paginas = [
-          tagUrl(origem, "/", "1.0"),
-          tagUrl(origem, "/transfers", "0.9"),
+          tagUrl(origem, "/", "1.0", ultimaEdicao),
+          tagUrl(origem, "/transfers", "0.9", ultimaEdicao),
           tagUrl(origem, "/frota", "0.6"),
           tagUrl(origem, "/contato", "0.6"),
-          ...rotas.map((r) => tagUrl(origem, `/transfers/${r.slug}`, "0.8")),
+          tagUrl(origem, "/sobre", "0.5", TEXTO_LEGAL_REVISADO_EM),
+          tagUrl(origem, "/cancelamento", "0.4", TEXTO_LEGAL_REVISADO_EM),
+          tagUrl(origem, "/termos", "0.3", TEXTO_LEGAL_REVISADO_EM),
+          tagUrl(origem, "/privacidade", "0.3", TEXTO_LEGAL_REVISADO_EM),
+          ...rotas.map((r) =>
+            tagUrl(origem, `/transfers/${r.slug}`, "0.8", lastmodIso(r.atualizadoEm)),
+          ),
         ];
 
         const corpo = [

@@ -58,6 +58,26 @@ export function Footer() {
                 Contato e atendimento
               </Link>
             </li>
+            <li>
+              <Link to="/sobre" className="text-muted-foreground hover:text-foreground">
+                Sobre nós
+              </Link>
+            </li>
+            <li>
+              <Link to="/cancelamento" className="text-muted-foreground hover:text-foreground">
+                Política de cancelamento
+              </Link>
+            </li>
+            <li>
+              <Link to="/termos" className="text-muted-foreground hover:text-foreground">
+                Termos de uso
+              </Link>
+            </li>
+            <li>
+              <Link to="/privacidade" className="text-muted-foreground hover:text-foreground">
+                Privacidade
+              </Link>
+            </li>
           </ul>
         </div>
 
@@ -66,7 +86,7 @@ export function Footer() {
           <p className="mt-4 text-sm text-muted-foreground">
             {EMPRESA.whatsappLabel}
             <br />
-            Todos os dias, 6h às 22h
+            {EMPRESA.horario}
           </p>
           <Button asChild className="mt-4 w-full bg-whats text-whats-foreground hover:bg-whats/90">
             <a

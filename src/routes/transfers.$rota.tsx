@@ -38,7 +38,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { toast } from "sonner";
-import { formatBRL, precoFinal, type Rota } from "@/data/rotas";
+import { EMPRESA, formatBRL, precoFinal, type Rota } from "@/data/rotas";
+import { dadosEstruturadosServico } from "@/lib/seo";
 import { listRotas } from "@/lib/rotas.functions";
 import { mensagemReserva, whatsappLink } from "@/lib/whatsapp";
 import { adicionarAoCarrinho } from "@/lib/carrinho";
@@ -96,6 +97,7 @@ export const Route = createFileRoute("/transfers/$rota")({
         // no Google. 'script:ld+json' é suportado nativamente pelo
         // TanStack Router (vira <script type="application/ld+json"> no
         // <head>, sem lib extra).
+        ...(origem ? [{ "script:ld+json": dadosEstruturadosServico(origem, rota) }] : []),
         {
           "script:ld+json": {
             "@context": "https://schema.org",
@@ -173,8 +175,7 @@ const faq = [
   },
   {
     pergunta: "Posso cancelar?",
-    resposta:
-      "Cancelamento sem custo até 24h antes do embarque. Alterações de horário podem ser feitas conforme disponibilidade.",
+    resposta: `Cancelamento sem custo até ${String(EMPRESA.cancelamentoGratisHoras)}h antes do embarque. Alterações de horário podem ser feitas conforme disponibilidade.`,
   },
 ];
 
@@ -194,8 +195,7 @@ const politicas = [
   {
     icon: CalendarOff,
     titulo: "Cancelamento",
-    texto:
-      "Grátis até 24h antes do embarque. Depois disso, fale com a gente pelo WhatsApp para reagendar conforme disponibilidade.",
+    texto: `Grátis até ${String(EMPRESA.cancelamentoGratisHoras)}h antes do embarque. Depois disso, fale com a gente pelo WhatsApp para reagendar conforme disponibilidade.`,
   },
 ];
 
@@ -791,7 +791,7 @@ function RotaDetalhe() {
               {reservaOnline
                 ? '"Reservar agora" leva você direto ao carrinho para finalizar. '
                 : ""}
-              Cancelamento grátis até 24h antes.
+              Cancelamento grátis até {EMPRESA.cancelamentoGratisHoras}h antes.
             </p>
           </div>
         </aside>

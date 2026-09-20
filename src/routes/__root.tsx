@@ -15,6 +15,7 @@ import { BottomNav } from "@/components/site/BottomNav";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { origemAtual } from "../lib/origem-atual.functions";
+import { urlCanonica } from "../lib/seo";
 import logo from "../assets/logo.jpeg";
 
 function NotFoundComponent() {
@@ -77,11 +78,17 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
+function canonicalLink(origem: string | undefined, matches: { pathname: string }[]) {
+  const atual = matches[matches.length - 1]?.pathname;
+  const href = origem && atual ? urlCanonica(origem, atual) : null;
+  return href ? [{ rel: "canonical", href }] : [];
+}
+
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   // Só pra montar a URL absoluta do og:image de fallback abaixo — ver
   // src/lib/origem-atual.functions.ts. Roda em toda página.
   loader: async () => ({ origem: await origemAtual() }),
-  head: ({ loaderData }) => ({
+  head: ({ loaderData, matches }) => ({
     meta: [
       { charSet: "utf-8" },
       {
@@ -131,6 +138,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap",
       },
+      // Canonical: uma URL só por página (sem ?query), pra busca não tratar
+      // /transfers?carro=grande e /transfers como conteúdo duplicado. Sem
+      // canonical nas áreas privadas (ver seo.ts).
+      ...canonicalLink(loaderData?.origem, matches),
       { rel: "icon", href: "/favicon.png", type: "image/png" },
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png", sizes: "180x180" },

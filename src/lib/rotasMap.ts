@@ -20,10 +20,12 @@ export type RotaRow = {
   foto: string;
   galeria: string[];
   ativo: boolean;
+  /** Só usado no lastmod do sitemap; ausente nas linhas montadas à mão. */
+  updated_at?: string;
 };
 
 export const ROTA_COLUMNS =
-  "id,slug,origem,destino,ida_e_volta,duracao,distancia,preco_pequeno,preco_grande,preco_pequeno_noite,preco_grande_noite,destaque,popularidade,resumo,descricao,embarque,foto,galeria,ativo";
+  "id,slug,origem,destino,ida_e_volta,duracao,distancia,preco_pequeno,preco_grande,preco_pequeno_noite,preco_grande_noite,destaque,popularidade,resumo,descricao,embarque,foto,galeria,ativo,updated_at";
 
 export function rowToRota(row: RotaRow): Rota {
   return {
@@ -45,5 +47,6 @@ export function rowToRota(row: RotaRow): Rota {
     embarque: row.embarque ?? [],
     foto: row.foto,
     galeria: row.galeria?.length ? row.galeria : [row.foto],
+    ...(row.updated_at ? { atualizadoEm: row.updated_at } : {}),
   };
 }
