@@ -3,6 +3,7 @@
 // Lovable Cloud seguem pelo cliente Supabase + RLS (comportamento atual).
 // Quando o site estiver 100% na VPS, basta apagar os ramos "cloud" daqui.
 import { supabase } from "@/integrations/supabase/client";
+import type { LeadRow, LeadStatus, NovoLead } from "@/lib/leads";
 import type {
   AgendamentoRow,
   AuditoriaRow,
@@ -57,6 +58,7 @@ import {
   vpsSalvarRota,
   vpsSalvarVeiculoFrota,
 } from "@/lib/vps/dados.functions";
+import { vpsAtualizarLead, vpsCriarLead, vpsListarLeads } from "@/lib/vps/leads.functions";
 import {
   vpsAtribuirMotoristaPedido,
   vpsAtualizarCanalVenda,
@@ -800,6 +802,32 @@ export type FiltroAuditoria = {
 export async function listarAuditoria(filtro: FiltroAuditoria = {}): Promise<AuditoriaRow[]> {
   if (MODO_VPS) return vpsListarAuditoria({ data: filtro });
   throw new Error("Auditoria ainda não disponível neste ambiente.");
+}
+
+// ------------------------------------------------------------------ leads
+/** Registra um pedido de orçamento do formulário de contato. Best-effort e
+ * PÚBLICO: só existe na VPS (migration 0017). No Lovable Cloud devolve
+ * salvo:false sem erro — a tela segue pro WhatsApp do mesmo jeito. */
+export async function criarLead(lead: NovoLead): Promise<{ salvo: boolean }> {
+  if (!MODO_VPS) return { salvo: false };
+  await vpsCriarLead({ data: lead });
+  return { salvo: true };
+}
+
+export async function listarLeads(
+  filtro: { status?: LeadStatus; busca?: string } = {},
+): Promise<LeadRow[]> {
+  if (MODO_VPS) return vpsListarLeads({ data: filtro });
+  throw new Error("Leads ainda não disponíveis neste ambiente.");
+}
+
+export async function atualizarLead(dados: {
+  id: string;
+  status?: LeadStatus;
+  notaInterna?: string;
+}): Promise<void> {
+  if (!MODO_VPS) throw new Error("Leads ainda não disponíveis neste ambiente.");
+  await vpsAtualizarLead({ data: dados });
 }
 
 // ------------------------------------------------------ usuários e acessos

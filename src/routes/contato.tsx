@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Clock, MapPin, MessageCircle, Phone } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { EMPRESA, fotos } from "@/data/rotas";
+import { criarLead } from "@/lib/dados";
+import { linkTelefone, novoLeadSchema } from "@/lib/leads";
 import { whatsappLink } from "@/lib/whatsapp";
 import { listConteudo } from "@/lib/conteudo.functions";
 import { mapearConteudo, texto } from "@/lib/conteudo";
@@ -36,7 +39,9 @@ export const Route = createFileRoute("/contato")({
 function Contato() {
   const conteudo = mapearConteudo(Route.useLoaderData());
   const [nome, setNome] = useState("");
-
+  const [telefone, setTelefone] = useState("");
+  const [website, setWebsite] = useState(""); // isca anti-robô
+  const [erro, setErro] = useState("");
   const [trecho, setTrecho] = useState("");
   const [data, setData] = useState("");
   const [obs, setObs] = useState("");
@@ -44,6 +49,7 @@ function Contato() {
   const mensagem = [
     `Olá, ${EMPRESA.nome}!`,
     nome && `Meu nome é ${nome}.`,
+    telefone && `Telefone: ${telefone}`,
     trecho && `Trecho: ${trecho}`,
     data && `Data: ${data}`,
     obs && `Observações: ${obs}`,
@@ -89,7 +95,13 @@ function Contato() {
             <h2 className="font-display text-fluid-lg">Atendimento</h2>
             <ul className="mt-4 space-y-3 text-sm text-muted-foreground">
               <li className="flex items-center gap-2">
-                <Phone className="size-4 text-primary" /> {EMPRESA.whatsappLabel}
+                <Phone className="size-4 text-primary" />{" "}
+                <a
+                  href={linkTelefone(EMPRESA.whatsappLabel)}
+                  className="underline-offset-4 hover:text-foreground hover:underline"
+                >
+                  {EMPRESA.whatsappLabel}
+                </a>
               </li>
               <li className="flex items-center gap-2">
                 <Clock className="size-4 text-primary" /> Todos os dias, 6h às 22h (embarques 24h
@@ -126,8 +138,24 @@ function Contato() {
           className="rounded-lg border border-border bg-card p-6"
           onSubmit={(e) => {
             e.preventDefault();
+            const lead = { nome, telefone, trecho, dataViagem: data, observacoes: obs, website };
+            const validado = novoLeadSchema.safeParse(lead);
+            if (!validado.success) {
+              setErro(validado.error.issues[0]?.message ?? "Confira os dados informados.");
+              return;
+            }
+            setErro("");
+            // Abre o WhatsApp NA HORA (dentro do clique — depois de um await o
+            // navegador bloquearia a janela) e grava o lead em paralelo. Se a
+            // gravação falhar, o pedido já foi pro WhatsApp: não vira erro.
             window.open(whatsappLink(mensagem), "_blank", "noopener");
+            void criarLead(lead)
+              .then((r) => {
+                if (r.salvo) toast.success("Pedido registrado. Já já falamos com você!");
+              })
+              .catch(() => undefined);
           }}
+          noValidate
         >
           <h2 className="font-display text-fluid-lg">Pedir orçamento</h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -139,9 +167,38 @@ function Contato() {
               <Label htmlFor="nome">Seu nome</Label>
               <Input
                 id="nome"
+                autoComplete="name"
+                required
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
                 className="mt-2"
+              />
+            </div>
+            <div>
+              <Label htmlFor="telefone">Seu WhatsApp ou telefone</Label>
+              <Input
+                id="telefone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                required
+                placeholder="(98) 98150-6268"
+                value={telefone}
+                onChange={(e) => setTelefone(e.target.value)}
+                aria-invalid={Boolean(erro)}
+                className="mt-2"
+              />
+            </div>
+            {/* Isca: escondido de quem usa a tela e de leitor de tela; robô que
+                preenche tudo cai aqui e o servidor descarta o pedido. */}
+            <div className="absolute -left-[9999px]" aria-hidden="true">
+              <label htmlFor="website">Não preencha este campo</label>
+              <input
+                id="website"
+                tabIndex={-1}
+                autoComplete="off"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
               />
             </div>
             <div>
@@ -176,6 +233,12 @@ function Contato() {
               />
             </div>
           </div>
+
+          {erro && (
+            <p role="alert" className="mt-4 text-sm text-red-400">
+              {erro}
+            </p>
+          )}
 
           <Button
             type="submit"

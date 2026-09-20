@@ -16,12 +16,14 @@ import {
   History,
   Image as ImageIcon,
   Info,
+  Inbox,
   KeyRound,
   LayoutDashboard,
   Loader2,
   LogOut,
   MessageCircle,
   Pencil,
+  Phone,
   Plus,
   Printer,
   Radio,
@@ -139,6 +141,8 @@ import {
   salvarFotoGaleria,
   salvarNotasFornecedor,
   salvarNotasInternas,
+  atualizarLead,
+  listarLeads,
   salvarRota,
   salvarVeiculoFrota,
   transicionarStatusPedido,
@@ -146,6 +150,14 @@ import {
   type FiltroPedidosAdmin,
   type Fornecedor,
 } from "@/lib/dados";
+import {
+  LEAD_STATUS,
+  ROTULO_LEAD_STATUS,
+  linkRespostaLead,
+  linkTelefone,
+  type LeadRow,
+  type LeadStatus,
+} from "@/lib/leads";
 import type { PedidoImportRow } from "@/lib/vps/dados-despacho.functions";
 import { encerrarSessaoAtual, useAuth } from "@/hooks/useAuth";
 import { MODO_VPS } from "@/lib/vps/config";
@@ -257,6 +269,8 @@ const abas = [
   // nem aparece, em vez de aparecer e dar erro ao tentar carregar.
   { id: "frota", label: "Frota", icon: Truck, soVps: true },
   { id: "agendamentos", label: "Agendamentos", icon: CalendarCheck },
+  // Pedidos de orçamento do formulário de contato (migration 0017) — VPS-only.
+  { id: "leads", label: "Leads", icon: Inbox, soVps: true },
   { id: "conteudo", label: "Conteúdo do site", icon: FileText },
   { id: "usuarios", label: "Usuários e acessos", icon: Users },
   // Trilha de auditoria (migration 0012) — a tabela só existe no Postgres da
@@ -360,6 +374,15 @@ function AdminPage() {
     idsPendentesVistos.current = idsAgora;
   }, [agendamentosLive]);
 
+  // Selo de "novos" na aba Leads — mesma cadência de atualização do despacho.
+  const { data: leadsNovos } = useQuery({
+    queryKey: ["admin-leads-novos"],
+    queryFn: () => listarLeads({ status: "novo" }),
+    enabled: isAdmin && MODO_VPS,
+    refetchInterval: 60_000,
+  });
+  const leadsNovosCount = leadsNovos?.length ?? 0;
+
   const pendentesCount = (agendamentosLive ?? []).filter((a) => a.status === "pendente").length;
 
   if (carregando || !isAdmin) {
@@ -436,6 +459,14 @@ function AdminPage() {
                         {pendentesCount}
                       </span>
                     )}
+                    {id === "leads" && leadsNovosCount > 0 && (
+                      <span
+                        className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground"
+                        title="Leads novos"
+                      >
+                        {leadsNovosCount}
+                      </span>
+                    )}
                     {id === "corridas" && semMotoristaCount > 0 && (
                       <span
                         className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[11px] font-semibold text-background"
@@ -473,6 +504,11 @@ function AdminPage() {
             <TabsContent value="agendamentos" className="mt-0">
               <AdminAgendamentos />
             </TabsContent>
+            {MODO_VPS && (
+              <TabsContent value="leads" className="mt-0">
+                <AdminLeads />
+              </TabsContent>
+            )}
             {MODO_VPS && (
               <TabsContent value="corridas" className="mt-0">
                 <AdminPedidos />
@@ -5622,6 +5658,7 @@ const ENTIDADES_AUDITORIA = [
   ["categoria", "Categorias"],
   ["empresa", "Empresas"],
   ["canal", "Canais de venda"],
+  ["lead", "Leads"],
 ] as const;
 
 const ROTULO_ENTIDADE: Record<string, string> = Object.fromEntries(ENTIDADES_AUDITORIA);
@@ -5690,6 +5727,241 @@ function AuditoriaLinha({ e }: { e: AuditoriaRow }) {
         )}
       </TableCell>
     </TableRow>
+  );
+}
+
+// ---------------------------------------------------------------- leads
+// Pedidos de orçamento do formulário de contato (public.leads). O cliente
+// também é mandado ao WhatsApp da empresa; aqui fica o registro pra ninguém
+// se perder e dar pra acompanhar (novo → contatado → virou reserva).
+const CLASSE_LEAD_STATUS: Record<LeadStatus, string> = {
+  novo: "border-primary/40 bg-primary/15 text-primary",
+  contatado: "border-sky-500/40 bg-sky-500/15 text-sky-300",
+  convertido: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300",
+  descartado: "border-border bg-muted text-muted-foreground",
+};
+
+function AdminLeads() {
+  const queryClient = useQueryClient();
+  const [status, setStatus] = useState<"todos" | LeadStatus>("todos");
+  const [busca, setBusca] = useState("");
+  const [buscaAplicada, setBuscaAplicada] = useState("");
+
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
+    queryKey: ["admin-leads", status, buscaAplicada],
+    queryFn: () =>
+      listarLeads({
+        ...(status !== "todos" && { status }),
+        ...(buscaAplicada && { busca: buscaAplicada }),
+      }),
+    refetchOnWindowFocus: true,
+  });
+
+  const atualizar = useMutation({
+    mutationFn: atualizarLead,
+    onSuccess: () => {
+      toast.success("Lead atualizado.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-leads"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-leads-novos"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atualizar o lead."),
+  });
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="font-display text-xl">Leads</h2>
+        <p className="text-sm text-muted-foreground">
+          Pedidos de orçamento enviados pelo formulário do site. Responda pelo WhatsApp e vá
+          marcando o andamento.
+        </p>
+      </div>
+
+      <form
+        className="flex flex-col gap-3 sm:flex-row"
+        onSubmit={(ev) => {
+          ev.preventDefault();
+          setBuscaAplicada(busca.trim());
+        }}
+      >
+        <Select value={status} onValueChange={(v) => setStatus(v as "todos" | LeadStatus)}>
+          <SelectTrigger className="h-11 sm:w-48" aria-label="Filtrar por status">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os status</SelectItem>
+            {LEAD_STATUS.map((s) => (
+              <SelectItem key={s} value={s}>
+                {ROTULO_LEAD_STATUS[s]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="relative sm:max-w-sm sm:flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 pl-8"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por nome, telefone ou trecho"
+          />
+        </div>
+        <Button type="submit" className="h-11">
+          Buscar
+        </Button>
+      </form>
+
+      {isLoading ? (
+        <ListaCarregando />
+      ) : isError ? (
+        <Alert variant="destructive">
+          <AlertTriangle className="size-4" />
+          <AlertTitle>Não foi possível carregar os leads</AlertTitle>
+          <AlertDescription>
+            <Button size="sm" variant="outline" className="mt-2" onClick={() => void refetch()}>
+              Tentar de novo
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : !data?.length ? (
+        <ListaVazia
+          icon={Inbox}
+          titulo="Nenhum lead"
+          descricao={
+            status !== "todos" || buscaAplicada
+              ? "Nenhum lead bate com esse filtro."
+              : "Quando alguém pedir orçamento pelo site, aparece aqui."
+          }
+        />
+      ) : (
+        <>
+          <p className="text-xs text-muted-foreground">
+            {isFetching ? "Atualizando…" : `${String(data.length)} lead(s)`}
+          </p>
+          <ul className="space-y-3">
+            {data.map((l) => (
+              <LeadCard
+                key={l.id}
+                lead={l}
+                salvando={atualizar.isPending && atualizar.variables.id === l.id}
+                onAtualizar={(dados) => atualizar.mutate({ id: l.id, ...dados })}
+              />
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
+function LeadCard({
+  lead,
+  salvando,
+  onAtualizar,
+}: {
+  lead: LeadRow;
+  salvando: boolean;
+  onAtualizar: (dados: { status?: LeadStatus; notaInterna?: string }) => void;
+}) {
+  const [nota, setNota] = useState(lead.nota_interna ?? "");
+  const notaMudou = nota.trim() !== (lead.nota_interna ?? "");
+  const whats = linkRespostaLead(lead, lead.telefone);
+  return (
+    <li className="rounded-lg border border-border bg-card p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="font-medium">{lead.nome}</p>
+          <p className="text-xs text-muted-foreground">{formatarDataHora(lead.created_at)}</p>
+        </div>
+        <Badge variant="outline" className={CLASSE_LEAD_STATUS[lead.status]}>
+          {ROTULO_LEAD_STATUS[lead.status]}
+        </Badge>
+      </div>
+
+      <dl className="mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="inline text-muted-foreground">Telefone: </dt>
+          <dd className="inline">{lead.telefone}</dd>
+        </div>
+        {lead.trecho && (
+          <div>
+            <dt className="inline text-muted-foreground">Trecho: </dt>
+            <dd className="inline">{lead.trecho}</dd>
+          </div>
+        )}
+        {lead.data_viagem && (
+          <div>
+            <dt className="inline text-muted-foreground">Data da viagem: </dt>
+            <dd className="inline">
+              {new Date(`${lead.data_viagem}T12:00:00`).toLocaleDateString("pt-BR")}
+            </dd>
+          </div>
+        )}
+        {lead.observacoes && (
+          <div className="sm:col-span-2">
+            <dt className="inline text-muted-foreground">Observações: </dt>
+            <dd className="inline whitespace-pre-line">{lead.observacoes}</dd>
+          </div>
+        )}
+      </dl>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {whats && (
+          <Button
+            asChild
+            size="sm"
+            className="h-11 bg-whats text-whats-foreground hover:bg-whats/90"
+          >
+            <a href={whats} target="_blank" rel="noreferrer">
+              <MessageCircle className="size-4" /> Responder no WhatsApp
+            </a>
+          </Button>
+        )}
+        <Button asChild size="sm" variant="outline" className="h-11">
+          <a href={linkTelefone(lead.telefone)}>
+            <Phone className="size-4" /> Ligar
+          </a>
+        </Button>
+        <Select
+          value={lead.status}
+          onValueChange={(v) => onAtualizar({ status: v as LeadStatus })}
+          disabled={salvando}
+        >
+          <SelectTrigger className="h-11 w-44" aria-label="Status do lead">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {LEAD_STATUS.map((s) => (
+              <SelectItem key={s} value={s}>
+                {ROTULO_LEAD_STATUS[s]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-start">
+        <Textarea
+          rows={2}
+          value={nota}
+          onChange={(e) => setNota(e.target.value)}
+          maxLength={1000}
+          placeholder="Nota interna (só o admin vê)"
+          aria-label="Nota interna"
+          className="sm:flex-1"
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-11"
+          disabled={!notaMudou || salvando}
+          onClick={() => onAtualizar({ notaInterna: nota.trim() })}
+        >
+          {salvando ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}{" "}
+          Salvar nota
+        </Button>
+      </div>
+    </li>
   );
 }
 
