@@ -20,7 +20,9 @@ import {
   KeyRound,
   LayoutDashboard,
   Loader2,
+  ExternalLink,
   LogOut,
+  Menu,
   MessageCircle,
   Pencil,
   Phone,
@@ -45,8 +47,6 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 
-import { Header } from "@/components/site/Header";
-import { Footer } from "@/components/site/Footer";
 import { ConfirmarAcao } from "@/components/site/ConfirmarAcao";
 import { StatusBadge } from "@/components/site/StatusBadge";
 import {
@@ -83,7 +83,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -160,7 +167,8 @@ import {
 import type { PedidoImportRow } from "@/lib/vps/dados-despacho.functions";
 import { encerrarSessaoAtual, useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
-import { formatBRL } from "@/data/rotas";
+import logo from "@/assets/logo-96.webp";
+import { EMPRESA, formatBRL } from "@/data/rotas";
 import {
   pedirPermissaoNotificacao,
   permissaoNotificacao,
@@ -294,15 +302,14 @@ function AdminPage() {
   const abaNaUrl = abaBruta === "pedidos" ? "corridas" : abaBruta;
   const abaValida = abasVisiveis.find((a) => a.id === abaNaUrl);
   const aba = abaValida?.id ?? "geral";
-  function setAba(novaAba: (typeof abas)[number]["id"]) {
+  function setAba(novaAba: AbaId) {
     void navigate({ to: "/admin", search: { aba: novaAba }, replace: true });
   }
+  const [menuAberto, setMenuAberto] = useState(false);
   const [permissaoNotif, setPermissaoNotif] = useState<NotificationPermission | null>(null);
   const idsPendentesVistos = useRef<Set<string> | null>(null);
 
-  // Duplica o "Sair" que já existe no Header (mesmo padrão de lá) aqui no
-  // rodapé do menu lateral — pedido explícito do usuário ao pedir que a
-  // sidebar ficasse mais parecida com a do car-fleet-co original.
+  // "Sair" fica no rodapé do menu do painel (o cabeçalho do site não aparece aqui).
   async function sair() {
     await queryClientSair.cancelQueries();
     queryClientSair.clear();
@@ -379,161 +386,266 @@ function AdminPage() {
 
   if (carregando || !isAdmin) {
     return (
-      <div className="min-h-screen">
-        <Header />
-        <main className="mx-auto max-w-5xl px-4 py-20 text-sm text-muted-foreground">
-          Verificando permissões…
-        </main>
-        <Footer />
-      </div>
+      <main className="grid min-h-screen place-items-center px-4 text-sm text-muted-foreground">
+        Verificando permissões…
+      </main>
     );
   }
 
+  const contadores = {
+    agendamentos: pendentesCount,
+    leads: leadsNovosCount,
+    corridas: semMotoristaCount,
+  };
+  const abaAtual = abasVisiveis.find((a) => a.id === aba);
+  const totalAvisos = pendentesCount + leadsNovosCount + semMotoristaCount;
+
+  function selecionar(id: AbaId) {
+    setAba(id);
+    setMenuAberto(false);
+  }
+
+  // Painel em tela cheia: menu lateral fixo à esquerda e conteúdo à direita — sem o
+  // cabeçalho e o rodapé do site público, que só aparecem para os visitantes. Em
+  // telas estreitas o menu vira uma gaveta aberta por uma barra no topo.
   return (
-    <div className="min-h-screen">
-      <Header />
-      <main className="mx-auto max-w-6xl px-4 py-12">
-        <h1 className="font-display text-3xl">Painel do administrador</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {user?.email ? `Logado como ${user.email} · ` : ""}
-          Acompanhe agendamentos, edite rotas, preços, fotos e o conteúdo do site.
-        </p>
-        {permissaoNotif === "default" && (
-          <button
-            type="button"
-            onClick={() => void pedirPermissaoNotificacao().then(setPermissaoNotif)}
-            className="mt-3 inline-flex min-h-11 items-center gap-1.5 text-sm text-primary underline-offset-4 hover:underline"
-          >
-            <BellRing className="size-4" /> Ativar aviso no navegador para novas solicitações
-          </button>
-        )}
-        {permissaoNotif === "denied" && (
-          <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-            <BellRing className="size-3.5" /> Notificações do navegador bloqueadas — o aviso sonoro
-            no painel continua funcionando.
+    <Tabs
+      value={aba}
+      onValueChange={(v) => setAba(v as AbaId)}
+      orientation="vertical"
+      className="min-h-screen md:flex"
+    >
+      <aside className="hidden border-r border-border bg-card md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col">
+        <MenuAdmin
+          ativa={aba}
+          abas={abasVisiveis}
+          contadores={contadores}
+          email={user?.email ?? ""}
+          onSelecionar={selecionar}
+          onSair={() => void sair()}
+        />
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b border-border bg-background/95 px-3 backdrop-blur md:hidden">
+          <Sheet open={menuAberto} onOpenChange={setMenuAberto}>
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative size-11"
+                aria-label="Abrir menu"
+              >
+                <Menu className="size-5" />
+                {totalAvisos > 0 && (
+                  <span className="absolute right-1.5 top-1.5 size-2.5 rounded-full bg-primary" />
+                )}
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-72 p-0 sm:max-w-xs">
+              <SheetTitle className="sr-only">Menu do painel</SheetTitle>
+              <SheetDescription className="sr-only">
+                Escolha uma área do painel administrativo.
+              </SheetDescription>
+              <MenuAdmin
+                ativa={aba}
+                abas={abasVisiveis}
+                contadores={contadores}
+                email={user?.email ?? ""}
+                onSelecionar={selecionar}
+                onSair={() => void sair()}
+              />
+            </SheetContent>
+          </Sheet>
+          <p className="min-w-0 flex-1 truncate font-display text-lg">
+            {abaAtual?.label ?? "Painel"}
+          </p>
+        </header>
+
+        <main className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8 md:py-8">
+          <h1 className="sr-only">Painel do administrador</h1>
+          {permissaoNotif === "default" && (
+            <button
+              type="button"
+              onClick={() => void pedirPermissaoNotificacao().then(setPermissaoNotif)}
+              className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-sm text-primary underline-offset-4 hover:underline"
+            >
+              <BellRing className="size-4" /> Ativar aviso no navegador para novas solicitações
+            </button>
+          )}
+          {permissaoNotif === "denied" && (
+            <p className="mb-4 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <BellRing className="size-3.5" /> Notificações do navegador bloqueadas — o aviso
+              sonoro no painel continua funcionando.
+            </p>
+          )}
+
+          <TabsContent value="geral" className="mt-0">
+            <AdminVisaoGeral onIrPara={setAba} />
+          </TabsContent>
+          <TabsContent value="rotas" className="mt-0">
+            <AdminRotas />
+          </TabsContent>
+          <TabsContent value="frota" className="mt-0">
+            <AdminFrota />
+          </TabsContent>
+          <TabsContent value="agendamentos" className="mt-0">
+            <AdminAgendamentos />
+          </TabsContent>
+          <TabsContent value="leads" className="mt-0">
+            <AdminLeads />
+          </TabsContent>
+          <TabsContent value="corridas" className="mt-0">
+            <AdminPedidos />
+          </TabsContent>
+          <TabsContent value="fornecedores" className="mt-0">
+            <AdminFornecedores />
+          </TabsContent>
+          <TabsContent value="empresas" className="mt-0">
+            <AdminEmpresas />
+          </TabsContent>
+          <TabsContent value="canais" className="mt-0">
+            <AdminCanais />
+          </TabsContent>
+          <TabsContent value="categorias" className="mt-0">
+            <AdminCategorias />
+          </TabsContent>
+          <TabsContent value="conteudo" className="mt-0">
+            <AdminConteudo />
+          </TabsContent>
+          <TabsContent value="usuarios" className="mt-0">
+            <AdminUsuarios />
+          </TabsContent>
+          <TabsContent value="auditoria" className="mt-0">
+            <AdminAuditoria />
+          </TabsContent>
+        </main>
+      </div>
+    </Tabs>
+  );
+}
+
+type AbaId = (typeof abas)[number]["id"];
+
+/** Menu do painel: marca no topo, áreas agrupadas (Site / Despacho) no meio e, no
+ * rodapé, o usuário, "Ver o site" e "Sair". Usado fixo na lateral (telas médias+)
+ * e dentro da gaveta no celular. */
+function MenuAdmin({
+  ativa,
+  abas: lista,
+  contadores,
+  email,
+  onSelecionar,
+  onSair,
+}: {
+  ativa: AbaId;
+  abas: readonly (typeof abas)[number][];
+  contadores: { agendamentos: number; leads: number; corridas: number };
+  email: string;
+  onSelecionar: (id: AbaId) => void;
+  onSair: () => void;
+}) {
+  const aviso = (id: AbaId): { n: number; classe: string; titulo: string } | null => {
+    if (id === "agendamentos" && contadores.agendamentos > 0)
+      return {
+        n: contadores.agendamentos,
+        classe: "bg-primary text-primary-foreground",
+        titulo: "Agendamentos pendentes",
+      };
+    if (id === "leads" && contadores.leads > 0)
+      return {
+        n: contadores.leads,
+        classe: "bg-primary text-primary-foreground",
+        titulo: "Leads novos",
+      };
+    if (id === "corridas" && contadores.corridas > 0)
+      return {
+        n: contadores.corridas,
+        classe: "bg-amber-500 text-background",
+        titulo: "Pedidos sem motorista atribuído",
+      };
+    return null;
+  };
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex items-center gap-3 border-b border-border px-4 py-4">
+        <img
+          src={logo}
+          alt=""
+          width={40}
+          height={40}
+          className="size-10 shrink-0 rounded-sm object-contain"
+        />
+        <div className="min-w-0 leading-tight">
+          <p className="truncate font-display text-base tracking-wide">{EMPRESA.nome}</p>
+          <p className="truncate text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            Painel administrativo
+          </p>
+        </div>
+      </div>
+
+      <nav aria-label="Menu do painel" className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        {lista.map(({ id, label, icon: Icon }) => {
+          const a = aviso(id);
+          const selecionada = ativa === id;
+          return (
+            <Fragment key={id}>
+              {id === "rotas" && <GrupoLabel texto="Site" />}
+              {id === "corridas" && <GrupoLabel texto="Despacho" />}
+              <button
+                type="button"
+                onClick={() => onSelecionar(id)}
+                aria-current={selecionada ? "page" : undefined}
+                className={cn(
+                  "flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
+                  selecionada
+                    ? "bg-secondary font-medium text-foreground"
+                    : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                )}
+              >
+                <Icon className="size-4 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">{label}</span>
+                {a && (
+                  <span
+                    className={cn(
+                      "inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
+                      a.classe,
+                    )}
+                    title={a.titulo}
+                  >
+                    {a.n}
+                  </span>
+                )}
+              </button>
+            </Fragment>
+          );
+        })}
+      </nav>
+
+      <div className="space-y-2 border-t border-border p-3">
+        {email && (
+          <p className="truncate px-1 text-xs text-muted-foreground" title={email}>
+            {email}
           </p>
         )}
-
-        <Tabs
-          value={aba}
-          onValueChange={(v) => setAba(v as (typeof abas)[number]["id"])}
-          orientation="vertical"
-          className="mt-6 flex flex-col gap-6 md:flex-row md:items-start"
-        >
-          {/* Menu lateral fixo em telas médias+ (mesmo layout do car-fleet-co
-              original, portado aqui em vez de virar um painel à parte —
-              continua sendo o mesmo <Tabs>/estado de sempre, só reestilizado
-              de barra horizontal pra sidebar). Em telas estreitas vira uma
-              faixa rolável no topo, como já era antes. */}
-          <div className="-mx-4 overflow-x-auto px-4 [-ms-overflow-style:none] [scrollbar-width:none] md:mx-0 md:w-56 md:shrink-0 md:overflow-visible md:px-0 md:[scrollbar-width:auto] [&::-webkit-scrollbar]:hidden">
-            <TabsList className="inline-flex h-auto w-max justify-start gap-1 bg-secondary/60 p-1 md:flex md:w-full md:flex-col md:items-stretch md:gap-0.5 md:bg-transparent md:p-0">
-              {abasVisiveis.map(({ id, label, icon: Icon }) => (
-                <Fragment key={id}>
-                  {/* Dois grupos (Site e Despacho): "rotas" é sempre o primeiro
-                      item do bloco Site e "corridas" o primeiro do bloco
-                      Despacho, dado o array reordenado acima. Escondido no
-                      scroller horizontal do mobile (hidden md:block): um
-                      rótulo de texto ali vira só mais um item confuso na
-                      faixa, a separação visual só faz sentido na coluna. */}
-                  {id === "rotas" && <GrupoLabel texto="Site" />}
-                  {id === "corridas" && <GrupoLabel texto="Despacho" />}
-                  <TabsTrigger
-                    value={id}
-                    className="min-h-11 shrink-0 gap-2 whitespace-nowrap px-3 text-sm md:w-full md:justify-start md:rounded-lg md:px-3 md:py-2.5 md:data-[state=active]:bg-secondary md:data-[state=active]:shadow-none"
-                  >
-                    <Icon className="size-4 shrink-0" /> {label}
-                    {id === "agendamentos" && pendentesCount > 0 && (
-                      <span
-                        className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground"
-                        title="Agendamentos pendentes"
-                      >
-                        {pendentesCount}
-                      </span>
-                    )}
-                    {id === "leads" && leadsNovosCount > 0 && (
-                      <span
-                        className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground"
-                        title="Leads novos"
-                      >
-                        {leadsNovosCount}
-                      </span>
-                    )}
-                    {id === "corridas" && semMotoristaCount > 0 && (
-                      <span
-                        className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[11px] font-semibold text-background"
-                        title="Pedidos sem motorista atribuído"
-                      >
-                        {semMotoristaCount}
-                      </span>
-                    )}
-                  </TabsTrigger>
-                </Fragment>
-              ))}
-            </TabsList>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-4 hidden w-full md:flex"
-              onClick={() => void sair()}
-            >
-              <LogOut className="size-4" /> Sair
-            </Button>
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <TabsContent value="geral" className="mt-0">
-              <AdminVisaoGeral onIrPara={setAba} />
-            </TabsContent>
-            <TabsContent value="rotas" className="mt-0">
-              <AdminRotas />
-            </TabsContent>
-            <TabsContent value="frota" className="mt-0">
-              <AdminFrota />
-            </TabsContent>
-            <TabsContent value="agendamentos" className="mt-0">
-              <AdminAgendamentos />
-            </TabsContent>
-            <TabsContent value="leads" className="mt-0">
-              <AdminLeads />
-            </TabsContent>
-            <TabsContent value="corridas" className="mt-0">
-              <AdminPedidos />
-            </TabsContent>
-            <TabsContent value="fornecedores" className="mt-0">
-              <AdminFornecedores />
-            </TabsContent>
-            <TabsContent value="empresas" className="mt-0">
-              <AdminEmpresas />
-            </TabsContent>
-            <TabsContent value="canais" className="mt-0">
-              <AdminCanais />
-            </TabsContent>
-            <TabsContent value="categorias" className="mt-0">
-              <AdminCategorias />
-            </TabsContent>
-            <TabsContent value="conteudo" className="mt-0">
-              <AdminConteudo />
-            </TabsContent>
-            <TabsContent value="usuarios" className="mt-0">
-              <AdminUsuarios />
-            </TabsContent>
-            <TabsContent value="auditoria" className="mt-0">
-              <AdminAuditoria />
-            </TabsContent>
-          </div>
-        </Tabs>
-      </main>
-      <Footer />
+        <Button asChild variant="outline" size="sm" className="h-10 w-full justify-start">
+          <Link to="/">
+            <ExternalLink className="size-4" /> Ver o site
+          </Link>
+        </Button>
+        <Button variant="ghost" size="sm" className="h-10 w-full justify-start" onClick={onSair}>
+          <LogOut className="size-4" /> Sair
+        </Button>
+      </div>
     </div>
   );
 }
 
-/** Cabeçalho de seção na sidebar do admin (ex.: "Site" / "Despacho") — só
- * aparece na coluna vertical (telas médias+), nunca na faixa horizontal do
- * mobile. Puramente visual, não afeta navegação nem estado. */
+/** Título de grupo no menu do painel ("Site" / "Despacho"). */
 function GrupoLabel({ texto }: { texto: string }) {
   return (
-    <p className="mb-1 mt-4 hidden px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground first:mt-0 md:block">
+    <p className="mb-1 mt-4 px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground first:mt-0">
       {texto}
     </p>
   );

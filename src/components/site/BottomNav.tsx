@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { Car, Home, MapPinned, ShoppingBag, UserRound, LogIn } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -47,6 +47,9 @@ function ItemLink({ item }: { item: Item }) {
 export function BottomNav() {
   const { user, isAdmin, isMotorista, carregando } = useAuth();
   const { itens: itensCarrinho } = useCarrinho();
+  const noPainel = useRouterState({ select: (r) => r.location.pathname.startsWith("/admin") });
+  // O painel administrativo tem o próprio menu lateral; a barra do site some ali.
+  if (noPainel) return null;
 
   const itensFixos: Item[] = [
     { key: "inicio", label: "Início", icon: Home, to: "/" },
