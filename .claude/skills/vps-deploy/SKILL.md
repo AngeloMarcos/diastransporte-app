@@ -20,7 +20,7 @@ description: Operate the Dias Transporte app on its VPS — logs, restart, rollb
 
 ## Backups
 
-`infra/backup-postgres.sh` (copy at `/home/deploy/backup-postgres.sh`, systemd timer daily ~04:00, 14 days kept in `/home/deploy/backups`) dumps every database it finds running plus the uploads volume; stopped stacks are skipped. To prove a restore works: `scp infra/testar-restauracao.sh deploy@VPS:/tmp/ && ssh deploy@VPS bash /tmp/testar-restauracao.sh` (never pipe it through `ssh bash -s`).
+Tudo fica no servidor (o dono não tem armazenamento externo e não quer arquivos no PC dele). `infra/backup-postgres.sh` (cópia em `/home/deploy/backup-postgres.sh`, timer systemd diário ~04:00, roda como `deploy`) grava em `/home/deploy/backups` (pasta `700`): dump do banco, tar das fotos enviadas e o `.env`. Retenção: diários 14 dias, `semanal/` (domingo) 60 dias, `mensal/` (dia 1) 200 dias. `ULTIMO_BACKUP.txt` diz `ok`/`FALHOU` + hora da última rodada; `FORCAR_ROTACAO=1` força as cópias semanal/mensal (teste). Stacks paradas são puladas. Para provar a restauração: `scp infra/testar-restauracao.sh deploy@VPS:/tmp/ && ssh deploy@VPS bash /tmp/testar-restauracao.sh` (nunca via `ssh bash -s`). Limite conhecido: os backups estão no mesmo disco da VPS; a única cópia realmente externa possível é o snapshot/backup do painel da Hostinger (o dono precisa ativar em hPanel).
 
 ## Before touching production
 

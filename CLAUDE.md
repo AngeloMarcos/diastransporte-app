@@ -51,7 +51,7 @@ Before pushing, always run typecheck + lint + tests + build. `tsconfig.json` is 
 
 ## Deploy & operations
 
-See `.claude/skills/deploy/SKILL.md` (ship a change), `vps-deploy` (operate the server), `vps-db` (database, backups). Short version: push to `main`, then on the VPS `git fetch && git reset --hard origin/main`, `docker compose -f docker-compose.staging.yml build app`, `docker compose … run --rm -T app node db/migrate.mjs`, `up -d --no-deps app`. Caddyfile is a single-file bind mount: after it changes on disk, `up -d --force-recreate caddy` (a plain `caddy reload` reads the stale inode). Backups: `infra/backup-postgres.sh` nightly (systemd timer, 14-day retention); `infra/testar-restauracao.sh` proves a restore works — run it before risky changes.
+See `.claude/skills/deploy/SKILL.md` (ship a change), `vps-deploy` (operate the server), `vps-db` (database, backups). Short version: push to `main`, then on the VPS `git fetch && git reset --hard origin/main`, `docker compose -f docker-compose.staging.yml build app`, `docker compose … run --rm -T app node db/migrate.mjs`, `up -d --no-deps app`. Caddyfile is a single-file bind mount: after it changes on disk, `up -d --force-recreate caddy` (a plain `caddy reload` reads the stale inode). Backups: `infra/backup-postgres.sh` nightly (systemd timer; dump + uploads + `.env`; 14 daily, 60-day weekly, 200-day monthly copies, all on the VPS disk — no external storage; nothing is kept on the owner's PC); `infra/testar-restauracao.sh` proves a restore works — run it before risky changes.
 
 ## External integration points
 
