@@ -580,7 +580,7 @@ function MenuAdmin({
         <div className="min-w-0 leading-tight">
           <p className="truncate font-display text-base tracking-wide">{EMPRESA.nome}</p>
           <p className="truncate text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            Painel administrativo
+            Administração
           </p>
         </div>
       </div>
