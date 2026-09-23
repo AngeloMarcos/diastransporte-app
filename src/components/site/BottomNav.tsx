@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Car, Home, MapPinned, ShoppingBag, UserRound, LogIn } from "lucide-react";
+import { Car, Home, LayoutDashboard, MapPinned, ShoppingBag, UserRound, LogIn } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -65,9 +65,11 @@ export function BottomNav() {
 
   const itemConta: Item = !user
     ? { key: "conta", label: "Entrar", icon: LogIn, to: "/auth" }
-    : isMotorista && !isAdmin
-      ? { key: "conta", label: "Corridas", icon: Car, to: "/motorista" }
-      : { key: "conta", label: "Minhas viagens", icon: UserRound, to: "/minhas-viagens" };
+    : isAdmin
+      ? { key: "conta", label: "Painel", icon: LayoutDashboard, to: "/admin" }
+      : isMotorista
+        ? { key: "conta", label: "Corridas", icon: Car, to: "/motorista" }
+        : { key: "conta", label: "Minhas viagens", icon: UserRound, to: "/minhas-viagens" };
 
   return (
     <>

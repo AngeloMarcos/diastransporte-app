@@ -314,7 +314,7 @@ function AdminPage() {
     await queryClientSair.cancelQueries();
     queryClientSair.clear();
     await encerrarSessaoAtual();
-    void navigate({ to: "/auth", replace: true });
+    void navigate({ to: "/", replace: true });
   }
 
   useEffect(() => {

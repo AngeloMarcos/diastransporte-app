@@ -24,7 +24,7 @@ export function Header() {
     await queryClient.cancelQueries();
     queryClient.clear();
     await encerrarSessaoAtual();
-    void navigate({ to: "/auth", replace: true });
+    void navigate({ to: "/", replace: true });
   }
 
   return (
@@ -67,35 +67,42 @@ export function Header() {
             // afirma nem Entrar nem o menu de conta — só um placeholder neutro.
             <Skeleton className="h-9 w-24 rounded-md" />
           ) : user ? (
-            <>
-              <Link
-                to="/minhas-viagens"
-                className="inline-flex items-center gap-1.5 text-sm font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
-                activeProps={{ className: "text-foreground" }}
-              >
-                <UserRound className="size-4" /> Minhas viagens
-              </Link>
-              {isMotorista && (
+            isAdmin ? (
+              // Equipe: o painel é a casa do admin. Aqui, no site público, só um
+              // botão pra voltar a ele (nada de "Minhas viagens" de cliente).
+              <>
+                <Button asChild size="sm">
+                  <Link to="/admin">
+                    <LayoutDashboard className="size-4" /> Voltar ao painel
+                  </Link>
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => void sair()}>
+                  <LogOut className="size-4" /> Sair
+                </Button>
+              </>
+            ) : (
+              <>
                 <Link
-                  to="/motorista"
+                  to="/minhas-viagens"
                   className="inline-flex items-center gap-1.5 text-sm font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
                   activeProps={{ className: "text-foreground" }}
                 >
-                  <Car className="size-4" /> Minhas corridas
+                  <UserRound className="size-4" /> Minhas viagens
                 </Link>
-              )}
-              {isAdmin && (
-                <Link
-                  to="/admin"
-                  className="inline-flex items-center gap-1.5 text-sm font-medium uppercase tracking-wide text-primary-text"
-                >
-                  <LayoutDashboard className="size-4" /> Admin
-                </Link>
-              )}
-              <Button size="sm" variant="secondary" onClick={() => void sair()}>
-                <LogOut className="size-4" /> Sair
-              </Button>
-            </>
+                {isMotorista && (
+                  <Link
+                    to="/motorista"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+                    activeProps={{ className: "text-foreground" }}
+                  >
+                    <Car className="size-4" /> Minhas corridas
+                  </Link>
+                )}
+                <Button size="sm" variant="secondary" onClick={() => void sair()}>
+                  <LogOut className="size-4" /> Sair
+                </Button>
+              </>
+            )
           ) : (
             <Button asChild size="sm" variant="secondary">
               <Link to="/auth">
@@ -104,15 +111,17 @@ export function Header() {
             </Button>
           )}
 
-          <Button asChild size="sm" className="bg-whats text-whats-foreground hover:bg-whats/90">
-            <a
-              href={whatsappLink("Olá! Quero informações sobre transfer.")}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <Phone className="size-4" /> WhatsApp
-            </a>
-          </Button>
+          {!isAdmin && (
+            <Button asChild size="sm" className="bg-whats text-whats-foreground hover:bg-whats/90">
+              <a
+                href={whatsappLink("Olá! Quero informações sobre transfer.")}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Phone className="size-4" /> WhatsApp
+              </a>
+            </Button>
+          )}
         </nav>
 
         {/* Mobile: uma ação secundária (navegação fica na barra inferior) —
@@ -122,18 +131,9 @@ export function Header() {
             "isAdmin" sempre ganhava sozinho aqui. */}
         {isAdmin ? (
           <div className="flex shrink-0 items-center gap-2 md:hidden">
-            {isMotorista && (
-              <Link
-                to="/motorista"
-                aria-label="Minhas corridas"
-                className="inline-grid size-11 shrink-0 place-items-center rounded-sm border border-border text-muted-foreground"
-              >
-                <Car className="size-5" />
-              </Link>
-            )}
             <Link
               to="/admin"
-              aria-label="Painel admin"
+              aria-label="Voltar ao painel"
               className="inline-grid size-11 shrink-0 place-items-center rounded-sm border border-border text-primary"
             >
               <LayoutDashboard className="size-5" />

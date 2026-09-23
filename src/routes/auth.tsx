@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { LogIn, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -8,6 +8,7 @@ import { Footer } from "@/components/site/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { destinoPosLogin, type PerfilLogado } from "@/lib/destino-pos-login";
 import { consumirRedirectPosLogin } from "@/lib/reserva";
 import { useCarrinho } from "@/lib/carrinho";
 import { EMPRESA, formatBRL } from "@/data/rotas";
@@ -21,13 +22,11 @@ function telefoneValido(v: string | null | undefined) {
   return (v ?? "").replace(/\D/g, "").length >= TELEFONE_MIN_DIGITOS;
 }
 
-function seguirAposEntrar(navigate: ReturnType<typeof useNavigate>) {
-  const redirect = consumirRedirectPosLogin();
-  if (redirect) {
-    window.location.assign(redirect);
-    return;
-  }
-  void navigate({ to: "/minhas-viagens" });
+/** Depois de entrar: admin vai pro painel, motorista pro painel dele e cliente pro
+ * site (carrinho ou Minhas viagens). Navegação completa (não SPA) pra que o menu
+ * já carregue com a sessão nova. */
+function seguirAposEntrar(perfil: PerfilLogado) {
+  window.location.assign(destinoPosLogin(perfil, consumirRedirectPosLogin()));
 }
 
 export const Route = createFileRoute("/auth")({
@@ -50,7 +49,6 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
-  const navigate = useNavigate();
   const [modo, setModo] = useState<"entrar" | "criar">("entrar");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
@@ -62,9 +60,9 @@ function AuthPage() {
   // Quem já está logado não precisa ver o formulário.
   useEffect(() => {
     void sessaoAtual().then((sessao) => {
-      if (sessao) seguirAposEntrar(navigate);
+      if (sessao) seguirAposEntrar(sessao);
     });
-  }, [navigate]);
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -87,13 +85,14 @@ function AuthPage() {
     setEnviando(true);
     try {
       if (modo === "entrar") {
-        await entrar({ data: { email, senha } });
+        const sessao = await entrar({ data: { email, senha } });
         toast.success("Bem-vindo de volta!");
+        seguirAposEntrar(sessao);
       } else {
-        await criarConta({ data: { email, senha, nome, telefone } });
+        const sessao = await criarConta({ data: { email, senha, nome, telefone } });
         toast.success("Conta criada!");
+        seguirAposEntrar(sessao);
       }
-      seguirAposEntrar(navigate);
     } catch (erro) {
       // As mensagens do servidor já saem em português, escritas à mão
       // (sessao.functions.ts / auth.server.ts — ex.: "Este e-mail já tem conta.").
