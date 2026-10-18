@@ -7,7 +7,7 @@ import { TrustBadges } from "@/components/site/TrustBadges";
 import { RotaCard } from "@/components/site/RotaCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { EMPRESA, fotos, type Rota, type Veiculo } from "@/data/rotas";
+import { EMPRESA, formatBRL, fotos, type Rota, type Veiculo } from "@/data/rotas";
 import { listRotas } from "@/lib/rotas.functions";
 import { listConteudo, type ConteudoRow } from "@/lib/conteudo.functions";
 import { listFrotaVeiculos } from "@/lib/frota.functions";
@@ -89,6 +89,12 @@ const passos = [
   { n: "03", t: "Embarque tranquilo", d: "Buscamos no aeroporto ou na sua hospedagem." },
 ];
 
+// Promoção em destaque no topo da home. O valor vem da própria rota (preço do
+// carro pequeno, de dia) — o mesmo que o banco cobra na reserva —, então mudar
+// o preço no admin muda o banner junto, sem anunciar um valor e cobrar outro.
+// Trecho inativo some do banner; sem nenhum, volta o selo de tarifário.
+const PROMOCAO_SLUGS = ["sao-luis-barreirinhas", "sao-luis-santo-amaro"];
+
 function Home() {
   const {
     rotas,
@@ -103,6 +109,9 @@ function Home() {
   const navigate = useNavigate();
   const [busca, setBusca] = useState("");
   const destaques = [...rotas].sort((a, b) => b.popularidade - a.popularidade).slice(0, 3);
+  const promocao = PROMOCAO_SLUGS.map((slug) => rotas.find((r) => r.slug === slug)).filter(
+    (r): r is Rota => r !== undefined,
+  );
   const filtradas = busca.trim() ? rotas.filter((r) => buscaCombina(busca, camposDeBusca(r))) : [];
 
   function buscar(e: React.FormEvent) {
@@ -140,9 +149,39 @@ function Home() {
         <div className="relative mx-auto w-full max-w-6xl px-4 py-section">
           {/* text-primary-text (não text-primary): achado de acessibilidade
               — vermelho de marca em 11px falhava o contraste mínimo AA. */}
-          <span className="inline-block rounded-sm border border-primary/60 px-3 py-1 text-[11px] uppercase tracking-[0.25em] text-primary-text">
-            Tarifário temporada 2026
-          </span>
+          {promocao.length > 0 ? (
+            <div className="max-w-3xl">
+              <span className="inline-block rounded-sm bg-primary px-3 py-1 text-[11px] font-bold uppercase tracking-[0.25em] text-primary-foreground">
+                Promoção
+              </span>
+              <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+                {promocao.map((r) => (
+                  <li key={r.slug}>
+                    <Link
+                      to="/transfers/$rota"
+                      params={{ rota: r.slug }}
+                      className="group flex h-full flex-col rounded-lg border border-primary/60 bg-background/85 p-4 backdrop-blur transition-colors hover:border-primary sm:p-5"
+                    >
+                      <span className="font-display text-lg leading-tight">
+                        {r.origem} <span className="text-primary">→</span> {r.destino}
+                      </span>
+                      <span className="mt-2 font-display text-4xl leading-none text-primary-text sm:text-5xl">
+                        {formatBRL(r.precoPequeno)}
+                      </span>
+                      <span className="mt-3 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                        Carro pequeno · preço por veículo
+                        <ArrowRight className="size-3.5 text-primary transition-transform group-hover:translate-x-0.5" />
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <span className="inline-block rounded-sm border border-primary/60 px-3 py-1 text-[11px] uppercase tracking-[0.25em] text-primary-text">
+              Tarifário temporada 2026
+            </span>
+          )}
           <h1 className="mt-5 max-w-3xl font-display text-fluid-hero leading-[0.95]">
             {texto(conteudo, "home_hero", "titulo", "Do desembarque às dunas")}
           </h1>
